@@ -1,12 +1,8 @@
 'use strict';
-import { formatDocumentTypeName, formatPathSegment } from '@/shared/utils/legacy-mappers';
 import { toPathExtension, toPathIdentifier } from '@/shared/lib/storage-file-name';
+import { formatDocumentTypeName, formatPathSegment } from '@/shared/utils/legacy-mappers';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-
-// Persistencia de documentos (Prisma) y rol del usuario en la empresa: server actions.
-export { getActualRole } from '@/shared/actions/shared-users.server';
-export { getAllDocumentsByIdDocumentTypeCientSide } from '@/shared/actions/documents.server';
 
 // eslint-disable-next-line react-hooks/rules-of-hooks
 export function cn(...inputs: ClassValue[]) {
@@ -16,30 +12,6 @@ export function formatCompanyName(companyName: string): string {
   // Transforma el nombre de la empresa eliminando los guiones bajos y convirtiendo a mayúsculas
   return companyName.replace(/_/g, ' ')?.toUpperCase();
 }
-export function validarCUIL(cuil: string) {
-  // Elimina guiones y espacios
-  cuil = cuil.replace(/[-\s]/g, '');
-
-  // Verifica la longitud
-  if (cuil?.length !== 11) {
-    return false;
-  }
-
-  // Calcula el dígito verificador
-  const coeficientes = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
-  let suma = 0;
-  for (let i = 0; i < 10; i++) {
-    suma += parseInt(cuil[i]) * coeficientes[i];
-  }
-  let digitoVerificador = 11 - (suma % 11);
-  if (digitoVerificador === 11) {
-    digitoVerificador = 0;
-  }
-
-  // Compara con el último dígito
-  return parseInt(cuil[10]) === digitoVerificador;
-}
-
 export function calculateNameOFDocument(
   company_name: string,
   company_cuit: string,

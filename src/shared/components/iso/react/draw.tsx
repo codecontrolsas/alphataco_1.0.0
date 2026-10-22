@@ -1,6 +1,5 @@
 import * as React from "react";
 import { type Flat, type KeyMark, type LegendKey, type LineTone, type SolidPaths, type Tone } from "../iso-kit";
-import { Stage } from "./live";
 
 interface SolidProps {
   paths: SolidPaths;
@@ -113,16 +112,6 @@ interface IsoFigureProps {
   label: string;
   className?: string;
   children: React.ReactNode;
-}
-
-export function IsoFigure({ width, height, label, className, children }: IsoFigureProps) {
-  return (
-    <Stage className={className ? `iso-stage ${className}` : "iso-stage"}>
-      <svg className="iso-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label} focusable="false">
-        {children}
-      </svg>
-    </Stage>
-  );
 }
 
 function Swatch({ mark }: { mark: KeyMark }) {

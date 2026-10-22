@@ -1,6 +1,6 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -8,18 +8,18 @@ import {
   buildFiltersWhere,
   buildSearchWhere,
   buildTextFiltersWhere,
-  NULL_FILTER_VALUE,
   parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import { prisma } from '@/shared/lib/prisma';
+import { toFacetMap } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { getBelowMinimumMaterials } from '../../../lib/stock-levels';
 import type { StockLevel } from '../../../lib/status-presentation';
+import { getBelowMinimumMaterials } from '../../../lib/stock-levels';
 
 const logger = new Logger('features/Warehouses/Materials/MaterialsList');
 
@@ -110,7 +110,9 @@ async function buildWhereClause(companyId: string, state: ListState): Promise<Pr
   const and: Prisma.materialsWhereInput[] = [{ company_id: companyId }];
 
   and.push(buildSearchWhere(state.search, ['code', 'name', 'description']) as Prisma.materialsWhereInput);
-  and.push(buildFiltersWhere(state.filters, COLUMN_MAP, { exclude: NON_FACETED_COLUMNS }) as Prisma.materialsWhereInput);
+  and.push(
+    buildFiltersWhere(state.filters, COLUMN_MAP, { exclude: NON_FACETED_COLUMNS }) as Prisma.materialsWhereInput
+  );
   and.push(buildTextFiltersWhere(state.filters, TEXT_FILTER_COLUMNS) as Prisma.materialsWhereInput);
   and.push(buildDateRangeFiltersWhere(state.filters, DATE_RANGE_COLUMNS) as Prisma.materialsWhereInput);
 
@@ -229,18 +231,12 @@ export async function getAllMaterialsForExport(
         }),
       fetchByIds: (ids) =>
         prisma.materials.findMany({ where: { id: { in: ids }, company_id: companyId }, select: MATERIAL_SELECT }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} materiales con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('materiales'),
     });
     return { ok: true, data: await shape(companyId, rows) };
   } catch (error) {
     logger.error('Error al exportar materiales', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar la lista de materiales',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de materiales');
   }
 }
 
@@ -262,15 +258,6 @@ export async function getMaterialSingleFacet(
     const filters = { ...parsed.filters };
     delete filters[excludeColumn];
     return buildWhereClause(companyId, { ...parsed, filters });
-  }
-
-  function toFacetMap(rows: { key: string | boolean | null; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      const k = key == null ? NULL_FILTER_VALUE : String(key);
-      map.set(k, (map.get(k) ?? 0) + count);
-    }
-    return map;
   }
 
   try {

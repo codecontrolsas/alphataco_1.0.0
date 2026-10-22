@@ -2,40 +2,30 @@
 
 import { withSessionActor } from '@/features/Operaciones/lib/with-session-actor';
 import { Logger } from '@/lib/logger';
-import { prisma } from '@/shared/lib/prisma';
-import { reconcileRowResourceStatus } from '../lib/row-resource-status';
+import { prisma, prismaBase } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { getTenantContext } from '@/shared/lib/tenant-db';
+import { reconcileRowResourceStatus } from '../lib/row-resource-status';
 import {
-  assertDailyReportInCompany,
-  assertRowInCompany,
-  assertRowResourcesInCompany,
-  filterRowsInCompany,
-} from './lib/row-query';
-import {
+  RowRuleError,
   assertRowDeletableUnderLock,
   assertRowEditableUnderLock,
   assertStatusSettable,
   authorizeBulkRowUpdate,
-  authorizeRowCreate,
   authorizeRowDelete,
   authorizeRowUpdate,
-  RowRuleError,
 } from './lib/row-guards';
+import { assertRowInCompany, assertRowResourcesInCompany, filterRowsInCompany } from './lib/row-query';
 import {
   buildResourceCheck,
   buildResourcesOnlyCheck,
   buildRowScalarData,
   resolveRowResources,
 } from './lib/row-write-helpers';
-import { prismaBase } from '@/shared/lib/prisma';
-import { getTenantContext } from '@/shared/lib/tenant-db';
-import { changeRowResources } from './use-cases/change-row-resources';
-import { changeRowResourcesSchema, changeRowStatusSchema } from './use-cases/command-schemas';
-import { changeRowStatus } from './use-cases/change-row-status';
 import { createRow } from './use-cases/create-row';
 import { syncRowResources } from './use-cases/row-resources';
 import { touchRow } from './use-cases/row-state';
-import type { DailyReportRowInput, RowWriteResult, UseCaseResult } from './use-cases/types';
+import type { DailyReportRowInput } from './use-cases/types';
 
 const logger = new Logger('features/Operaciones/PartesDiarios/detail/mutations');
 
@@ -121,27 +111,6 @@ export async function createDailyReportRowPrisma(data: DailyReportRowInput & { d
 // 6b. COMANDOS CON IDEMPOTENCIA Y VERSION (casos de uso)
 // ============================================================================
 
-function invalidCommand(detail?: string): UseCaseResult<RowWriteResult> {
-  return { ok: false, code: 'INVALID_INPUT', message: detail ? `Pedido inválido: ${detail}` : 'Pedido inválido.' };
-}
-
-/**
- * Cambia los recursos de una línea con altas y bajas EXPLÍCITAS. Devuelve la unión del caso de uso: quien llama
- * decide qué mostrar según `code` (y debe lanzar si `!ok` en su `mutationFn`, para no mostrar un "guardado" falso).
- */
-export async function changeDailyReportRowResources(command: unknown): Promise<UseCaseResult<RowWriteResult>> {
-  const parsed = changeRowResourcesSchema.safeParse(command);
-  if (!parsed.success) return invalidCommand(parsed.error.issues[0]?.message);
-  return changeRowResources({ db: prismaBase }, await getTenantContext(), parsed.data);
-}
-
-/** Cambia el estado de una línea (o completa un turno) con control de versión. */
-export async function changeDailyReportRowStatus(command: unknown): Promise<UseCaseResult<RowWriteResult>> {
-  const parsed = changeRowStatusSchema.safeParse(command);
-  if (!parsed.success) return invalidCommand(parsed.error.issues[0]?.message);
-  return changeRowStatus({ db: prismaBase }, await getTenantContext(), parsed.data);
-}
-
 // ============================================================================
 // 7. UPDATE ROW
 // ============================================================================
@@ -185,8 +154,11 @@ export async function updateDailyReportRowPrisma(rowId: string, data: DailyRepor
       //    `sin_recursos_asignados` NO se escribe estado: es derivado de los recursos y lo fija `reconcileRowResourceStatus`;
       //    escribir uno provisional dejaba dos cambios de estado en el historial por cada edición.
       const derivedStatuses: string[] = ['pendiente', 'sin_recursos_asignados'];
-      const current = fullEdit ? await tx.dailyreportrows.findUniqueOrThrow({ where: { id: rowId }, select: { status: true } }) : null;
-      const keepDerivedStatus = current !== null && derivedStatuses.includes(current.status) && derivedStatuses.includes(resolvedStatus);
+      const current = fullEdit
+        ? await tx.dailyreportrows.findUniqueOrThrow({ where: { id: rowId }, select: { status: true } })
+        : null;
+      const keepDerivedStatus =
+        current !== null && derivedStatuses.includes(current.status) && derivedStatuses.includes(resolvedStatus);
       const updatedRow = fullEdit
         ? await tx.dailyreportrows.update({
             where: { id: rowId },
@@ -264,8 +236,14 @@ export async function deleteDailyReportRowPrisma(rowId: string) {
     if (row.preparte && row.preparte.company_id && row.preparte.company_id !== companyId) {
       logger.warn('La línea tenía un preparte de otra empresa: no se revierte', { data: { rowId } });
     }
-    if (row.preparte_id && row.preparte && (row.preparte.company_id === companyId || row.preparte.company_id === null)) {
-      const { updatePreparte, logPreparteChange } = await import('@/features/Operaciones/Preparte/actions/mutations.server');
+    if (
+      row.preparte_id &&
+      row.preparte &&
+      (row.preparte.company_id === companyId || row.preparte.company_id === null)
+    ) {
+      const { updatePreparte, logPreparteChange } = await import(
+        '@/features/Operaciones/Preparte/actions/mutations.server'
+      );
 
       await updatePreparte(row.preparte_id, { status: 'pendiente' });
       await logPreparteChange({
@@ -396,4 +374,3 @@ export async function bulkUpdateRowStatus(rowIds: string[], data: BulkRowUpdateD
     throw new Error('No se pudieron actualizar las filas del parte diario. Intente nuevamente.');
   }
 }
-

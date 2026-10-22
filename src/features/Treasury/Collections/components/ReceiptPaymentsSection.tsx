@@ -5,8 +5,9 @@ import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS } from '@/features/Purchases/schemas/payment-orders';
+import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from '@/features/Purchases/schemas/payment-orders';
 import { formatMoney } from '@/features/Warehouses/lib/format';
+import { InputFormField } from '@/shared/components/common/form-fields';
 import { Plus, Trash2 } from 'lucide-react';
 import moment from 'moment';
 import { useFieldArray, useWatch, type UseFormReturn } from 'react-hook-form';
@@ -53,8 +54,8 @@ export function ReceiptPaymentsSection({
   const watched = useWatch({ control: form.control, name: 'payments' });
   const moneyAccounts = accounts.filter((a) => a.kind !== 'CHECK_PORTFOLIO');
   const portfolios = accounts.filter((a) => a.kind === 'CHECK_PORTFOLIO');
-  const defaultAccount = moneyAccounts.length === 1 ? (moneyAccounts[0]?.id ?? '') : '';
-  const defaultPortfolio = portfolios.length === 1 ? (portfolios[0]?.id ?? '') : '';
+  const defaultAccount = moneyAccounts.length === 1 ? moneyAccounts[0]?.id ?? '' : '';
+  const defaultPortfolio = portfolios.length === 1 ? portfolios[0]?.id ?? '' : '';
   const missing = gap.startsWith('-') || gap === '0.00' ? '' : gap;
 
   /** Al pasar a cheque (o salir de cheque) la cuenta cambia de lista; el librador se precarga con el cliente. */
@@ -73,7 +74,9 @@ export function ReceiptPaymentsSection({
 
   return (
     <div className="space-y-3">
-      {payments.fields.length === 0 && <p className="text-sm text-muted-foreground">Sin medios: un recibo que solo aplica anticipos no mueve plata.</p>}
+      {payments.fields.length === 0 && (
+        <p className="text-sm text-muted-foreground">Sin medios: un recibo que solo aplica anticipos no mueve plata.</p>
+      )}
       {payments.fields.map((f, i) => {
         const method = watched?.[i]?.method;
         const isCheck = isCheckMethod(method);
@@ -112,7 +115,11 @@ export function ReceiptPaymentsSection({
                   <FormItem>
                     <FormLabel>{isCheck ? 'Cartera de cheques' : 'Cuenta o caja'}</FormLabel>
                     {/* Remonta al cambiar de lista: Radix no refresca la etiqueta si cambian a la vez las opciones y el valor. */}
-                    <Select key={isCheck ? 'portfolios' : 'accounts'} value={field.value} onValueChange={field.onChange}>
+                    <Select
+                      key={isCheck ? 'portfolios' : 'accounts'}
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder={isCheck ? 'A qué cartera entra' : 'A dónde entra'} />
@@ -121,7 +128,9 @@ export function ReceiptPaymentsSection({
                       <SelectContent>
                         {options.length === 0 && (
                           <p className="px-2 py-1.5 text-sm text-muted-foreground">
-                            {isCheck ? 'No hay carteras: creá una en Tesorería → Configuración' : 'No hay cuentas activas'}
+                            {isCheck
+                              ? 'No hay carteras: creá una en Tesorería → Configuración'
+                              : 'No hay cuentas activas'}
                           </p>
                         )}
                         {options.map((a) => (
@@ -135,64 +144,39 @@ export function ReceiptPaymentsSection({
                   </FormItem>
                 )}
               />
-              <FormField
+              <InputFormField
                 control={form.control}
                 name={`payments.${i}.amount`}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Importe</FormLabel>
-                    <FormControl>
-                      <Input inputMode="decimal" className="text-right tabular-nums" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                label="Importe"
+                inputMode="decimal"
+                className="text-right tabular-nums"
               />
-              <Button type="button" variant="ghost" size="icon" className="h-9 w-9" aria-label="Quitar el medio" onClick={() => payments.remove(i)}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9"
+                aria-label="Quitar el medio"
+                onClick={() => payments.remove(i)}
+              >
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
             <div className="grid gap-3 sm:grid-cols-4">
-              <FormField
+              <InputFormField
                 control={form.control}
                 name={`payments.${i}.reference`}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Referencia (opcional)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="N° de operación" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                label="Referencia (opcional)"
+                placeholder="N° de operación"
               />
               {isCheck && (
                 <>
-                  <FormField
-                    control={form.control}
-                    name={`payments.${i}.checkNumber`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>N° de cheque</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
+                  <InputFormField control={form.control} name={`payments.${i}.checkNumber`} label="N° de cheque" />
+                  <InputFormField
                     control={form.control}
                     name={`payments.${i}.checkBank`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Banco</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Banco emisor" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    label="Banco"
+                    placeholder="Banco emisor"
                   />
                   <FormField
                     control={form.control}
@@ -201,7 +185,11 @@ export function ReceiptPaymentsSection({
                       <FormItem>
                         <FormLabel>Emisión</FormLabel>
                         <FormControl>
-                          <EnhancedDatePicker date={toDate(field.value)} setDate={(d) => field.onChange(fromDate(d))} placeholder="DD/MM/AAAA" />
+                          <EnhancedDatePicker
+                            date={toDate(field.value)}
+                            setDate={(d) => field.onChange(fromDate(d))}
+                            placeholder="DD/MM/AAAA"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -219,7 +207,11 @@ export function ReceiptPaymentsSection({
                     <FormItem>
                       <FormLabel>Fecha de pago</FormLabel>
                       <FormControl>
-                        <EnhancedDatePicker date={toDate(field.value)} setDate={(d) => field.onChange(fromDate(d))} placeholder="DD/MM/AAAA" />
+                        <EnhancedDatePicker
+                          date={toDate(field.value)}
+                          setDate={(d) => field.onChange(fromDate(d))}
+                          placeholder="DD/MM/AAAA"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -256,7 +248,12 @@ export function ReceiptPaymentsSection({
           </div>
         );
       })}
-      <Button type="button" size="sm" variant="outline" onClick={() => payments.append(emptyPayment(missing, defaultAccount))}>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={() => payments.append(emptyPayment(missing, defaultAccount))}
+      >
         <Plus className="mr-1 h-4 w-4" />
         Agregar medio
       </Button>

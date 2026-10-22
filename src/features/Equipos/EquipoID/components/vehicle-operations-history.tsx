@@ -1,5 +1,5 @@
-import { getUserPermissionsMapServer } from '@/features/Permissions';
-import { ViewManagerServer } from '@/features/TabsManager';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
+import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
 import { _EquipmentOrdersDataTable } from './equipment-orders/_EquipmentOrdersDataTable';
 import { VehicleRejectedRequestsTable } from './rejected-requests/VehicleRejectedRequestsTable';
 

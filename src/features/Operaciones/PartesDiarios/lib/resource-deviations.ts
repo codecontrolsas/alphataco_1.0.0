@@ -84,19 +84,6 @@ export function deviationText(entry: DeviationEntry<DeviationKind>): string {
 }
 
 /**
- * Desvíos de DIAGRAMA de un empleado a partir de sus entradas de diagrama del día
- * (`employees_diagram`) y el `work_active` del tipo de diagrama. Misma regla que el SQL:
- * sin entrada = sin diagrama; con entrada y `work_active === false` = día no laboral.
- */
-export function classifyEmployeeDiagram(
-  diagramEntriesCount: number,
-  workActive: boolean | null | undefined
-): { has_no_diagram: boolean; is_non_work_day: boolean } {
-  const hasNoDiagram = diagramEntriesCount === 0;
-  return { has_no_diagram: hasNoDiagram, is_non_work_day: !hasNoDiagram && workActive === false };
-}
-
-/**
  * Todos los desvíos que aplican a un empleado (0, 1 o varios, simultáneos). El orden
  * coincide con el que arma hoy el tooltip de `EmployeeBadgeCell`.
  */

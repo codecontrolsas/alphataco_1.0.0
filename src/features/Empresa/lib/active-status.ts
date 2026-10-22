@@ -1,4 +1,4 @@
-import type { FacetResult } from '@/shared/components/common/DataTable';
+import type { FacetResult } from '@/shared/components/common/DataTable/types';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { Check, CircleOff, X } from 'lucide-react';
 import { TONE_TO_BADGE, type StatusUi } from '../../Mantenimiento/lib/status-presentation';

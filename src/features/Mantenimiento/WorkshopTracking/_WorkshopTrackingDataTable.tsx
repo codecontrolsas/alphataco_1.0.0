@@ -1,7 +1,7 @@
 'use client';
 
 import { Card, CardContent } from '@/components/ui/card';
-import { DataTable } from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type {
   DataTableFacetedFilterConfig,

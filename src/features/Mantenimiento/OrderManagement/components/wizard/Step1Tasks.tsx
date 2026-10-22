@@ -19,11 +19,11 @@ import { RepairGroupBadge } from '@/features/Mantenimiento/shared/components/Rep
 import { RepairItemPhotos } from '@/features/Mantenimiento/shared/components/RepairItemPhotos';
 import { PREVENTIVE_TYPES, type PreventiveType } from '@/features/Mantenimiento/shared/preventive-maintenance';
 import { getRepairItemGroupName, getRepairItemImages } from '@/features/Mantenimiento/shared/repair-item-label';
-import { AddItemInlineForm } from '../AddItemInlineForm';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { AlertTriangle, Ban, MessageSquare, Pencil, Plus, RotateCcw, Trash2, Wrench } from 'lucide-react';
 import { useState } from 'react';
 import type { OrderManagementItem } from '../../actions/queries.server';
+import { AddItemInlineForm } from '../AddItemInlineForm';
 import type { LocalItem } from '../ManageOrderWizard';
 import { getItemLabel } from './helpers';
 
@@ -36,7 +36,6 @@ interface Step1TasksProps {
   onRejectItem?: (itemId: string, reason: string) => void;
   onRestoreItem?: (itemId: string) => void;
   onEditRepairTypes: (item: LocalItem) => void;
-  onDescriptionChange: (itemId: string, description: string) => void;
   onChiefCommentChange: (itemId: string, comment: string) => void;
 }
 
@@ -49,7 +48,6 @@ export function Step1Tasks({
   onRejectItem,
   onRestoreItem,
   onEditRepairTypes,
-  onDescriptionChange,
   onChiefCommentChange,
 }: Step1TasksProps) {
   const [editingCommentItemId, setEditingCommentItemId] = useState<string | null>(null);
@@ -99,11 +97,7 @@ export function Step1Tasks({
         <PermissionGuard module="mantenimiento" tab="gestion_ordenes" action="create">
           <section id="add-item-inline" aria-label="Agregar reparación" className="rounded-lg border bg-muted/20 p-4">
             <h4 className="mb-3 text-sm font-medium">Agregar reparación</h4>
-            <AddItemInlineForm
-              repairTypes={repairTypes}
-              onAdd={onAddItem}
-              onClose={() => setAddFormOpen(false)}
-            />
+            <AddItemInlineForm repairTypes={repairTypes} onAdd={onAddItem} onClose={() => setAddFormOpen(false)} />
           </section>
         </PermissionGuard>
       )}
@@ -237,7 +231,8 @@ export function Step1Tasks({
                   <div className="flex items-center gap-1.5 ml-3 shrink-0">
                     {!item._isTemp && !hasWorkOrder && (
                       <PermissionGuard module="mantenimiento" tab="gestion_ordenes" action="update">
-                        <Button type="button"
+                        <Button
+                          type="button"
                           variant="outline"
                           size="sm"
                           className="h-7 text-xs"
@@ -250,7 +245,8 @@ export function Step1Tasks({
                     )}
                     {!canDelete && !hasWorkOrder && !item._rejected && onRejectItem && (
                       <PermissionGuard module="mantenimiento" tab="gestion_ordenes" action="update">
-                        <Button type="button"
+                        <Button
+                          type="button"
                           variant="ghost"
                           size="sm"
                           className="h-7 text-xs text-destructive/60 hover:text-destructive"
@@ -267,7 +263,8 @@ export function Step1Tasks({
                     )}
                     {canDelete && !hasWorkOrder && (
                       <PermissionGuard module="mantenimiento" tab="gestion_ordenes" action="delete">
-                        <Button type="button"
+                        <Button
+                          type="button"
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6 text-destructive/60 hover:text-destructive md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
@@ -295,7 +292,8 @@ export function Step1Tasks({
                           autoFocus
                         />
                         <div className="flex justify-end">
-                          <Button type="button"
+                          <Button
+                            type="button"
                             variant="ghost"
                             size="sm"
                             className="h-6 text-xs"
@@ -309,12 +307,11 @@ export function Step1Tasks({
                       <div className="flex items-start gap-2 p-2 rounded border bg-ok-subtle border-ok/30 text-sm">
                         <MessageSquare className="h-3.5 w-3.5 mt-0.5 text-ok shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <span className="font-semibold text-ok-subtle-foreground text-xs">
-                            Mi comentario
-                          </span>
+                          <span className="font-semibold text-ok-subtle-foreground text-xs">Mi comentario</span>
                           <p className="mt-0.5 text-sm italic">{item.workshop_chief_comment}</p>
                         </div>
-                        <Button type="button"
+                        <Button
+                          type="button"
                           variant="ghost"
                           size="icon"
                           className="h-5 w-5 shrink-0 text-ok hover:text-ok-subtle-foreground"
@@ -325,7 +322,8 @@ export function Step1Tasks({
                         </Button>
                       </div>
                     ) : (
-                      <Button type="button"
+                      <Button
+                        type="button"
                         variant="outline"
                         size="sm"
                         className="h-7 text-xs text-muted-foreground hover:text-foreground"
@@ -364,7 +362,8 @@ export function Step1Tasks({
                 )}
               </div>
               {onRestoreItem && (
-                <Button type="button"
+                <Button
+                  type="button"
                   variant="ghost"
                   size="sm"
                   className="h-7 text-xs ml-3 shrink-0"

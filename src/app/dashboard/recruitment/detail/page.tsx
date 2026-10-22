@@ -1,4 +1,4 @@
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { getPreEmployeeByIdCached } from '@/features/Seleccion/actions/pre-employee-actions.server';
 import { PreEmployeeDetailClient } from '@/features/Seleccion/components/PreEmployeeDetailClient';
 import { Logger } from '@/lib/logger';

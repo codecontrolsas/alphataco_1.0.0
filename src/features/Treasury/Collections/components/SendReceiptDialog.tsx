@@ -1,12 +1,18 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Form } from '@/components/ui/form';
 import { Logger } from '@/lib/logger';
+import { InputFormField, TextareaFormField } from '@/shared/components/common/form-fields';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Mail } from 'lucide-react';
@@ -24,12 +30,23 @@ const logger = new Logger('Treasury/SendReceiptDialog');
  * Envía el recibo al cliente por mail con el PDF adjunto. Propone el mail del cliente; se pueden
  * cargar varios separados por coma. Si el mail no sale, el recibo no queda como enviado.
  */
-export function SendReceiptDialog({ receiptId, number, defaultEmail }: { receiptId: string; number: string; defaultEmail: string | null }) {
+export function SendReceiptDialog({
+  receiptId,
+  number,
+  defaultEmail,
+}: {
+  receiptId: string;
+  number: string;
+  defaultEmail: string | null;
+}) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const defaults = { to: defaultEmail ?? '', message: '' };
-  const form = useForm<SendReceiptFormValues>({ resolver: zodResolver(sendReceiptFormSchema), defaultValues: defaults });
+  const form = useForm<SendReceiptFormValues>({
+    resolver: zodResolver(sendReceiptFormSchema),
+    defaultValues: defaults,
+  });
 
   const send = useMutation({
     mutationFn: async (values: SendReceiptFormValues) => {
@@ -64,36 +81,19 @@ export function SendReceiptDialog({ receiptId, number, defaultEmail }: { receipt
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Enviar {number} al cliente</DialogTitle>
-          <DialogDescription>Se manda por mail con el PDF adjunto. Recién cuando el mail sale queda como enviado.</DialogDescription>
+          <DialogDescription>
+            Se manda por mail con el PDF adjunto. Recién cuando el mail sale queda como enviado.
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((values) => send.mutate(values))} className="space-y-4">
-            <FormField
+            <InputFormField
               control={form.control}
               name="to"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Para</FormLabel>
-                  <FormControl>
-                    <Input placeholder="pagos@cliente.com, tesoreria@cliente.com" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Para"
+              placeholder="pagos@cliente.com, tesoreria@cliente.com"
             />
-            <FormField
-              control={form.control}
-              name="message"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Mensaje (opcional)</FormLabel>
-                  <FormControl>
-                    <Textarea rows={3} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <TextareaFormField control={form.control} name="message" label="Mensaje (opcional)" rows={3} />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={send.isPending}>
                 Cancelar

@@ -5,6 +5,7 @@ import { parseSearchParams } from '@/shared/components/common/DataTable/helpers'
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { applyTableState, facetCounts, paginate } from '@/shared/lib/in-memory-table';
 // Resultado discriminado de export: Next enmascara el mensaje de un error lanzado desde una server action.
+import { tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { COMPANY_DOCUMENT_SPEC, loadAuthorizedCompanyDocumentRows } from './lib/company-document-rows.server';
 
@@ -42,7 +43,7 @@ export async function getAllCompanyDocsForExport(
     if (filtered.length > EXPORT_MAX_ROWS) {
       return {
         ok: false,
-        message: `Hay más de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} documentos con los filtros actuales. Acote la exportación con filtros.`,
+        message: tooManyRowsMessage('documentos')(EXPORT_MAX_ROWS),
       };
     }
     return { ok: true, data: filtered };

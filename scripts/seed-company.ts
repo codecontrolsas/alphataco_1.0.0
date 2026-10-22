@@ -19,13 +19,13 @@
  * Requiere DATABASE_URL=postgresql://... en el entorno.
  */
 import { PrismaPg } from '@prisma/adapter-pg';
-import { createHash } from 'node:crypto';
 import { NOTIFICATION_EVENTS, NOTIFICATION_EVENT_KEYS } from '../src/features/Notifications/notification-catalog.ts';
 import { ACTION_DESCRIPTIONS, TAB_DESCRIPTIONS } from '../src/features/Permissions/permission-catalog.ts';
 import { ACTIONS, PERMISSIONS } from '../src/features/Permissions/permissions-map.ts';
 import { DEFAULT_MEASUREMENT_UNITS } from '../src/features/Warehouses/lib/default-units.ts';
 import { PrismaClient } from '../src/generated/prisma/client.ts';
 import { prismaPgConfig } from '../src/shared/lib/prisma-pg-config.ts';
+import { uuidV5 } from './lib/uuid-v5.ts';
 import { SYSTEM_ROLE_SLUGS, buildPermissionRows } from './seed/permission-rows.ts';
 
 /** Namespace fijo para derivar UUIDs v5 deterministicos en este seed. No cambiar entre corridas. */
@@ -43,20 +43,6 @@ const SYSTEM_ROLE_NAMES: Record<(typeof SYSTEM_ROLE_SLUGS)[number], string> = {
  * los 3 roles de acceso total: no recibe `role_permissions`.
  */
 const DEFAULT_PROFILE_ROLE = { name: 'User', slug: 'user' } as const;
-
-/** UUID v5 (RFC 4122) via crypto.createHash('sha1') — sin dependencias externas. */
-function uuidV5(name: string, namespace: string): string {
-  const namespaceBytes = Buffer.from(namespace.replace(/-/g, ''), 'hex');
-  const nameBytes = Buffer.from(name, 'utf8');
-  const hash = createHash('sha1')
-    .update(Buffer.concat([namespaceBytes, nameBytes]))
-    .digest();
-  const bytes = Buffer.from(hash.subarray(0, 16));
-  bytes[6] = (bytes[6] & 0x0f) | 0x50; // version 5
-  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant RFC 4122
-  const hex = bytes.toString('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
 
 function slugify(value: string): string {
   const slug = value

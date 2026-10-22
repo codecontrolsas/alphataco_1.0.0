@@ -3,14 +3,11 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
-import {
-  DataTable,
-  DataTableColumnHeader,
-  inMemoryFacetedFilterFn,
-  inMemoryTextFilterFn,
-  type DataTableFacetedFilterConfig,
-  type TablePreferences,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
+import { type TablePreferences } from '@/shared/components/common/DataTable/helpers';
+import { inMemoryFacetedFilterFn, inMemoryTextFilterFn } from '@/shared/components/common/DataTable/in-memory';
+import { type DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable/types';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Building2, Check, Pencil, X } from 'lucide-react';
 import { use, useMemo, type ReactNode } from 'react';
@@ -27,32 +24,28 @@ export function getSectoresColumns(
   const columns: ColumnDef<WorkshopSector>[] = [
     {
       accessorKey: 'name',
-      meta: { title: 'Nombre' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
+      ...titled('Nombre'),
       cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
       filterFn: inMemoryTextFilterFn,
     },
     {
       id: 'description',
       accessorFn: (row) => row.description ?? '',
-      meta: { title: 'Descripción' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
+      ...titled('Descripción'),
       cell: ({ row }) => row.original.description || <span className="text-muted-foreground">-</span>,
       filterFn: inMemoryTextFilterFn,
     },
     {
       id: 'workshop',
       accessorFn: (row) => row.workshops?.name ?? '',
-      meta: { title: 'Taller' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Taller" />,
+      ...titled('Taller'),
       cell: ({ row }) => row.original.workshops?.name || <span className="text-muted-foreground">-</span>,
       filterFn: inMemoryFacetedFilterFn,
     },
     {
       id: 'max_capacity',
       accessorFn: (row) => row.max_capacity ?? '',
-      meta: { title: 'Cupo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Cupo" />,
+      ...titled('Cupo'),
       cell: ({ row }) =>
         row.original.max_capacity != null ? (
           row.original.max_capacity
@@ -64,8 +57,7 @@ export function getSectoresColumns(
     {
       id: 'is_active',
       accessorFn: (row) => String(row.is_active),
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => (
         <Badge variant={row.original.is_active ? 'success' : 'secondary'}>
           {row.original.is_active ? (
@@ -105,7 +97,7 @@ export function getSectoresColumns(
   return columns;
 }
 
-export function SectoresTable({
+function SectoresTable({
   workshopSectors,
   preferences,
   onEdit,

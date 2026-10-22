@@ -1,9 +1,10 @@
+import { TableSkeleton } from '@/shared/components/skeletons/TableSkeleton';
 import { Card } from '@/components/ui/card';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { Suspense } from 'react';
 import { InvoicingNotices } from './components/InvoicingNotices';
 import { NewInvoiceMenu } from './components/NewInvoiceMenu';
-import { InvoicesTableSkeleton } from './fallback/InvoicesTableSkeleton';
+
 import { InvoicesList } from './list/InvoicesList';
 
 /**
@@ -35,7 +36,7 @@ export default function FacturacionTabContent({
           <InvoicingNotices />
         </Suspense>
 
-        <Suspense fallback={<InvoicesTableSkeleton />}>
+        <Suspense fallback={<TableSkeleton inCard columnCount={7} rowCount={10} />}>
           <InvoicesList searchParams={searchParams as DataTableSearchParams} />
         </Suspense>
       </div>

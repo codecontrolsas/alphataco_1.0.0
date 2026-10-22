@@ -1,7 +1,7 @@
 'use server';
 
 import { errorMessage, fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { isVatRateId } from '@/shared/lib/arca/catalogs';
 import { fromDateOnly } from '@/shared/lib/date-only';

@@ -10,6 +10,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
 import { Logger } from '@/lib/logger';
 import {
   CatalogCreateButton,
@@ -17,12 +18,12 @@ import {
   CatalogTableSurface,
   useCatalogSheet,
 } from '@/shared/components/common/CatalogFormSheet';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
 import {
-  DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
   type FacetResult,
-} from '@/shared/components/common/DataTable';
+} from '@/shared/components/common/DataTable/types';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
@@ -67,13 +68,7 @@ export default function _MensureUnitsDataTable({
   const queryClient = useQueryClient();
   const [unitToDelete, setUnitToDelete] = useState<MeasureUnitListItem | null>(null);
 
-  const permissions = useMemo(
-    () => ({
-      hasPermission: (module: string, tab: string, action: string) =>
-        permissionsMap[`${module}:${tab}:${action}`] === true,
-    }),
-    [permissionsMap]
-  );
+  const permissions = usePermissionChecker(permissionsMap);
   const canCreate = permissions.hasPermission('comercial', 'mensure_units', 'create');
   const canUpdate = permissions.hasPermission('comercial', 'mensure_units', 'update');
 

@@ -3,16 +3,15 @@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { createFacetFilters, textFilter } from '@/shared/components/common/DataTable/facet-filters';
+import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import {
-  DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+} from '@/shared/components/common/DataTable/types';
 import type { ColumnDef } from '@tanstack/react-table';
-import { CircleOff } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
 import {
@@ -20,7 +19,7 @@ import {
   getAvailableEmployeeSingleFacet,
   getAvailableEmployeesPaginated,
   type AvailableEmployeeListItem,
-} from '../actions/rrhh.server';
+} from '../actions/rrhh-lists.server';
 import { unwrapExportWithToast } from '../lib/export-client';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -32,24 +31,6 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   count: number;
   positionIds?: string[];
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers — FacetResult builders
-// ─────────────────────────────────────────────────────────────────────────────
-
-function buildFkFacetResult(
-  resolvedOptions: Array<{ id: string; name: string | null }> | undefined,
-  counts: Map<string, number>,
-  nullLabel = 'Sin asignar'
-): FacetResult {
-  return {
-    options: [
-      ...(resolvedOptions?.map((o) => ({ value: o.id, label: o.name ?? '' })) ?? []),
-      ...(counts.has(NULL_FILTER_VALUE) ? [{ value: NULL_FILTER_VALUE, label: nullLabel, icon: CircleOff }] : []),
-    ],
-    counts,
-  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -219,42 +200,21 @@ export default function AvailableEmployeesDialog({ open, onOpenChange, count, po
 
   // ─── Lazy-load facets ──────────────────────────────────────────────────────
 
-  const makeFkFetchFacet = useCallback(
-    (columnId: string, nullLabel = 'Sin asignar') => {
-      return async (params: DataTableSearchParams): Promise<FacetResult> => {
-        const result = await getAvailableEmployeeSingleFacet(columnId, params, positionIds);
-        if (!result) return { options: [], counts: new Map() };
-        return buildFkFacetResult(result.resolvedOptions, result.counts, nullLabel);
-      };
-    },
-    [positionIds]
-  );
-
-  const facetedFilters = useMemo<DataTableFacetedFilterConfig[]>(
-    () => [
+  const facetedFilters = useMemo<DataTableFacetedFilterConfig[]>(() => {
+    const facets = createFacetFilters((columnId, params) =>
+      getAvailableEmployeeSingleFacet(columnId, params, positionIds)
+    );
+    return [
       // Legajo ANTES que el nombre; coincidencia exacta (con parcial, «1» traería 1, 10, 100...).
-      { columnId: 'file', title: 'Legajo', type: 'text', placeholder: 'Legajo completo (coincidencia exacta)' },
-      { columnId: 'name', title: 'Nombre', type: 'text', placeholder: 'Buscar por apellido o nombre...' },
-      { columnId: 'cuil', title: 'CUIL', type: 'text', placeholder: 'Buscar por CUIL...' },
-      { columnId: 'comments', title: 'Comentario', type: 'text', placeholder: 'Buscar en el comentario...' },
-      {
-        columnId: 'company_positions',
-        title: 'Posición',
-        fetchFacet: makeFkFetchFacet('company_positions'),
-      },
-      {
-        columnId: 'customers',
-        title: 'Clientes',
-        fetchFacet: makeFkFetchFacet('customers', 'Sin afectar'),
-      },
-      {
-        columnId: 'diagram',
-        title: 'Diagrama',
-        fetchFacet: makeFkFetchFacet('diagram'),
-      },
-    ],
-    [makeFkFetchFacet]
-  );
+      textFilter('file', 'Legajo', 'Legajo completo (coincidencia exacta)'),
+      textFilter('name', 'Nombre', 'Buscar por apellido o nombre...'),
+      textFilter('cuil', 'CUIL', 'Buscar por CUIL...'),
+      textFilter('comments', 'Comentario', 'Buscar en el comentario...'),
+      facets.lookup('company_positions', 'Posición', undefined, { label: 'Sin asignar' }),
+      facets.lookup('customers', 'Clientes', undefined, { label: 'Sin afectar' }),
+      facets.lookup('diagram', 'Diagrama', undefined, { label: 'Sin asignar' }),
+    ];
+  }, [positionIds]);
 
   // ─── Export config ─────────────────────────────────────────────────────────
 

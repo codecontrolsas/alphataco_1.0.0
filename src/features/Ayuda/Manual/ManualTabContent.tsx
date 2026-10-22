@@ -2,22 +2,23 @@ import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visib
 import { cn } from '@/lib/utils';
 import { BookDashed, FileQuestion, ListTree, Lock } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { MANUAL_SECTIONS, READING_PATHS, START_HERE } from './catalog';
+import { MANUAL_SECTIONS } from './catalog';
+import { READING_PATHS, START_HERE } from './catalog/home';
 import { GuideToc } from './components/GuideToc';
-import { ScrollToHash } from './components/ScrollToHash';
 import { GuideView } from './components/GuideView';
 import { ManualHome, type VisibleReadingPath } from './components/ManualHome';
 import { ManualIndex } from './components/ManualIndex';
 import { ManualNotice } from './components/ManualNotice';
 import { ManualProvider, type ManualGuideRef } from './components/ManualProvider';
 import { ManualSearch } from './components/ManualSearch';
+import { ScrollToHash } from './components/ScrollToHash';
 import { visibleGuides } from './lib/guide-access';
 import { buildTree, neighbors, relatedGuides, toSummary, type ManualTree } from './lib/guide-navigation';
 import type { LoadedGuide } from './lib/manual-loader';
 import { manualHref, screenHref } from './lib/manual-urls';
-import { firstConcreteScreen } from './lib/route-table';
 import { getManual } from './lib/manual.server';
 import type { TocItem } from './lib/mdx-scan';
+import { firstConcreteScreen } from './lib/route-table';
 
 type SearchParams = { [key: string]: string | string[] | undefined };
 
@@ -54,7 +55,7 @@ export function ManualTabContent({
 
   const rawGuide = searchParams.guide;
   const requestedSlug = typeof rawGuide === 'string' && rawGuide ? rawGuide : null;
-  const guide = requestedSlug ? (visibleBySlug.get(requestedSlug) ?? null) : null;
+  const guide = requestedSlug ? visibleBySlug.get(requestedSlug) ?? null : null;
 
   const backToHome = { href: manualHref(), label: 'Ir a la portada del manual' };
   let content: ReactNode;
@@ -155,7 +156,10 @@ function ManualLayout({
       )}
     >
       {(hasIndex || showSearch) && (
-        <aside aria-label="Navegación del manual" className="min-w-0 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pe-1">
+        <aside
+          aria-label="Navegación del manual"
+          className="min-w-0 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pe-1"
+        >
           {showSearch && (
             <div className="mb-4">
               <ManualSearch />
@@ -183,7 +187,10 @@ function ManualLayout({
       <div className="min-w-0">{children}</div>
 
       {hasToc && (
-        <aside aria-label="En esta guía" className="hidden xl:sticky xl:top-20 xl:block xl:max-h-[calc(100dvh-6rem)] xl:self-start xl:overflow-y-auto">
+        <aside
+          aria-label="En esta guía"
+          className="hidden xl:sticky xl:top-20 xl:block xl:max-h-[calc(100dvh-6rem)] xl:self-start xl:overflow-y-auto"
+        >
           <p className="mb-2 text-sm font-semibold text-foreground">En esta guía</p>
           <GuideToc items={toc} />
         </aside>

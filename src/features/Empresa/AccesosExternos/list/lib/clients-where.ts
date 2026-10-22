@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { Prisma } from '@/generated/prisma/client';
-import type { DataTableSearchParams } from '@/shared/components/common/DataTable';
+import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,

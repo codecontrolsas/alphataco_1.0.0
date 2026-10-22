@@ -15,13 +15,7 @@ import { INVALIDATION_MAP } from '@/shared/constants/cache-invalidation-map';
 import { prisma } from '@/shared/lib/prisma';
 import { invalidateCacheTags } from '@/shared/utils/cache-invalidation';
 import { z } from 'zod';
-import {
-  lockEditableOrder,
-  OrderManagementError,
-  requireOrderManagementPermission,
-  requireOrderManagementPermissions,
-  toFailure,
-} from './access';
+import { lockEditableOrder, OrderManagementError, requireOrderManagementPermissions, toFailure } from './access';
 import {
   applyChiefCommentUpdates,
   applyDescriptionUpdates,
@@ -45,31 +39,6 @@ import { withMaintenanceActor } from '@/features/Mantenimiento/shared/maintenanc
 import { nextWorkOrderSequence } from '@/features/Mantenimiento/shared/order-numbering';
 
 const logger = new Logger('OrderManagement/work-orders');
-
-/**
- * Genera ordenes de trabajo agrupando items por sector.
- * Crea una OT por sector, con sus work_order_items y work_order_item_repairs.
- */
-export async function generateWorkOrdersForOrder(
-  orderId: string,
-  dates: { plannedStartDate: string; plannedEndDate: string }
-): Promise<GenerateWorkOrdersResult> {
-  try {
-    // Permiso: generar OTs es un alta.
-    await requireOrderManagementPermission('create');
-    orderIdSchema.parse(orderId);
-    const validDates = plannedDatesSchema.parse(dates);
-    const workOrders = await generateWorkOrdersCore(orderId, validDates);
-    return { ok: true, workOrders };
-  } catch (error) {
-    if (error instanceof z.ZodError) return { ok: false, message: error.issues[0]?.message ?? 'Datos inválidos' };
-    return toFailure(error);
-  }
-}
-
-export type GenerateWorkOrdersResult =
-  | { ok: true; workOrders: Array<{ orderNumber: string; sectorName: string; itemCount: number }> }
-  | { ok: false; message: string };
 
 /** Núcleo sin chequeo de permisos: lo llaman las dos acciones exportadas, que ya lo verificaron. */
 async function generateWorkOrdersCore(

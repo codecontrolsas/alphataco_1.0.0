@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DeviationsResult, RowWithDeviations } from '../schemas/deviations';
+import type { DailyReportDeviationsResult as DeviationsResult, RowWithDeviations } from '@/features/Operaciones/PartesDiarios/schemas/deviations';
 import type { ExpirySummary } from '../schemas/documents-expiry';
 import { renderDeviationsEmail } from './deviations';
 import { renderDocumentsExpiryEmail } from './documents-expiry';

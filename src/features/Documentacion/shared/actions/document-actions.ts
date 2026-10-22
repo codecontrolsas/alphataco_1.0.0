@@ -6,7 +6,7 @@ import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { typeAppliesTo } from '../compliance';
+import { typeAppliesTo } from '@/features/Documentacion/shared/compliance/applicability';
 import { loadComplianceDataset } from '../compliance/server/dataset.server';
 import { validateDocumentFile } from '../lib/document-file-rules';
 import {

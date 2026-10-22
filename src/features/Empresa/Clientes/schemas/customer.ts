@@ -1,5 +1,5 @@
+import { isValidCuit, normalizeCuit } from '@/shared/utils/cuit-text';
 import { z } from 'zod';
-import { isValidCuit, normalizeCuit } from '@/features/Empresa/General/lib/company-form';
 
 /**
  * Schema compartido server/client del formulario de cliente (sin directiva: lo importan la

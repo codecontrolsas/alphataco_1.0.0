@@ -2,7 +2,8 @@ import 'server-only';
 
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
-import { parseSearchParams, type DataTableSearchParams } from '@/shared/components/common/DataTable';
+import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
+import { type DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { NULL_FILTER_VALUE, buildDateRangeFiltersWhere } from '@/shared/components/common/DataTable/helpers';
 import { prisma } from '@/shared/lib/prisma';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';

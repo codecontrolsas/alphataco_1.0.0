@@ -1,22 +1,24 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Textarea } from '@/components/ui/textarea';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { DateFormField, TextareaFormField } from '@/shared/components/common/form-fields';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import moment from 'moment';
-import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { rejectCheck } from '../../actions/checks.server';
-import { invalidateTreasury } from '../../lib/invalidate';
 import { treasuryToday } from '../../lib/today';
+import { useTreasuryMutation } from '../../lib/use-treasury-mutation';
 import { RETURNED_BY, RETURNED_BY_LABELS, rejectionSchema, type RejectionValues } from '../../schemas/checks';
 
 const logger = new Logger('Treasury/RejectCheckDialog');
@@ -29,25 +31,25 @@ interface RejectCheckDialogProps {
 
 /** Rechazo de un cheque depositado, endosado o descontado (spec Tesorería etapa 3a §3.6). */
 export function RejectCheckDialog({ open, onOpenChange, check }: RejectCheckDialogProps) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const form = useForm<RejectionValues>({
     resolver: zodResolver(rejectionSchema),
-    defaultValues: { checkId: check.id, date: treasuryToday(), reason: '', returnedBy: check.status === 'ENDORSED' ? 'SUPPLIER' : 'BANK' },
+    defaultValues: {
+      checkId: check.id,
+      date: treasuryToday(),
+      reason: '',
+      returnedBy: check.status === 'ENDORSED' ? 'SUPPLIER' : 'BANK',
+    },
   });
 
-  const save = useMutation({
-    mutationFn: async (values: RejectionValues) => unwrapAction(await rejectCheck(values)),
+  const save = useTreasuryMutation({
+    action: (values: RejectionValues) => rejectCheck(values),
     onSuccess: (result) => {
       toast.success(`Rechazo ${result.number} registrado`);
-      invalidateTreasury(queryClient);
-      router.refresh();
       onOpenChange(false);
     },
-    onError: (error) => {
-      logger.error('Error al registrar el rechazo', { data: { error } });
-      toast.error(error instanceof Error ? error.message : 'No se pudo registrar el rechazo');
-    },
+    logger,
+    logError: 'Error al registrar el rechazo',
+    errorFallback: 'No se pudo registrar el rechazo',
   });
 
   const effect =
@@ -66,23 +68,7 @@ export function RejectCheckDialog({ open, onOpenChange, check }: RejectCheckDial
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((values) => save.mutate(values))} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="date"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Fecha del rechazo</FormLabel>
-                  <FormControl>
-                    <EnhancedDatePicker
-                      date={field.value ? moment(field.value, 'YYYY-MM-DD').toDate() : undefined}
-                      setDate={(d) => field.onChange(d ? moment(d).format('YYYY-MM-DD') : '')}
-                      placeholder="DD/MM/AAAA"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <DateFormField control={form.control} name="date" label="Fecha del rechazo" />
             <FormField
               control={form.control}
               name="returnedBy"
@@ -105,18 +91,12 @@ export function RejectCheckDialog({ open, onOpenChange, check }: RejectCheckDial
                 </FormItem>
               )}
             />
-            <FormField
+            <TextareaFormField
               control={form.control}
               name="reason"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Motivo</FormLabel>
-                  <FormControl>
-                    <Textarea rows={3} placeholder="Sin fondos, firma no coincide…" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Motivo"
+              rows={3}
+              placeholder="Sin fondos, firma no coincide…"
             />
             <DialogFooter className="gap-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

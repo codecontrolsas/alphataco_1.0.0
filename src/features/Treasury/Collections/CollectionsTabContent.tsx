@@ -1,16 +1,16 @@
 import { Button } from '@/components/ui/button';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { StateBlock } from '@/shared/components/common/StateBlock';
+import { SectionTableSkeleton } from '@/shared/components/skeletons/SectionTableSkeleton';
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { getReceivablesSummary } from '../actions/customer-statement.server';
 import { getCollectionsSectionCount } from '../lib/section-counts';
-import { StateBlock } from '@/shared/components/common/StateBlock';
-import { TreasurySectionSkeleton } from '../fallback/TreasurySectionSkeleton';
-import { CustomerStatementPicker } from './components/CustomerStatementPicker';
-import { ReceivablesAttentionSection } from './components/ReceivablesAttentionSection';
 import { ReceiptsList } from './ReceiptsList/ReceiptsList';
 import { ReceivablesList } from './ReceivablesList/ReceivablesList';
+import { CustomerStatementPicker } from './components/CustomerStatementPicker';
+import { ReceivablesAttentionSection } from './components/ReceivablesAttentionSection';
 
 /** Id de la tabla "A cobrar" (el mismo que usa `ReceivablesList`). */
 const RECEIVABLES_TABLE_ID = 'treasury-receivables';
@@ -33,7 +33,8 @@ export default async function CollectionsTabContent({
   searchParams: DataTableSearchParams;
   permissions: Record<string, boolean>;
 }) {
-  if (permissions['tesoreria:cobranzas:view'] !== true) return <StateBlock variant="noperm" title="No tenés permiso para ver esta información" />;
+  if (permissions['tesoreria:cobranzas:view'] !== true)
+    return <StateBlock variant="noperm" title="No tenés permiso para ver esta información" />;
   const canCreate = permissions['tesoreria:cobranzas:create'] === true;
   const view: CollectionsView = searchParams.view === 'receipts' ? 'receipts' : 'receivables';
   // Las promesas arrancan ya y se resuelven en su propio Suspense: la tabla no espera a las tarjetas.
@@ -74,7 +75,7 @@ export default async function CollectionsTabContent({
       {summary && overdueCount && (
         <ReceivablesAttentionSection tableId={RECEIVABLES_TABLE_ID} summary={summary} overdueCount={overdueCount} />
       )}
-      <Suspense fallback={<TreasurySectionSkeleton />}>
+      <Suspense fallback={<SectionTableSkeleton filterCount={2} />}>
         {view === 'receivables' ? (
           <ReceivablesList searchParams={searchParams} permissionsMap={permissions} />
         ) : (

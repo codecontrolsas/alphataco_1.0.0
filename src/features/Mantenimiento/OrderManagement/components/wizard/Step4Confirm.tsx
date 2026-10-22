@@ -9,7 +9,6 @@ import { RepairItemPhotos } from '@/features/Mantenimiento/shared/components/Rep
 import { getRepairItemGroupName, getRepairItemImages } from '@/features/Mantenimiento/shared/repair-item-label';
 import { ClipboardList, Info } from 'lucide-react';
 import { useMemo } from 'react';
-import type { WorkshopSector } from '../../actions/queries.server';
 import type { LocalItem } from '../ManageOrderWizard';
 import { RejectedItemsList } from './RejectedItemsList';
 import type { SectorOrderEntry } from './Step3ExecutionOrder';
@@ -17,7 +16,6 @@ import { getItemLabel, getItemRepairTypeNames } from './helpers';
 
 interface Step4ConfirmProps {
   localItems: LocalItem[];
-  sectors: WorkshopSector[];
   sectorAssignments: Map<string, string>;
   sectorOrder: SectorOrderEntry[];
   repairTypes: Array<{ id: string; name: string }>;
@@ -38,7 +36,6 @@ interface SectorPreview {
 
 export function Step4Confirm({
   localItems,
-  sectors,
   sectorAssignments,
   sectorOrder,
   repairTypes,

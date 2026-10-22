@@ -1,12 +1,9 @@
 'use client';
 
-import {
-  DataTable,
-  DataTableColumnHeader,
-  inMemoryFacetedFilterFn,
-  inMemoryTextFilterFn,
-  type DataTableFacetedFilterConfig,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
+import { inMemoryFacetedFilterFn, inMemoryTextFilterFn } from '@/shared/components/common/DataTable/in-memory';
+import { type DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable/types';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Truck } from 'lucide-react';
 import { useMemo } from 'react';
@@ -29,15 +26,13 @@ export function getCustomerEquipmentColumns(customerId: string, canEdit: boolean
   const columns: ColumnDef<CustomerEquipmentRow>[] = [
     {
       accessorKey: 'name',
-      meta: { title: 'Nombre' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
+      ...titled('Nombre'),
       cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
       filterFn: inMemoryTextFilterFn,
     },
     {
       accessorKey: 'type',
-      meta: { title: 'Tipo de equipo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de equipo" />,
+      ...titled('Tipo de equipo'),
       filterFn: inMemoryFacetedFilterFn,
     },
   ];

@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { canViewServer } from '@/features/Permissions/actionsServer';
+import { canViewServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';

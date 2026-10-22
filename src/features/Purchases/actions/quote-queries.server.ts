@@ -1,12 +1,13 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { argentinaDate } from '@/shared/lib/argentina-time';
+import { toDateOnly } from '@/shared/lib/date-only';
 import { prisma } from '@/shared/lib/prisma';
 import { buildStorageFileUrl } from '@/shared/lib/storage-url';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { UUID_RE } from '../lib/action-errors';
+import { isUuid } from '@/shared/lib/uuid';
 import { requestLineLabel } from '../lib/order-progress';
 import { comparePrices, computeOrderTotals } from '../lib/order-totals';
 import { maskAmount } from '../lib/price-visibility';
@@ -15,15 +16,12 @@ import { canApplyPurchaseQuoteAction, type PurchaseQuoteStatus } from '../lib/qu
 import { ORDERABLE_REQUEST_STATUSES, type PurchaseRequestStatus } from '../lib/request-state-machine';
 import { SUPPLIER_FILES_BUCKET } from '../lib/storage-files';
 import { supplierRecipients } from '../lib/supplier-send';
+import { userName } from '../lib/user-name';
 import { type PurchaseQuoteFormValues } from '../schemas/quotes';
-
-const userName = (p: { fullname: string | null; email: string | null } | null) =>
-  p ? p.fullname ?? p.email ?? 'Usuario' : null;
-const dateOnly = (value: Date | null) => (value ? value.toISOString().slice(0, 10) : null);
 
 /** Detalle del pedido de cotizacion: lineas con su solicitud, respuesta, OC generadas e historial. */
 export async function getPurchaseQuoteDetail(id: string) {
-  if (!UUID_RE.test(id)) return null;
+  if (!isUuid(id)) return null;
   const [canView, canUpdate, canSend, canViewPrices, canCreateOrder] = await Promise.all([
     checkPermissionServer('compras', 'cotizaciones', 'view'),
     checkPermissionServer('compras', 'cotizaciones', 'update'),
@@ -117,8 +115,8 @@ export async function getPurchaseQuoteDetail(id: string) {
     supplier: quote.supplier,
     notes: quote.notes,
     sentTo: quote.sent_to,
-    receivedAt: dateOnly(quote.received_at),
-    validUntil: dateOnly(quote.valid_until),
+    receivedAt: toDateOnly(quote.received_at),
+    validUntil: toDateOnly(quote.valid_until),
     deliveryDays: quote.delivery_days,
     supplierNotes: quote.supplier_notes,
     attachment: quote.attachment_path
@@ -150,7 +148,7 @@ export async function getPurchaseQuoteDetail(id: string) {
         ? [
             {
               event: status === 'DECLINED' ? 'No cotiza' : 'Respondida',
-              at: dateOnly(quote.received_at),
+              at: toDateOnly(quote.received_at),
               by: null,
               notes: quote.supplier_notes,
             },
@@ -188,7 +186,7 @@ type ComparisonCell =
  * por linea, y el menor unitario neto por linea marcado (en un empate, todos).
  */
 export async function getRequestQuoteComparison(requestId: string) {
-  if (!UUID_RE.test(requestId)) return null;
+  if (!isUuid(requestId)) return null;
   const [canViewQuotes, canViewRequests, canViewAll, canCreateOrder, canViewPrices, profile] = await Promise.all([
     checkPermissionServer('compras', 'cotizaciones', 'view'),
     checkPermissionServer('compras', 'solicitudes', 'view'),
@@ -251,7 +249,7 @@ export async function getRequestQuoteComparison(requestId: string) {
         ? [{ quantity: line.quantity.toString(), unitPrice: line.unit_price.toString(), vatRateId: line.vat_rate_id }]
         : []
     );
-    const validUntil = dateOnly(quote.valid_until);
+    const validUntil = toDateOnly(quote.valid_until);
     return {
       quoteId: quote.id,
       number: quote.number,

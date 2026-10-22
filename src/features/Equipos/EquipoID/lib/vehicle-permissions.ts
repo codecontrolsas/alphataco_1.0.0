@@ -1,4 +1,4 @@
-import { canViewServer, checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { canViewServer, checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 
 /**
  * Permisos de servidor de la ficha de vehículos. Los slugs son los de `permissions-map.ts`

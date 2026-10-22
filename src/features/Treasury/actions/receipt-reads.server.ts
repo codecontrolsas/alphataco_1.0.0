@@ -2,14 +2,16 @@
 
 import { formatVoucherLabel } from '@/features/Comercial/Facturacion/lib/invoice-type';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { NO_PERMISSION } from '@/features/Purchases/lib/action-errors';
+import { UUID_RE } from '@/features/Treasury/schemas/shared';
 import type { payment_method } from '@/generated/prisma/enums';
 import { prisma } from '@/shared/lib/prisma';
 import { storagePublicUrl } from '@/shared/lib/storage';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { NO_PERMISSION, UUID_RE } from '../lib/action-errors';
 import { CHECK_STATUS_LABELS } from '../lib/check-transitions';
 import { findAliveDuplicates } from '../lib/checks';
+import { isoDay } from '../lib/dates';
 import { availableAdvancesOfCustomer, openInvoicesOfCustomer } from '../lib/receivables';
 import { openCheckDebtsOfCustomer, rejectedCheckLabel } from '../lib/rejected-checks';
 import { CUSTOMER_FILES_BUCKET } from '../lib/storage-files';
@@ -17,7 +19,6 @@ import { TreasuryError } from '../lib/treasury-errors';
 import { emptyReceiptForm, type ReceiptFormValues } from '../schemas/receipts';
 import { getActiveTreasuryAccountOptions } from './accounts.server';
 import { localToday } from './shared';
-import { isoDay } from '../lib/dates';
 
 /** Lecturas de recibos de cobranza (editor, detalle, aviso de cheques repetidos). Sin efectos. */
 
@@ -190,7 +191,6 @@ export async function getReceiptFormData(input: { receiptId?: string; customerId
     checkDebts,
   };
 }
-
 
 /**
  * Aviso del editor (etapa 3a): cheques vigentes iguales a los que se están cargando. No bloquea;

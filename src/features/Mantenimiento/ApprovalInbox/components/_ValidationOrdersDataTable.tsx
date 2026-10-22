@@ -11,8 +11,8 @@ import { RelativeAge } from '@/features/Mantenimiento/shared/components/Relative
 import { ResourceCell, toResourceCellResource } from '@/features/Mantenimiento/shared/components/ResourceCell';
 import { calculateRepairProgress } from '@/features/Mantenimiento/utils/repairProgress';
 import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
-import { DataTable } from '@/shared/components/common/DataTable';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import type { ColumnDef } from '@tanstack/react-table';
 import { ClipboardCheck, Clock, Eye } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
@@ -100,8 +100,7 @@ function ValidationOrdersTable({
       {
         accessorKey: 'order_number',
         id: 'order_number',
-        meta: { title: 'N° Orden' },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="N° Orden" />,
+        ...titled('N° Orden'),
         cell: ({ row }) =>
           row.original.order_number ? (
             <span className="font-mono text-sm font-medium">{row.original.order_number}</span>
@@ -114,8 +113,7 @@ function ValidationOrdersTable({
       {
         id: 'vehicle',
         accessorFn: (row) => getVehicleLabel(row),
-        meta: { title: 'Equipo' },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo" />,
+        ...titled('Equipo'),
         cell: ({ row }) => <ResourceCell resource={toResourceCellResource(row.original)} />,
         enableSorting: false,
       },
@@ -124,8 +122,7 @@ function ValidationOrdersTable({
       {
         id: 'description',
         accessorFn: (row) => row.description ?? row.maintenance_requests?.description ?? '',
-        meta: { title: 'Descripción' },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
+        ...titled('Descripción'),
         cell: ({ row }) => {
           const value = row.original.description ?? row.original.maintenance_requests?.description ?? '';
           if (!value) return <span className="text-muted-foreground text-sm">—</span>;
@@ -143,8 +140,7 @@ function ValidationOrdersTable({
       {
         id: 'sectors',
         accessorFn: (row) => getSectors(row).join(', '),
-        meta: { title: 'Sectores' },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Sectores" />,
+        ...titled('Sectores'),
         cell: ({ row }) => {
           const sectorList = getSectors(row.original);
           if (sectorList.length === 0) return <Badge variant="outline">Sin asignar</Badge>;
@@ -165,8 +161,7 @@ function ValidationOrdersTable({
       {
         id: 'progress',
         accessorFn: (row) => calculateRepairProgress(row.maintenance_order_items).percent,
-        meta: { title: 'Progreso' },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Progreso" />,
+        ...titled('Progreso'),
         cell: ({ row }) => {
           const { percent, completed, total } = calculateRepairProgress(row.original.maintenance_order_items);
           return (
@@ -194,8 +189,7 @@ function ValidationOrdersTable({
       {
         accessorKey: 'workshop_entry_date',
         id: 'workshop_entry_date',
-        meta: { title: 'Ingreso a Taller' },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Ingreso a Taller" />,
+        ...titled('Ingreso a Taller'),
         cell: ({ row }) => {
           const date = row.original.workshop_entry_date;
           return date ? (

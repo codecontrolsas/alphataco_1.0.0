@@ -1,13 +1,15 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
+import { toDateOnly } from '@/shared/lib/date-only';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
+import { isUuid } from '@/shared/lib/uuid';
+import { revalidatePath } from 'next/cache';
+import { NO_PERMISSION, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { PurchaseError } from '../lib/purchase-errors';
 import { trimDecimals } from '../lib/quantity-format';
 import {
@@ -20,11 +22,10 @@ import {
 
 const logger = new Logger('features/Purchases/withholding-profiles');
 
-const isoDay = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
 const pct = (d: Prisma.Decimal | null) => (d === null ? null : trimDecimals(d.toFixed(4)));
 
 export async function getSupplierWithholdingProfiles(supplierId: string) {
-  if (!UUID_RE.test(supplierId)) return [];
+  if (!isUuid(supplierId)) return [];
   const allowed = await Promise.all([
     checkPermissionServer('compras', 'proveedores', 'view'),
     checkPermissionServer('compras', 'pagos', 'view'),
@@ -54,7 +55,12 @@ export async function getSupplierWithholdingProfiles(supplierId: string) {
       regime: r.regime,
       rate: pct(r.rate),
       exclusion: r.exclusion_percentage
-        ? { percentage: pct(r.exclusion_percentage)!, from: isoDay(r.exclusion_from)!, to: isoDay(r.exclusion_to)!, certificate: r.exclusion_certificate }
+        ? {
+            percentage: pct(r.exclusion_percentage)!,
+            from: toDateOnly(r.exclusion_from)!,
+            to: toDateOnly(r.exclusion_to)!,
+            certificate: r.exclusion_certificate,
+          }
         : null,
     }));
 }
@@ -62,15 +68,21 @@ export async function getSupplierWithholdingProfiles(supplierId: string) {
 export type SupplierWithholdingProfile = Awaited<ReturnType<typeof getSupplierWithholdingProfiles>>[number];
 
 /** Guarda los cuatro impuestos de una vez: "No aplica" borra el perfil de ese impuesto. */
-export async function saveSupplierWithholdingProfiles(supplierId: string, values: WithholdingProfilesFormValues): Promise<ActionResult> {
+export async function saveSupplierWithholdingProfiles(
+  supplierId: string,
+  values: WithholdingProfilesFormValues
+): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'proveedores', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(supplierId)) return fail('El proveedor no existe');
+  if (!isUuid(supplierId)) return fail('El proveedor no existe');
   const parsed = withholdingProfilesFormSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
   const companyId = await getActiveCompanyId();
   try {
     await prisma.$transaction(async (tx) => {
-      const supplier = await tx.suppliers.findFirst({ where: { id: supplierId, company_id: companyId }, select: { id: true } });
+      const supplier = await tx.suppliers.findFirst({
+        where: { id: supplierId, company_id: companyId },
+        select: { id: true },
+      });
       if (!supplier) throw new PurchaseError('El proveedor no existe');
       for (const tax of WITHHOLDING_TAXES) {
         const p = parsed.data.profiles[tax];
@@ -79,8 +91,11 @@ export async function saveSupplierWithholdingProfiles(supplierId: string, values
           continue;
         }
         if (p.regimeId) {
-          const regime = UUID_RE.test(p.regimeId)
-            ? await tx.withholding_regimes.findFirst({ where: { id: p.regimeId, company_id: companyId, tax }, select: { id: true } })
+          const regime = isUuid(p.regimeId)
+            ? await tx.withholding_regimes.findFirst({
+                where: { id: p.regimeId, company_id: companyId, tax },
+                select: { id: true },
+              })
             : null;
           if (!regime) throw new PurchaseError('El régimen no existe o no es de ese impuesto');
         }

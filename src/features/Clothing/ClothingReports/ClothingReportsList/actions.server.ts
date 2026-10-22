@@ -1,27 +1,37 @@
 'use server';
 
 import {
+  buildPersonFileWhere,
+  DELIVERED_BY_RELATION,
+  DELIVERY_PERSON_SELECT,
+  deliveryPersonFacet,
+  deliveryStatusFacet,
+  deliveryTypeFacet,
+  deliveryWarehouseFacet,
+  RECIPIENT_RELATION,
+} from '@/features/Clothing/lib/delivery-list-query';
+import {
   buildDeliveryStockWhere,
-  DELIVERY_STATUS_ACTIVE,
-  DELIVERY_STATUS_CANCELLED,
   DELIVERY_STOCK_MANUAL_COLUMNS,
   DELIVERY_STOCK_SELECT,
   serializeDeliveryCost,
 } from '@/features/Clothing/lib/delivery-stock-where';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
   buildSearchWhere,
   buildTextFiltersWhere,
-  NULL_FILTER_VALUE,
   parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
+import { createCrossWhere } from '@/shared/lib/table-facets';
+import { resolveSorts, type SingleFacetResult } from '@/shared/lib/table-list-query';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('Clothing/ClothingReports/actions.server');
 
@@ -33,7 +43,7 @@ const logger = new Logger('Clothing/ClothingReports/actions.server');
 const VALID_SORT_FIELDS = new Set(['delivery_type', 'delivered_at', 'created_at', 'signature_url', 'notes']);
 
 /** FK sort map: columnId → Prisma orderBy */
-const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Record<string, unknown>> = {
+const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Prisma.clothing_deliveriesOrderByWithRelationInput> = {
   employee: (dir) => ({
     employees_clothing_deliveries_employee_idToemployees: { lastname: dir },
   }),
@@ -105,30 +115,6 @@ function buildWhereClause(companyId: string, state: ReturnType<typeof parseSearc
     // If both are selected, no filter needed (all records)
   }
 
-  // Text filter: employee_file (legajo del receptor)
-  const employeeFileValues = state.filters['employee_file'];
-  const employeeFileSearch = employeeFileValues?.[0]?.trim();
-  let employeeFileWhere: Record<string, unknown> = {};
-  if (employeeFileSearch) {
-    employeeFileWhere = {
-      employees_clothing_deliveries_employee_idToemployees: {
-        file: { contains: employeeFileSearch, mode: 'insensitive' },
-      },
-    };
-  }
-
-  // Text filter: delivered_by_file (legajo del que entrega)
-  const deliveredByFileValues = state.filters['delivered_by_file'];
-  const deliveredByFileSearch = deliveredByFileValues?.[0]?.trim();
-  let deliveredByFileWhere: Record<string, unknown> = {};
-  if (deliveredByFileSearch) {
-    deliveredByFileWhere = {
-      employees_clothing_deliveries_delivered_by_idToemployees: {
-        file: { contains: deliveredByFileSearch, mode: 'insensitive' },
-      },
-    };
-  }
-
   return {
     company_id: companyId,
     ...searchWhere,
@@ -138,8 +124,8 @@ function buildWhereClause(companyId: string, state: ReturnType<typeof parseSearc
     ...employeeWhere,
     ...deliveredByWhere,
     ...hasSignatureWhere,
-    ...employeeFileWhere,
-    ...deliveredByFileWhere,
+    ...buildPersonFileWhere(RECIPIENT_RELATION, state.filters['employee_file']),
+    ...buildPersonFileWhere(DELIVERED_BY_RELATION, state.filters['delivered_by_file']),
     ...buildDeliveryStockWhere(state.filters, canViewPrices),
   };
 }
@@ -159,12 +145,8 @@ const deliverySelect = {
   delivered_at: true,
   created_at: true,
   updated_at: true,
-  employees_clothing_deliveries_employee_idToemployees: {
-    select: { id: true, firstname: true, lastname: true, file: true },
-  },
-  employees_clothing_deliveries_delivered_by_idToemployees: {
-    select: { id: true, firstname: true, lastname: true, file: true },
-  },
+  [RECIPIENT_RELATION]: DELIVERY_PERSON_SELECT,
+  [DELIVERED_BY_RELATION]: DELIVERY_PERSON_SELECT,
   clothing_delivery_items: {
     include: {
       clothing_items: true,
@@ -187,21 +169,14 @@ export async function getClothingReportsPaginated(searchParams: DataTableSearchP
     const where = buildWhereClause(companyId, state, canViewPrices);
 
     // Safe orderBy: multi-sort con FK_SORT_MAP
-    const resolvedSorts: Record<string, unknown>[] = [];
-    for (const s of state.sorting) {
-      const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-      const fkMapper = FK_SORT_MAP[s.id];
-      if (s.id === 'cost') {
+    const safeOrderBy = [
+      ...resolveSorts<Prisma.clothing_deliveriesOrderByWithRelationInput>(state.sorting, VALID_SORT_FIELDS, {
+        ...FK_SORT_MAP,
         // Ordenar por costo sin permiso permitiria deducir los importes.
-        if (canViewPrices) resolvedSorts.push({ stock_movement: { total_cost: dir } });
-      } else if (fkMapper) {
-        resolvedSorts.push(fkMapper(dir));
-      } else if (VALID_SORT_FIELDS.has(s.id)) {
-        resolvedSorts.push({ [s.id]: dir });
-      }
-    }
-
-    const safeOrderBy = [...resolvedSorts, { delivered_at: 'desc' as const }];
+        cost: (dir) => (canViewPrices ? { stock_movement: { total_cost: dir } } : []),
+      }),
+      { delivered_at: 'desc' as const },
+    ];
 
     const [data, total] = await Promise.all([
       prisma.clothing_deliveries.findMany({
@@ -256,130 +231,20 @@ export async function getAllClothingReportsForExport(searchParams: DataTableSear
 export async function getClothingReportsSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
-): Promise<{
-  counts: Map<string, number>;
-  resolvedOptions?: Array<{ id: string; name: string | null }>;
-} | null> {
+): Promise<SingleFacetResult> {
   const [companyId, canViewPrices] = await Promise.all([getActiveCompanyId(), canViewDeliveryPrices()]);
-  const baseWhere = { company_id: companyId };
-
-  let parsedState: ReturnType<typeof parseSearchParams> | null = null;
-  if (searchParams && Object.keys(searchParams).length > 0) {
-    parsedState = parseSearchParams(searchParams);
-  }
-
-  const hasActiveFilters = parsedState && (Object.keys(parsedState.filters).length > 0 || parsedState.search);
-
-  function crossWhere(excludeColumn: string) {
-    if (!parsedState || !hasActiveFilters) return baseWhere;
-    const modified = { ...parsedState, filters: { ...parsedState.filters } };
-    delete modified.filters[excludeColumn];
-    delete modified.filters[`${excludeColumn}_from`];
-    delete modified.filters[`${excludeColumn}_to`];
-    return buildWhereClause(companyId, modified, canViewPrices);
-  }
-
-  function toFacetMap(rows: { key: string | null | undefined; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      if (key == null) {
-        map.set(NULL_FILTER_VALUE, (map.get(NULL_FILTER_VALUE) ?? 0) + count);
-      } else {
-        map.set(String(key), count);
-      }
-    }
-    return map;
-  }
+  const crossWhere = createCrossWhere<Prisma.clothing_deliveriesWhereInput>(
+    searchParams,
+    { company_id: companyId },
+    (state) => buildWhereClause(companyId, state, canViewPrices)
+  );
 
   try {
-    // ── delivery_type — enum ──────────────────────────────────────────────────
-    if (columnId === 'delivery_type') {
-      const where = crossWhere('delivery_type');
-      const rows = await prisma.clothing_deliveries.groupBy({
-        by: ['delivery_type'],
-        where,
-        _count: true,
-      });
-      return {
-        counts: toFacetMap(rows.map((r) => ({ key: r.delivery_type, count: r._count }))),
-      };
-    }
-
-    // ── status — virtual (cancelled_at) ───────────────────────────────────────
-    if (columnId === 'status') {
-      const where = crossWhere('status');
-      const [active, cancelled] = await Promise.all([
-        prisma.clothing_deliveries.count({ where: { ...where, cancelled_at: null } }),
-        prisma.clothing_deliveries.count({ where: { ...where, cancelled_at: { not: null } } }),
-      ]);
-      const counts = new Map<string, number>();
-      if (active > 0) counts.set(DELIVERY_STATUS_ACTIVE, active);
-      if (cancelled > 0) counts.set(DELIVERY_STATUS_CANCELLED, cancelled);
-      return { counts };
-    }
-
-    // ── warehouse — FK nullable ───────────────────────────────────────────────
-    if (columnId === 'warehouse') {
-      const where = crossWhere('warehouse');
-      const rows = await prisma.clothing_deliveries.groupBy({
-        by: ['warehouse_id'],
-        where,
-        _count: true,
-      });
-      const counts = toFacetMap(rows.map((r) => ({ key: r.warehouse_id, count: r._count })));
-      const ids = rows.map((r) => r.warehouse_id).filter((id): id is string => id != null);
-      const warehouses =
-        ids.length > 0
-          ? await prisma.warehouses.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
-          : [];
-      return { counts, resolvedOptions: warehouses };
-    }
-
-    // ── employee — FK ─────────────────────────────────────────────────────────
-    if (columnId === 'employee') {
-      const where = crossWhere('employee');
-      const rows = await prisma.clothing_deliveries.groupBy({
-        by: ['employee_id'],
-        where,
-        _count: true,
-      });
-      const employeeIds = rows.map((r) => r.employee_id);
-      const employees = await prisma.employees.findMany({
-        where: { id: { in: employeeIds } },
-        select: { id: true, firstname: true, lastname: true, file: true },
-      });
-
-      const counts = toFacetMap(rows.map((r) => ({ key: r.employee_id, count: r._count })));
-      const resolvedOptions = employees.map((emp) => ({
-        id: emp.id,
-        name: `[${emp.file ?? ''}] ${emp.lastname} ${emp.firstname}`,
-      }));
-
-      return { counts, resolvedOptions };
-    }
-
-    // ── delivered_by — FK ─────────────────────────────────────────────────────
-    if (columnId === 'delivered_by') {
-      const where = crossWhere('delivered_by');
-      const rows = await prisma.clothing_deliveries.groupBy({
-        by: ['delivered_by_id'],
-        where,
-        _count: true,
-      });
-      const employeeIds = rows.map((r) => r.delivered_by_id).filter((id): id is string => id != null);
-      const employees = await prisma.employees.findMany({
-        where: { id: { in: employeeIds } },
-        select: { id: true, firstname: true, lastname: true, file: true },
-      });
-
-      const counts = toFacetMap(rows.map((r) => ({ key: r.delivered_by_id, count: r._count })));
-      const resolvedOptions = employees.map((emp) => ({
-        id: emp.id,
-        name: `[${emp.file ?? ''}] ${emp.lastname} ${emp.firstname}`,
-      }));
-
-      return { counts, resolvedOptions };
-    }
+    if (columnId === 'delivery_type') return await deliveryTypeFacet(crossWhere('delivery_type'));
+    if (columnId === 'status') return await deliveryStatusFacet(crossWhere('status'));
+    if (columnId === 'warehouse') return await deliveryWarehouseFacet(crossWhere('warehouse'));
+    if (columnId === 'employee') return await deliveryPersonFacet('employee_id', crossWhere('employee'));
+    if (columnId === 'delivered_by') return await deliveryPersonFacet('delivered_by_id', crossWhere('delivered_by'));
 
     // ── has_signature — computed boolean ───────────────────────────────────────
     if (columnId === 'has_signature') {

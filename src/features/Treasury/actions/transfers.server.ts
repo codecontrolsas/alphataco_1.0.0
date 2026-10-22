@@ -1,15 +1,17 @@
 'use server';
 
-import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { AMOUNT_SCALE, formatScaled, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
-import { checkPermissionServer } from '@/features/Permissions';
+import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { NO_PERMISSION, firstIssue } from '@/features/Purchases/lib/action-errors';
+import { UUID_RE } from '@/features/Treasury/schemas/shared';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError } from '../lib/action-errors';
+import { toTreasuryActionError } from '../lib/action-errors';
 import { nextTransferNumber } from '../lib/document-number';
 import { assertMoneyAccount, cancelMovements, createMovement, dateOnly } from '../lib/movements';
 import { TreasuryError } from '../lib/treasury-errors';
@@ -26,7 +28,9 @@ const logger = new Logger('features/Treasury/transfers');
 
 const NOT_FOUND = 'La transferencia no existe';
 
-export async function createTransfer(values: TransferFormValues): Promise<ActionResult<{ id: string; number: string }>> {
+export async function createTransfer(
+  values: TransferFormValues
+): Promise<ActionResult<{ id: string; number: string }>> {
   if (!(await checkPermissionServer('tesoreria', 'transferencias', 'create'))) return fail(NO_PERMISSION);
   const parsed = transferFormSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
@@ -55,7 +59,14 @@ export async function createTransfer(values: TransferFormValues): Promise<Action
           select: { id: true, number: true },
         });
         const description = v.notes.trim() ? `${number} — ${v.notes.trim()}` : number;
-        const common = { companyId, date: v.date, kind: 'TRANSFER' as const, transferId: transfer.id, description, createdBy: profile.id };
+        const common = {
+          companyId,
+          date: v.date,
+          kind: 'TRANSFER' as const,
+          transferId: transfer.id,
+          description,
+          createdBy: profile.id,
+        };
         await createMovement(tx, { ...common, accountId: v.fromAccountId, amountCents: -cents });
         await createMovement(tx, { ...common, accountId: v.toAccountId, amountCents: cents });
         return transfer;

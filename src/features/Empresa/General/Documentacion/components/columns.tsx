@@ -6,7 +6,7 @@ import {
   documentListStateLabels,
   formatDocumentPeriod,
 } from '@/features/Documentacion/shared/components/DocumentCells';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { documentStateBadges } from '@/shared/utils/mappers';
@@ -64,8 +64,7 @@ export function getColumns(): ColumnDef<CompanyDocListItem>[] {
     {
       id: 'documentType',
       accessorFn: (row) => row.document_types?.name ?? '',
-      meta: { title: 'Documento' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Documento" />,
+      ...titled('Documento'),
       cell: ({ row }) => <span className="font-medium">{row.original.document_types?.name ?? '-'}</span>,
       filterFn: (row, _id, value: string[]) => {
         const id = row.original.document_types?.id;
@@ -78,8 +77,7 @@ export function getColumns(): ColumnDef<CompanyDocListItem>[] {
     {
       id: 'state',
       accessorKey: 'state',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const stateValue = row.original.state as string;
         const label = documentListStateLabels[stateValue] ?? stateValue;
@@ -103,8 +101,7 @@ export function getColumns(): ColumnDef<CompanyDocListItem>[] {
     {
       id: 'docType',
       accessorFn: (row) => (row.document_types?.is_it_montlhy ? 'Mensual' : 'Permanente'),
-      meta: { title: 'Tipo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
+      ...titled('Tipo'),
       cell: ({ row }) => {
         const isMonthly = row.original.document_types?.is_it_montlhy;
         return <Badge variant={isMonthly ? 'default' : 'secondary'}>{isMonthly ? 'Mensual' : 'Permanente'}</Badge>;
@@ -121,8 +118,7 @@ export function getColumns(): ColumnDef<CompanyDocListItem>[] {
     {
       id: 'mandatory',
       accessorFn: (row) => row.document_types?.mandatory,
-      meta: { title: 'Mandatorio' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Mandatorio" />,
+      ...titled('Mandatorio'),
       cell: ({ row }) => {
         const mandatory = row.original.document_types?.mandatory;
         if (mandatory == null) return <span className="text-muted-foreground">-</span>;
@@ -140,8 +136,7 @@ export function getColumns(): ColumnDef<CompanyDocListItem>[] {
     {
       id: 'uploadedBy',
       accessorFn: (row) => row.profile?.fullname ?? '',
-      meta: { title: 'Subido por' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Subido por" />,
+      ...titled('Subido por'),
       cell: ({ row }) => {
         const fullname = row.original.profile?.fullname;
         if (!fullname) {
@@ -160,8 +155,7 @@ export function getColumns(): ColumnDef<CompanyDocListItem>[] {
     {
       id: 'created_at',
       accessorKey: 'created_at',
-      meta: { title: 'Fecha de carga' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de carga" />,
+      ...titled('Fecha de carga'),
       cell: ({ row }) => {
         const date = row.original.created_at;
         if (!date) return <span className="text-muted-foreground">-</span>;
@@ -173,8 +167,7 @@ export function getColumns(): ColumnDef<CompanyDocListItem>[] {
     {
       id: 'validity',
       accessorKey: 'validity',
-      meta: { title: 'Vencimiento' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Vencimiento" />,
+      ...titled('Vencimiento'),
       cell: ({ row }) => {
         const validity = row.original.validity;
         const explired = row.original.document_types?.explired;
@@ -191,8 +184,7 @@ export function getColumns(): ColumnDef<CompanyDocListItem>[] {
     {
       id: 'period',
       accessorKey: 'period',
-      meta: { title: 'Período' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Período" />,
+      ...titled('Período'),
       cell: ({ row }) => {
         return <span>{formatDocumentPeriod(row.original.period) ?? '-'}</span>;
       },

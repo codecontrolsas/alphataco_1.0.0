@@ -3,7 +3,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ORDER_STATUS_UI, TONE_TO_BADGE, type BadgeVariant } from '@/features/Mantenimiento/lib/status-presentation';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { LucideIcon } from 'lucide-react';
@@ -57,8 +57,7 @@ export function getOtherEquipmentMaintenanceColumns(): ColumnDef<OtherEquipmentM
     {
       id: 'order_number',
       accessorKey: 'order_number',
-      meta: { title: 'N° Orden' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="N° Orden" />,
+      ...titled('N° Orden'),
       cell: ({ row }) => (
         <span className="font-mono text-sm font-medium tabular-nums">{row.original.order_number || '—'}</span>
       ),
@@ -67,8 +66,7 @@ export function getOtherEquipmentMaintenanceColumns(): ColumnDef<OtherEquipmentM
     {
       id: 'status',
       accessorKey: 'status',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const status = row.original.status ?? '';
         const config = STATUS_CONFIG[status];
@@ -87,8 +85,7 @@ export function getOtherEquipmentMaintenanceColumns(): ColumnDef<OtherEquipmentM
     {
       id: 'source',
       accessorFn: (row) => row.maintenance_requests?.source ?? 'manual',
-      meta: { title: 'Origen' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Origen" />,
+      ...titled('Origen'),
       cell: ({ row }) => {
         const source = row.original.maintenance_requests?.source ?? 'manual';
         return <span className="text-sm">{SOURCE_LABELS[source] ?? source}</span>;
@@ -131,8 +128,7 @@ export function getOtherEquipmentMaintenanceColumns(): ColumnDef<OtherEquipmentM
     {
       id: 'scheduled_date',
       accessorKey: 'scheduled_date',
-      meta: { title: 'Fecha Planificada' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha Planificada" />,
+      ...titled('Fecha Planificada'),
       cell: ({ row }) => {
         const date = row.original.scheduled_date;
         // Sin fecha asignada todavía: no es lo mismo que "no tiene"
@@ -143,8 +139,7 @@ export function getOtherEquipmentMaintenanceColumns(): ColumnDef<OtherEquipmentM
     {
       id: 'workshop_entry_date',
       accessorKey: 'workshop_entry_date',
-      meta: { title: 'Ingreso a Taller' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Ingreso a Taller" />,
+      ...titled('Ingreso a Taller'),
       cell: ({ row }) => {
         const date = row.original.workshop_entry_date;
         return <span className="tabular-nums">{date ? formatArgentinaDay(date) : '—'}</span>;
@@ -154,8 +149,7 @@ export function getOtherEquipmentMaintenanceColumns(): ColumnDef<OtherEquipmentM
     {
       id: 'created_at',
       accessorKey: 'created_at',
-      meta: { title: 'Creada' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Creada" />,
+      ...titled('Creada'),
       cell: ({ row }) => {
         const date = row.original.created_at;
         return <span className="tabular-nums">{date ? formatArgentinaDay(date) : '—'}</span>;
@@ -165,8 +159,7 @@ export function getOtherEquipmentMaintenanceColumns(): ColumnDef<OtherEquipmentM
     {
       id: 'description',
       accessorFn: (row) => row.description ?? row.maintenance_requests?.description ?? '',
-      meta: { title: 'Descripción' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
+      ...titled('Descripción'),
       enableSorting: false,
       cell: ({ row }) => {
         const value = row.original.description ?? row.original.maintenance_requests?.description ?? '';

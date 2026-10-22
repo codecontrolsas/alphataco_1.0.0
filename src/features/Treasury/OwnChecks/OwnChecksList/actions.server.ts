@@ -1,11 +1,11 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { NULL_FILTER_VALUE, parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
@@ -172,7 +172,9 @@ export async function getOwnChecksPaginated(searchParams: DataTableSearchParams)
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllOwnChecksForExport(searchParams: DataTableSearchParams): Promise<ExportResult<OwnCheckListItem[]>> {
+export async function getAllOwnChecksForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<OwnCheckListItem[]>> {
   const companyId = await resolveCompanyId();
   if (!companyId) return { ok: false, message: 'No tiene permiso para exportar los cheques propios.' };
 
@@ -184,18 +186,14 @@ export async function getAllOwnChecksForExport(searchParams: DataTableSearchPara
     const rows = await fetchExportRowsInBatches({
       maxRows: EXPORT_LIMIT,
       listIds: (take) => prisma.own_checks.findMany({ where, orderBy, select: { id: true }, take }),
-      fetchByIds: (ids) => prisma.own_checks.findMany({ where: { id: { in: ids }, company_id: companyId }, select: OWN_CHECK_SELECT }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} cheques propios con los filtros actuales. Acote la exportación con filtros.`,
+      fetchByIds: (ids) =>
+        prisma.own_checks.findMany({ where: { id: { in: ids }, company_id: companyId }, select: OWN_CHECK_SELECT }),
+      tooLargeMessage: tooManyRowsMessage('cheques propios'),
     });
     return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar cheques propios', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
-    return {
-      ok: false,
-      message: error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar la lista de cheques propios. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de cheques propios. Intente nuevamente.');
   }
 }
 
@@ -237,7 +235,11 @@ export async function getOwnCheckSingleFacet(
       const counts = new Map(rows.map((r) => [r.account_id, r._count]));
       const ids = [...counts.keys()];
       const resolved = ids.length
-        ? await prisma.treasury_accounts.findMany({ where: { id: { in: ids } }, select: { id: true, name: true }, orderBy: { name: 'asc' } })
+        ? await prisma.treasury_accounts.findMany({
+            where: { id: { in: ids } },
+            select: { id: true, name: true },
+            orderBy: { name: 'asc' },
+          })
         : [];
       return { counts, resolvedOptions: resolved };
     }
@@ -248,7 +250,11 @@ export async function getOwnCheckSingleFacet(
       for (const r of rows) counts.set(r.supplier_id ?? NULL_FILTER_VALUE, r._count);
       const ids = rows.flatMap((r) => (r.supplier_id ? [r.supplier_id] : []));
       const resolved = ids.length
-        ? await prisma.suppliers.findMany({ where: { id: { in: ids } }, select: { id: true, name: true }, orderBy: { name: 'asc' } })
+        ? await prisma.suppliers.findMany({
+            where: { id: { in: ids } },
+            select: { id: true, name: true },
+            orderBy: { name: 'asc' },
+          })
         : [];
       return { counts, resolvedOptions: resolved };
     }

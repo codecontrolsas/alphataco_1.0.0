@@ -2,13 +2,10 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  DataTable,
-  DataTableColumnHeader,
-  inMemoryFacetedFilterFn,
-  inMemoryTextFilterFn,
-  type DataTableFacetedFilterConfig,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
+import { inMemoryFacetedFilterFn, inMemoryTextFilterFn } from '@/shared/components/common/DataTable/in-memory';
+import { type DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable/types';
 import { VAT_RATE_LABELS, type VatRateId } from '@/shared/lib/arca/catalogs';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import { Check, CheckCircle2, Percent, Ruler, X, XCircle } from 'lucide-react';
@@ -78,16 +75,14 @@ export function getServiceItemsColumns(
   const columns: ColumnDef<ServiceItemRow>[] = [
     {
       accessorKey: 'item_name',
-      meta: { title: 'Nombre' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
+      ...titled('Nombre'),
       cell: ({ row }) => <span className="font-medium">{row.original.item_name}</span>,
       filterFn: inMemoryTextFilterFn,
     },
     {
       id: 'status',
       accessorFn: (row) => String(isActive(row)),
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const active = isActive(row.original);
         const key = String(active) as keyof typeof STATUS_LABELS;
@@ -104,56 +99,49 @@ export function getServiceItemsColumns(
     {
       id: 'needs_personnel',
       accessorFn: (row) => String(row.needs_personnel),
-      meta: { title: 'Req. Personal' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Req. Personal" />,
+      ...titled('Req. Personal'),
       cell: ({ row }) => <YesNoBadge value={row.original.needs_personnel} />,
       filterFn: inMemoryFacetedFilterFn,
     },
     {
       id: 'needs_equipment',
       accessorFn: (row) => String(row.needs_equipment),
-      meta: { title: 'Req. Equipos' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Req. Equipos" />,
+      ...titled('Req. Equipos'),
       cell: ({ row }) => <YesNoBadge value={row.original.needs_equipment} />,
       filterFn: inMemoryFacetedFilterFn,
     },
     {
       id: 'item_description',
       accessorFn: (row) => row.item_description ?? '',
-      meta: { title: 'Descripción' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
+      ...titled('Descripción'),
       cell: ({ row }) => row.original.item_description || emptyValue,
       filterFn: inMemoryTextFilterFn,
     },
     {
       id: 'code_item',
       accessorFn: (row) => row.code_item ?? '',
-      meta: { title: 'Código' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Código" />,
+      ...titled('Código'),
       cell: ({ row }) => row.original.code_item || emptyValue,
       filterFn: inMemoryTextFilterFn,
     },
     {
       id: 'item_number',
       accessorFn: (row) => row.item_number ?? '',
-      meta: { title: 'Número' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Número" />,
+      ...titled('Número'),
       cell: ({ row }) => row.original.item_number || emptyValue,
       filterFn: inMemoryTextFilterFn,
     },
     {
       id: 'measure_unit',
       accessorFn: (row) => row.measure_units.unit,
-      meta: { title: 'UDM' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="UDM" />,
+      ...titled('UDM'),
       cell: ({ row }) => row.original.measure_units.unit,
       filterFn: inMemoryFacetedFilterFn,
     },
     {
       id: 'vat_rate',
       accessorFn: (row) => vatLabel(row),
-      meta: { title: 'IVA' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="IVA" />,
+      ...titled('IVA'),
       cell: ({ row }) => vatLabel(row.original),
       filterFn: inMemoryFacetedFilterFn,
     },
@@ -164,8 +152,7 @@ export function getServiceItemsColumns(
     columns.push({
       id: 'item_price',
       accessorFn: (row) => row.item_price ?? '',
-      meta: { title: 'Precio' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Precio" />,
+      ...titled('Precio'),
       sortingFn: priceSortingFn,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">

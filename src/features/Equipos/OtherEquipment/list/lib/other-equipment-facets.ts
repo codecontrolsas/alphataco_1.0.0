@@ -1,6 +1,7 @@
 import type { Prisma } from '@/generated/prisma/client';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { prisma } from '@/shared/lib/prisma';
+import { toFacetMap } from '@/shared/lib/table-facets';
 import type { OtherEquipmentEnumField } from './other-equipment-where';
 
 /**
@@ -47,16 +48,6 @@ const FK_UUID_CONFIG: Record<string, { field: string; resolve: (ids: string[]) =
     },
   },
 };
-
-/** `null` (sin valor) se cuenta bajo `NULL_FILTER_VALUE` ("Sin asignar"). */
-function toFacetMap(rows: { key: string | number | boolean | null | undefined; count: number }[]) {
-  const map = new Map<string, number>();
-  for (const { key, count } of rows) {
-    const mapKey = key == null ? NULL_FILTER_VALUE : String(key);
-    map.set(mapKey, (map.get(mapKey) ?? 0) + count);
-  }
-  return map;
-}
 
 export async function getOtherEquipmentFacet(
   columnId: string,

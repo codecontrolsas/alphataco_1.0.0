@@ -1,17 +1,26 @@
 'use server';
 
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { NO_PERMISSION, firstIssue } from '@/features/Purchases/lib/action-errors';
+import { UUID_RE } from '@/features/Treasury/schemas/shared';
 import { Logger } from '@/lib/logger';
-import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError } from '../lib/action-errors';
 import { lockTreasuryAccount } from '../lib/account-lock';
+import { assertNotFuture, toTreasuryActionError, treasurySession } from '../lib/action-errors';
+import { formatDay as dmy, isoDay } from '../lib/dates';
 import { assertBankAccount, cancelMovements } from '../lib/movements';
 import { checkbookStatus, normalizeCheckNumber, ownCheckAlert } from '../lib/own-check-transitions';
-import { assertOwnTransition, debitOwnCheck, lockCheckbook, lockOwnChecks, moveOwnCheck, voidCheckNumber } from '../lib/own-checks';
+import {
+  assertOwnTransition,
+  debitOwnCheck,
+  lockCheckbook,
+  lockOwnChecks,
+  moveOwnCheck,
+  voidCheckNumber,
+} from '../lib/own-checks';
 import { supplierCheckDebts } from '../lib/rejected-checks';
 import { TreasuryError } from '../lib/treasury-errors';
 import {
@@ -26,7 +35,6 @@ import {
   type VoidCheckNumberValues,
 } from '../schemas/own-checks';
 import { SESSION_EXPIRED, TRANSACTION_OPTIONS, localToday, revalidateTreasury } from './shared';
-import { formatDay as dmy, isoDay } from '../lib/dates';
 
 /**
  * Chequeras y cheques propios (spec Tesorería etapa 3b §3). La emisión vive en `registerPayment`
@@ -39,22 +47,12 @@ const logger = new Logger('features/Treasury/own-checks');
 
 const CHECK_NOT_FOUND = 'El cheque no existe';
 
-async function session() {
-  const profile = await getServerAuthProfile();
-  if (!profile) return null;
-  return { profile, companyId: await getActiveCompanyId() };
-}
-
-function assertNotFuture(date: string, today: string) {
-  if (date > today) throw new TreasuryError('La fecha no puede ser futura');
-}
-
 /** Alta de una chequera: cuenta bancaria activa y un rango que no se superpone con otra chequera de la cuenta. */
 export async function createCheckbook(values: CheckbookValues): Promise<ActionResult<{ id: string }>> {
   if (!(await checkPermissionServer('tesoreria', 'cheques-propios', 'create'))) return fail(NO_PERMISSION);
   const parsed = checkbookSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   const first = Number(normalizeCheckNumber(parsed.data.firstNumber));
@@ -71,7 +69,9 @@ export async function createCheckbook(values: CheckbookValues): Promise<ActionRe
           select: { first_number: true, last_number: true },
         });
         if (overlap) {
-          throw new TreasuryError(`El rango se superpone con la chequera del ${overlap.first_number} al ${overlap.last_number} de «${account.name}»`);
+          throw new TreasuryError(
+            `El rango se superpone con la chequera del ${overlap.first_number} al ${overlap.last_number} de «${account.name}»`
+          );
         }
         return tx.checkbooks.create({
           data: { account_id: account.id, first_number: first, last_number: last, created_by: profile.id },
@@ -93,7 +93,7 @@ export async function retireCheckbook(checkbookId: string, reason: string): Prom
   if (!(await checkPermissionServer('tesoreria', 'cheques-propios', 'delete'))) return fail(NO_PERMISSION);
   const motive = ownCheckReasonSchema.safeParse(reason);
   if (!motive.success) return fail(firstIssue(motive.error));
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   try {
@@ -102,7 +102,10 @@ export async function retireCheckbook(checkbookId: string, reason: string): Prom
       async (tx) => {
         const checkbook = await lockCheckbook(tx, companyId, checkbookId);
         if (checkbook.retired) throw new TreasuryError('La chequera ya está dada de baja');
-        await tx.checkbooks.update({ where: { id: checkbook.id }, data: { retired_at: new Date(), retired_by: profile.id, retire_reason: motive.data } });
+        await tx.checkbooks.update({
+          where: { id: checkbook.id },
+          data: { retired_at: new Date(), retired_by: profile.id, retire_reason: motive.data },
+        });
       },
       prisma,
       TRANSACTION_OPTIONS
@@ -119,7 +122,7 @@ export async function voidOwnCheckNumber(values: VoidCheckNumberValues): Promise
   if (!(await checkPermissionServer('tesoreria', 'cheques-propios', 'create'))) return fail(NO_PERMISSION);
   const parsed = voidCheckNumberSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   try {
@@ -127,7 +130,14 @@ export async function voidOwnCheckNumber(values: VoidCheckNumberValues): Promise
       profile.credentialId,
       async (tx) => {
         const checkbook = await lockCheckbook(tx, companyId, parsed.data.checkbookId);
-        return voidCheckNumber(tx, { companyId, checkbook, number: parsed.data.number, reason: parsed.data.reason, date: localToday(), userId: profile.id });
+        return voidCheckNumber(tx, {
+          companyId,
+          checkbook,
+          number: parsed.data.number,
+          reason: parsed.data.reason,
+          date: localToday(),
+          userId: profile.id,
+        });
       },
       prisma,
       TRANSACTION_OPTIONS
@@ -147,7 +157,7 @@ export async function debitOwnChecks(values: DebitOwnChecksValues): Promise<Acti
   if (!(await checkPermissionServer('tesoreria', 'cheques-propios', 'update'))) return fail(NO_PERMISSION);
   const parsed = debitOwnChecksSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   const v = parsed.data;
@@ -157,7 +167,8 @@ export async function debitOwnChecks(values: DebitOwnChecksValues): Promise<Acti
       async (tx) => {
         assertNotFuture(v.date, localToday());
         const checks = await lockOwnChecks(tx, companyId, v.checkIds);
-        for (const check of checks.values()) await debitOwnCheck(tx, { check, date: v.date, companyId, userId: profile.id });
+        for (const check of checks.values())
+          await debitOwnCheck(tx, { check, date: v.date, companyId, userId: profile.id });
         return checks.size;
       },
       prisma,
@@ -176,7 +187,7 @@ export async function undoOwnCheckDebit(checkId: string, reason: string): Promis
   const motive = ownCheckReasonSchema.safeParse(reason);
   if (!motive.success) return fail(firstIssue(motive.error));
   if (!UUID_RE.test(checkId)) return fail(CHECK_NOT_FOUND);
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   try {
@@ -186,7 +197,13 @@ export async function undoOwnCheckDebit(checkId: string, reason: string): Promis
         const check = (await lockOwnChecks(tx, companyId, [checkId])).get(checkId)!;
         assertOwnTransition(check, 'UNDO_DEBIT');
         await cancelMovements(tx, { ownCheckId: check.id }, { by: profile.id, reason: motive.data, at: new Date() });
-        await moveOwnCheck(tx, { check, action: 'UNDO_DEBIT', date: localToday(), userId: profile.id, reason: motive.data });
+        await moveOwnCheck(tx, {
+          check,
+          action: 'UNDO_DEBIT',
+          date: localToday(),
+          userId: profile.id,
+          reason: motive.data,
+        });
       },
       prisma,
       TRANSACTION_OPTIONS
@@ -204,7 +221,7 @@ export async function rejectOwnCheck(checkId: string, values: RejectOwnCheckValu
   const parsed = rejectOwnCheckSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
   if (!UUID_RE.test(checkId)) return fail(CHECK_NOT_FOUND);
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   const v = parsed.data;
@@ -215,7 +232,8 @@ export async function rejectOwnCheck(checkId: string, values: RejectOwnCheckValu
         assertNotFuture(v.date, localToday());
         const check = (await lockOwnChecks(tx, companyId, [checkId])).get(checkId)!;
         assertOwnTransition(check, 'REJECT');
-        if (v.date < check.issueDate) throw new TreasuryError(`La fecha del rechazo no puede ser anterior a la emisión (${dmy(check.issueDate)})`);
+        if (v.date < check.issueDate)
+          throw new TreasuryError(`La fecha del rechazo no puede ser anterior a la emisión (${dmy(check.issueDate)})`);
         await moveOwnCheck(tx, { check, action: 'REJECT', date: v.date, userId: profile.id, reason: v.reason });
       },
       prisma,
@@ -234,7 +252,7 @@ export async function undoOwnCheckRejection(checkId: string, reason: string): Pr
   const motive = ownCheckReasonSchema.safeParse(reason);
   if (!motive.success) return fail(firstIssue(motive.error));
   if (!UUID_RE.test(checkId)) return fail(CHECK_NOT_FOUND);
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   try {
@@ -249,9 +267,17 @@ export async function undoOwnCheckRejection(checkId: string, reason: string): Pr
           ORDER BY (po.status = 'PAID') DESC LIMIT 1
         `;
         const order = orders[0];
-        if (order?.status === 'PAID') throw new TreasuryError(`La deuda del cheque se pagó en la ${order.number}: anulá esa orden primero`);
-        if (order) throw new TreasuryError(`La deuda del cheque está en la ${order.number}, sin pagar: quitala de ahí primero`);
-        await moveOwnCheck(tx, { check, action: 'UNDO_REJECTION', date: localToday(), userId: profile.id, reason: motive.data });
+        if (order?.status === 'PAID')
+          throw new TreasuryError(`La deuda del cheque se pagó en la ${order.number}: anulá esa orden primero`);
+        if (order)
+          throw new TreasuryError(`La deuda del cheque está en la ${order.number}, sin pagar: quitala de ahí primero`);
+        await moveOwnCheck(tx, {
+          check,
+          action: 'UNDO_REJECTION',
+          date: localToday(),
+          userId: profile.id,
+          reason: motive.data,
+        });
       },
       prisma,
       TRANSACTION_OPTIONS
@@ -329,7 +355,9 @@ async function loadCheckbooks(companyId: string, options: { includeRetired: bool
 export async function getCheckbooksForPayment() {
   if (!(await checkPermissionServer('compras', 'pagos', 'update'))) return [];
   const companyId = await getActiveCompanyId();
-  return (await loadCheckbooks(companyId, { includeRetired: false })).filter((c) => c.status === 'ACTIVE' && c.account.active);
+  return (await loadCheckbooks(companyId, { includeRetired: false })).filter(
+    (c) => c.status === 'ACTIVE' && c.account.active
+  );
 }
 
 /** Encabezado de la tab: total EMITIDO por cuenta y cuántos están pendientes de confirmar. */
@@ -344,9 +372,14 @@ export async function getOwnChecksHeader() {
       WHERE c.company_id = ${companyId}::uuid AND c.status = 'ISSUED'
       GROUP BY a.id, a.name ORDER BY a.name
     `,
-    prisma.own_checks.count({ where: { company_id: companyId, status: 'ISSUED', payment_date: { lt: new Date(`${today}T00:00:00.000Z`) } } }),
+    prisma.own_checks.count({
+      where: { company_id: companyId, status: 'ISSUED', payment_date: { lt: new Date(`${today}T00:00:00.000Z`) } },
+    }),
   ]);
-  return { issued: byAccount.map((r) => ({ accountId: r.account_id, name: r.name, total: r.total, count: r.count })), pendingConfirmation: pending };
+  return {
+    issued: byAccount.map((r) => ({ accountId: r.account_id, name: r.name, total: r.total, count: r.count })),
+    pendingConfirmation: pending,
+  };
 }
 
 /** Detalle del cheque propio: datos, aviso, historial con sus documentos y deuda si está rechazado. */
@@ -390,7 +423,7 @@ export async function getOwnCheckDetail(checkId: string) {
   if (!row) return null;
   const today = localToday();
   const paymentDate = isoDay(row.payment_date);
-  const debt = row.status === 'REJECTED' ? ((await supplierCheckDebts(prisma, [row.id])).get(row.id) ?? null) : null;
+  const debt = row.status === 'REJECTED' ? (await supplierCheckDebts(prisma, [row.id])).get(row.id) ?? null : null;
   return {
     id: row.id,
     kind: row.kind,
@@ -405,7 +438,9 @@ export async function getOwnCheckDetail(checkId: string) {
     rejectReason: row.reject_reason,
     voidReason: row.void_reason,
     account: { id: row.account.id, name: row.account.name, bankName: row.account.bank_name },
-    checkbook: row.checkbook ? { id: row.checkbook.id, range: `${row.checkbook.first_number} al ${row.checkbook.last_number}` } : null,
+    checkbook: row.checkbook
+      ? { id: row.checkbook.id, range: `${row.checkbook.first_number} al ${row.checkbook.last_number}` }
+      : null,
     supplier: row.supplier,
     paymentOrder: row.payment_order_payment?.payment_order ?? null,
     events: row.events.map((e) => ({
@@ -436,4 +471,3 @@ export async function getCheckbookFormData() {
   });
   return { accounts };
 }
-

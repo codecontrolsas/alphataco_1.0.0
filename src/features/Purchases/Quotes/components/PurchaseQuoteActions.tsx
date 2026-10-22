@@ -1,25 +1,20 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { DownloadPdfButton } from '@/shared/components/common/DownloadPdfButton';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ban, CheckCheck, FilePlus2, Pencil, XCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { createPurchaseOrderFromQuote } from '../../actions/orders.server';
-import {
-  cancelPurchaseQuote,
-  declinePurchaseQuote,
-  getPurchaseQuotePdf,
-  markPurchaseQuoteSent,
-  sendPurchaseQuote,
-} from '../../actions/quotes.server';
-import type { PurchaseQuoteDetail } from '../../lib/quote-query-types';
+import { getPurchaseQuotePdf, markPurchaseQuoteSent, sendPurchaseQuote } from '../../actions/quote-send.server';
+import { cancelPurchaseQuote, declinePurchaseQuote } from '../../actions/quotes.server';
 import { ConfirmAction } from '../../components/ConfirmAction';
 import { SendToSupplierDialog } from '../../components/SendToSupplierDialog';
 import { invalidatePurchases } from '../../lib/invalidate';
+import type { PurchaseQuoteDetail } from '../../lib/quote-query-types';
 import { QuoteResponseDialog } from './QuoteResponseDialog';
 
 /** Botones del detalle del pedido de cotizacion segun su estado y los permisos. */

@@ -1,7 +1,7 @@
 'use client';
 
-import type { DataTableFilterOption, DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable';
-import { DataTable } from '@/shared/components/common/DataTable';
+import type { DataTableFilterOption, DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { conditionLabels, otherEquipmentStatusLabels } from '@/shared/utils/mappers';
 import { useQuery } from '@tanstack/react-query';

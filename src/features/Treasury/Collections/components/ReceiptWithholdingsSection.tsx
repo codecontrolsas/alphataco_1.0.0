@@ -1,17 +1,15 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { WITHHOLDING_TAXES } from '@/features/Purchases/schemas/payment-settings';
+import { DateFormField, InputFormField } from '@/shared/components/common/form-fields';
 import { FileText, Plus, Trash2 } from 'lucide-react';
-import moment from 'moment';
 import type { UseFieldArrayReturn, UseFormReturn } from 'react-hook-form';
 import { toast } from 'sonner';
-import { CERTIFICATE_MAX_BYTES, CUSTOMER_WITHHOLDING_TAX_LABELS, type ReceiptFormValues } from '../../schemas/receipts';
 import { treasuryToday } from '../../lib/today';
+import { CERTIFICATE_MAX_BYTES, CUSTOMER_WITHHOLDING_TAX_LABELS, type ReceiptFormValues } from '../../schemas/receipts';
 import type { PendingCertificates } from './ReceiptEditor';
 
 /**
@@ -82,61 +80,25 @@ export function ReceiptWithholdingsSection({
                   </FormItem>
                 )}
               />
-              <FormField
+              <InputFormField
                 control={form.control}
                 name={`withholdings.${i}.jurisdiction`}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Jurisdicción</FormLabel>
-                    <FormControl>
-                      <Input placeholder={tax === 'IIBB' ? 'Neuquén' : 'Solo IIBB'} disabled={tax !== 'IIBB'} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                label="Jurisdicción"
+                placeholder={tax === 'IIBB' ? 'Neuquén' : 'Solo IIBB'}
+                disabled={tax !== 'IIBB'}
               />
-              <FormField
+              <InputFormField
                 control={form.control}
                 name={`withholdings.${i}.certificateNumber`}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>N° de certificado</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                label="N° de certificado"
               />
-              <FormField
-                control={form.control}
-                name={`withholdings.${i}.certificateDate`}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fecha</FormLabel>
-                    <FormControl>
-                      <EnhancedDatePicker
-                        date={field.value ? moment(field.value, 'YYYY-MM-DD').toDate() : undefined}
-                        setDate={(d) => field.onChange(d ? moment(d).format('YYYY-MM-DD') : '')}
-                        placeholder="DD/MM/AAAA"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
+              <DateFormField control={form.control} name={`withholdings.${i}.certificateDate`} label="Fecha" />
+              <InputFormField
                 control={form.control}
                 name={`withholdings.${i}.amount`}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Importe</FormLabel>
-                    <FormControl>
-                      <Input inputMode="decimal" className="text-right tabular-nums" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                label="Importe"
+                inputMode="decimal"
+                className="text-right tabular-nums"
               />
               <Button
                 type="button"
@@ -156,7 +118,12 @@ export function ReceiptWithholdingsSection({
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-muted">
                 <FileText className="h-4 w-4" />
                 {pending || saved ? 'Reemplazar certificado (PDF)' : 'Adjuntar certificado (PDF)'}
-                <input type="file" accept="application/pdf" className="sr-only" onChange={(e) => pick(row.id, e.target.files?.[0])} />
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  className="sr-only"
+                  onChange={(e) => pick(row.id, e.target.files?.[0])}
+                />
               </label>
               {pending ? (
                 <span className="text-muted-foreground">{pending.name} · se sube al guardar</span>
@@ -175,7 +142,16 @@ export function ReceiptWithholdingsSection({
         type="button"
         size="sm"
         variant="outline"
-        onClick={() => rows.append({ id: '', tax: 'IIBB', jurisdiction: 'Neuquén', certificateNumber: '', certificateDate: today, amount: '' })}
+        onClick={() =>
+          rows.append({
+            id: '',
+            tax: 'IIBB',
+            jurisdiction: 'Neuquén',
+            certificateNumber: '',
+            certificateDate: today,
+            amount: '',
+          })
+        }
       >
         <Plus className="mr-1 h-4 w-4" />
         Agregar retención

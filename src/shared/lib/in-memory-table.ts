@@ -1,6 +1,7 @@
-import { argentinaDate } from '@/features/Jobs/lib/dates';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableState } from '@/shared/components/common/DataTable/types';
+import { argentinaDate } from '@/shared/lib/argentina-time';
+import { normalizeSearchText } from '@/shared/utils/search-text';
 
 /**
  * Pipeline "en memoria" para tablas cuyas filas no salen de una consulta Prisma sino de un cálculo
@@ -57,13 +58,6 @@ export interface FacetCountsResult {
 // ============================================================================
 // NORMALIZACIÓN
 // ============================================================================
-
-const DIACRITICS = /[̀-ͯ]/g;
-
-/** Minúsculas y sin acentos: "Ñandú" y "nandu" se buscan igual. */
-export function normalizeSearchText(value: string): string {
-  return value.normalize('NFD').replace(DIACRITICS, '').toLowerCase().trim();
-}
 
 function normalizedValues(values: TextValues): string[] {
   const result: string[] = [];
@@ -230,11 +224,7 @@ function sortRows<Row>(rows: Row[], state: DataTableState, spec: InMemoryTableSp
 // ============================================================================
 
 /** Aplica búsqueda, filtros y orden del estado de la tabla. No pagina. */
-export function applyTableState<Row>(
-  rows: readonly Row[],
-  state: DataTableState,
-  spec: InMemoryTableSpec<Row>
-): Row[] {
+export function applyTableState<Row>(rows: readonly Row[], state: DataTableState, spec: InMemoryTableSpec<Row>): Row[] {
   const predicates = compileFilters(state, spec);
   const filtered = predicates.length === 0 ? [...rows] : rows.filter((row) => predicates.every((p) => p(row)));
   return sortRows(filtered, state, spec);

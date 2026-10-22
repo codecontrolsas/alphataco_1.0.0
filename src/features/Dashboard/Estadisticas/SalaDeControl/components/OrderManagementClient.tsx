@@ -1,12 +1,15 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ChartSummary } from '@/features/Dashboard/shared/charts/ChartSummary';
+import {
+  PeriodControls,
+  getBucketKey,
+  getDataWindow,
+  type Granularity,
+} from '@/features/Dashboard/shared/charts/period-controls';
 import { argentinaDate } from '@/shared/lib/argentina-time';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import moment from 'moment';
 import 'moment/locale/es';
 import * as React from 'react';
@@ -19,89 +22,14 @@ import { OrderManagementChart, type OrderChartDataPoint } from './OrderManagemen
 // Types
 // ---------------------------------------------------------------------------
 
-type Granularity = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 type ActiveView = OrderActiveView;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function getBucketKey(dateStr: string, granularity: Granularity): { key: string; label: string } {
-  const m = moment(dateStr);
-
-  if (granularity === 'daily') {
-    return {
-      key: `day-${dateStr}`,
-      label: m.format('D MMM'),
-    };
-  }
-
-  if (granularity === 'weekly') {
-    const weekStart = m.clone().startOf('isoWeek');
-    const weekEnd = weekStart.clone().add(6, 'days');
-    return {
-      key: `week-${weekStart.format('YYYY-MM-DD')}`,
-      label: `${weekStart.format('D MMM')} - ${weekEnd.format('D MMM')}`,
-    };
-  }
-
-  if (granularity === 'quarterly') {
-    const q = m.quarter();
-    const year = m.year();
-    return {
-      key: `quarter-${year}-Q${q}`,
-      label: `T${q} ${year}`,
-    };
-  }
-
-  return {
-    key: `month-${m.format('YYYY-MM')}`,
-    label: m.format('MMM YYYY'),
-  };
-}
-
-function getDataWindow(selectedMonth: moment.Moment, granularity: Granularity): { start: string; end: string } {
-  const end = selectedMonth.clone().endOf('month').format('YYYY-MM-DD');
-
-  if (granularity === 'daily') {
-    return {
-      start: selectedMonth.clone().startOf('month').format('YYYY-MM-DD'),
-      end,
-    };
-  }
-
-  if (granularity === 'weekly') {
-    return {
-      start: selectedMonth.clone().startOf('month').format('YYYY-MM-DD'),
-      end,
-    };
-  }
-
-  if (granularity === 'monthly') {
-    return {
-      start: selectedMonth.clone().subtract(5, 'months').startOf('month').format('YYYY-MM-DD'),
-      end,
-    };
-  }
-
-  if (granularity === 'quarterly') {
-    // 4 trimestres (1 ano) terminando en el trimestre del mes seleccionado
-    return {
-      start: selectedMonth.clone().subtract(3, 'quarters').startOf('quarter').format('YYYY-MM-DD'),
-      end: selectedMonth.clone().endOf('quarter').format('YYYY-MM-DD'),
-    };
-  }
-
-  // yearly — 12 months back
-  return {
-    start: selectedMonth.clone().subtract(11, 'months').startOf('month').format('YYYY-MM-DD'),
-    end,
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Main Component
 // ---------------------------------------------------------------------------
+
+/** Meses previos al elegido que abren las vistas semanal y mensual de este gráfico. */
+const MONTHS_BACK = { weekly: 0, monthly: 5 };
 
 interface Props {
   data: PreparteKpiData;
@@ -119,14 +47,11 @@ export function OrderManagementClient({ data }: Props) {
     return moment(data.rows[0].date).startOf('month');
   }, [data.rows]);
 
-  const canGoBack = selectedMonth.isAfter(earliestMonth, 'month');
-  const canGoForward = selectedMonth.isBefore(moment(argentinaDate()), 'month');
-
   // Process data
   const { chartData, stats, periodLabel } = React.useMemo(() => {
     moment.locale('es');
 
-    const { start, end } = getDataWindow(selectedMonth, granularity);
+    const { start, end } = getDataWindow(selectedMonth, granularity, MONTHS_BACK);
     const customerFilter = selectedCustomerIds.length > 0 ? new Set(selectedCustomerIds) : null;
 
     // Bucket aggregation for chart
@@ -216,7 +141,7 @@ export function OrderManagementClient({ data }: Props) {
   // Aggregate by customer for bar chart
   const clientBarData = React.useMemo(() => {
     moment.locale('es');
-    const { start, end } = getDataWindow(selectedMonth, granularity);
+    const { start, end } = getDataWindow(selectedMonth, granularity, MONTHS_BACK);
     const customerFilter = selectedCustomerIds.length > 0 ? new Set(selectedCustomerIds) : null;
 
     const byCustomer = new Map<
@@ -262,10 +187,6 @@ export function OrderManagementClient({ data }: Props) {
       }));
   }, [data.rows, selectedMonth, granularity, selectedCustomerIds]);
 
-  // Month display
-  const monthDisplay = selectedMonth.clone().locale('es').format('MMMM YYYY');
-  const capitalizedMonth = monthDisplay.charAt(0).toUpperCase() + monthDisplay.slice(1);
-
   // Stat buttons config (right side of header)
   const statButtons: { key: ActiveView; label: string; value: number }[] = [
     { key: 'total', label: 'Total', value: stats.total },
@@ -299,50 +220,13 @@ export function OrderManagementClient({ data }: Props) {
 
             {/* Controls row */}
             <div className="flex flex-wrap items-center gap-2 mt-2">
-              {/* Month navigator */}
-              <div className="flex items-center gap-1">
-                <Button
-                  type="button"
-                  aria-label="Mes anterior"
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  disabled={!canGoBack}
-                  onClick={() => setSelectedMonth((m) => m.clone().subtract(1, 'month'))}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm font-medium min-w-[130px] text-center">{capitalizedMonth}</span>
-                <Button
-                  type="button"
-                  aria-label="Mes siguiente"
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  disabled={!canGoForward}
-                  onClick={() => setSelectedMonth((m) => m.clone().add(1, 'month'))}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-
-              {/* Granularity toggle */}
-              <ToggleGroup
-                type="single"
-                value={granularity}
-                onValueChange={(val) => {
-                  if (val) setGranularity(val as Granularity);
-                }}
-                variant="outline"
-                size="sm"
-                className="max-w-full overflow-x-auto"
-              >
-                <ToggleGroupItem value="daily">Diario</ToggleGroupItem>
-                <ToggleGroupItem value="weekly">Semanal</ToggleGroupItem>
-                <ToggleGroupItem value="monthly">Mensual</ToggleGroupItem>
-                <ToggleGroupItem value="quarterly">Trimestral</ToggleGroupItem>
-                <ToggleGroupItem value="yearly">Anual</ToggleGroupItem>
-              </ToggleGroup>
+              <PeriodControls
+                selectedMonth={selectedMonth}
+                onSelectedMonthChange={setSelectedMonth}
+                earliestMonth={earliestMonth}
+                granularity={granularity}
+                onGranularityChange={setGranularity}
+              />
 
               {/* Client filter */}
               <div className="w-full max-w-[220px]">

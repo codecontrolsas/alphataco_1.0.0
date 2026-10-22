@@ -1,13 +1,13 @@
 import 'server-only';
 
 import { notify } from '@/features/Notifications/lib/dispatch.server';
-import type { SendMail } from '@/shared/lib/mail';
+import { deviationsResultSchema } from '@/features/Operaciones/PartesDiarios/schemas/deviations';
+import { argentinaDate } from '@/shared/lib/argentina-time';
+import type { SendMail } from '@/shared/lib/mail/transport';
 import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
 import { callScalar } from '@/shared/lib/sql';
-import { argentinaDate } from '../lib/dates';
-import { runForEachCompany, runJobWithBitacora } from '../lib/per-company';
+import { notifyOutcome, runJobForEachCompany } from '../lib/per-company';
 import type { JobSummary } from '../lib/types';
-import { deviationsResultSchema } from '../schemas/deviations';
 import { renderDeviationsEmail } from '../templates/deviations';
 
 /**
@@ -53,87 +53,76 @@ export async function runDailyReportDeviationsJob(deps: DeviationsJobDeps = {}):
   // Todo va DENTRO de la bitácora: si el `findMany` falla (base caída, pool agotado), la fila
   // `corrida:<fecha>` ya está abierta y el error queda registrado. Sin esto, el modo de falla
   // más probable no dejaba ninguna fila en `jobs_runs`.
-  return runJobWithBitacora(JOB, date, async () => {
-    const companies = await prisma.company.findMany({
-      select: { id: true, company_name: true },
-      orderBy: { company_name: 'asc' },
-    });
+  return runJobForEachCompany({
+    job: JOB,
+    date,
+    work: async (company) => {
+      const report = await prisma.dailyreport.findFirst({
+        where: { company_id: company.id, date: new Date(`${date}T00:00:00Z`), is_active: true },
+        select: { id: true },
+      });
 
-    return runForEachCompany({
-      job: JOB,
-      date,
-      companies,
-      work: async (company) => {
-        const report = await prisma.dailyreport.findFirst({
-          where: { company_id: company.id, date: new Date(`${date}T00:00:00Z`), is_active: true },
-          select: { id: true },
-        });
+      if (!report) {
+        // `skipped`, no `ok`: la clave queda reclamable por si el parte se crea más tarde.
+        return { skipped: true, reason: 'sin parte diario activo para la fecha' };
+      }
 
-        if (!report) {
-          // `skipped`, no `ok`: la clave queda reclamable por si el parte se crea más tarde.
-          return { skipped: true, reason: 'sin parte diario activo para la fecha' };
-        }
+      const deviations = await callScalar(
+        'get_daily_report_deviations',
+        [{ uuid: report.id }, { date }],
+        deviationsResultSchema
+      );
 
-        const deviations = await callScalar(
-          'get_daily_report_deviations',
-          [{ uuid: report.id }, { date }],
-          deviationsResultSchema
-        );
-
-        if (deviations.rows_with_deviations.length === 0) {
-          // Sí es `ok`: el trabajo se hizo y el resultado es "no hay nada que informar".
-          // Volver a mirarlo más tarde no cambiaría la decisión de no mandar el correo.
-          return {
-            reason: 'sin desvíos',
-            metadata: { dailyReportId: report.id, rowsWithDeviations: 0 },
-          };
-        }
-
-        const email = renderDeviationsEmail({
-          companyName: company.company_name,
-          reportDate: date,
-          dailyReportId: report.id,
-          data: deviations,
-        });
-        const rowsWithDeviations = deviations.rows_with_deviations.length;
-
-        // Los destinatarios (roles con el aviso + lista fija) se resuelven recién acá, ya confirmado
-        // que hay algo que informar. (Es el mismo orden que tenía la edge function.)
-        const result = await notify(
-          {
-            event: 'operations.daily_report_deviations',
-            companyId: company.id,
-            dedupeKey: `operations.daily_report_deviations:${report.id}`,
-            title: `Parte del ${date.split('-').reverse().join('/')}: ${rowsWithDeviations} servicios con desvíos`,
-            href: `/dashboard/operations/${report.id}`,
-            email,
-            metadata: { dailyReportId: report.id, rowsWithDeviations },
-          },
-          { sendMail: deps.sendMail }
-        );
-
-        if (result.status === 'no_recipients') {
-          // `skipped`: si un admin configura destinatarios a media mañana y redispara, la
-          // empresa se reintenta. Con `ok` quedaba salteada hasta el día siguiente.
-          return {
-            skipped: true,
-            reason: 'hay desvíos pero la empresa no tiene destinatarios (roles ni lista fija)',
-            metadata: { dailyReportId: report.id, rowsWithDeviations },
-          };
-        }
-        const emailSent = result.emailSent;
-
+      if (deviations.rows_with_deviations.length === 0) {
+        // Sí es `ok`: el trabajo se hizo y el resultado es "no hay nada que informar".
+        // Volver a mirarlo más tarde no cambiaría la decisión de no mandar el correo.
         return {
-          reason: emailSent ? 'correo enviado' : 'correo NO enviado (SMTP sin configurar o error de envío)',
-          recipients: result.status === 'sent' ? result.emailRecipients + result.inApp : 0,
-          emailSent,
-          metadata: {
-            dailyReportId: report.id,
-            rowsWithDeviations: deviations.rows_with_deviations.length,
-            summary: deviations.summary,
-          },
+          reason: 'sin desvíos',
+          metadata: { dailyReportId: report.id, rowsWithDeviations: 0 },
         };
-      },
-    });
+      }
+
+      const email = renderDeviationsEmail({
+        companyName: company.company_name,
+        reportDate: date,
+        dailyReportId: report.id,
+        data: deviations,
+      });
+      const rowsWithDeviations = deviations.rows_with_deviations.length;
+
+      // Los destinatarios (roles con el aviso + lista fija) se resuelven recién acá, ya confirmado
+      // que hay algo que informar. (Es el mismo orden que tenía la edge function.)
+      const result = await notify(
+        {
+          event: 'operations.daily_report_deviations',
+          companyId: company.id,
+          dedupeKey: `operations.daily_report_deviations:${report.id}`,
+          title: `Parte del ${date.split('-').reverse().join('/')}: ${rowsWithDeviations} servicios con desvíos`,
+          href: `/dashboard/operations/${report.id}`,
+          email,
+          metadata: { dailyReportId: report.id, rowsWithDeviations },
+        },
+        { sendMail: deps.sendMail }
+      );
+
+      if (result.status === 'no_recipients') {
+        // `skipped`: si un admin configura destinatarios a media mañana y redispara, la
+        // empresa se reintenta. Con `ok` quedaba salteada hasta el día siguiente.
+        return {
+          skipped: true,
+          reason: 'hay desvíos pero la empresa no tiene destinatarios (roles ni lista fija)',
+          metadata: { dailyReportId: report.id, rowsWithDeviations },
+        };
+      }
+
+      return {
+        ...notifyOutcome(result),
+        metadata: {
+          dailyReportId: report.id,
+          rowsWithDeviations: deviations.rows_with_deviations.length,
+          summary: deviations.summary,
+        },
+      };
+    },
   });
 }

@@ -1,16 +1,11 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
 import { LEVEL_TEXT_CLASS } from '@/features/Dashboard/lib/chart-thresholds';
-import {
-  DataTableColumnHeader,
-  inMemoryDateSortingFn,
-  inMemoryTextFilterFn,
-} from '@/shared/components/common/DataTable';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
+import { inMemoryDateSortingFn, inMemoryTextFilterFn } from '@/shared/components/common/DataTable/in-memory';
 import { ColumnDef } from '@tanstack/react-table';
-import { Users } from 'lucide-react';
 import { DailyAbsenceTimeseriesItem } from '../../actions.server';
-import { ABSENCE_BADGE_CLASS, absenceLevel, formatAbsencePercent } from '../../lib/absence-level';
+import { AbsencePercentCell, ViewAbsentButton } from '../absence-cells';
 
 export function getDailyAbsenceColumns(
   onViewEmployees: (row: DailyAbsenceTimeseriesItem) => void
@@ -19,8 +14,7 @@ export function getDailyAbsenceColumns(
     {
       accessorKey: 'fecha',
       id: 'fecha',
-      meta: { title: 'Fecha' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
+      ...titled('Fecha'),
       cell: ({ row }) => <span className="font-medium">{row.original.fecha}</span>,
       sortingFn: inMemoryDateSortingFn,
       filterFn: inMemoryTextFilterFn,
@@ -28,66 +22,50 @@ export function getDailyAbsenceColumns(
     {
       accessorKey: 'dotacion',
       id: 'dotacion',
-      meta: { title: 'Dotación' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Dotación" />,
+      ...titled('Dotación'),
       cell: ({ row }) => <div>{row.original.dotacion}</div>,
       filterFn: inMemoryTextFilterFn,
     },
     {
       accessorKey: 'altas',
       id: 'altas',
-      meta: { title: 'Altas' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Altas" />,
+      ...titled('Altas'),
       cell: ({ row }) => <div className={`font-medium ${LEVEL_TEXT_CLASS.ok}`}>{row.original.altas || '-'}</div>,
       filterFn: inMemoryTextFilterFn,
     },
     {
       accessorKey: 'bajas',
       id: 'bajas',
-      meta: { title: 'Bajas' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Bajas" />,
+      ...titled('Bajas'),
       cell: ({ row }) => <div className={`font-medium ${LEVEL_TEXT_CLASS.danger}`}>{row.original.bajas || '-'}</div>,
       filterFn: inMemoryTextFilterFn,
     },
     {
       accessorKey: 'vacaciones',
       id: 'vacaciones',
-      meta: { title: 'Vacaciones' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Vacaciones" />,
+      ...titled('Vacaciones'),
       cell: ({ row }) => <div>{row.original.vacaciones || '-'}</div>,
       filterFn: inMemoryTextFilterFn,
     },
     {
       accessorKey: 'totalDotacion',
       id: 'totalDotacion',
-      meta: { title: 'Total Dotación' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Total Dotación" />,
+      ...titled('Total Dotación'),
       cell: ({ row }) => <div className="font-medium">{row.original.totalDotacion}</div>,
       filterFn: inMemoryTextFilterFn,
     },
     {
       accessorKey: 'totalAusentes',
       id: 'totalAusentes',
-      meta: { title: 'Total Ausentes' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Total Ausentes" />,
+      ...titled('Total Ausentes'),
       cell: ({ row }) => <div>{row.original.totalAusentes}</div>,
       filterFn: inMemoryTextFilterFn,
     },
     {
       accessorKey: 'porcentajeAusentismo',
       id: 'porcentajeAusentismo',
-      meta: { title: '% Ausentismo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="% Ausentismo" />,
-      cell: ({ row }) => {
-        const p = row.original.porcentajeAusentismo;
-        return (
-          <div>
-            <span className={`rounded px-2 py-1 text-xs font-medium ${ABSENCE_BADGE_CLASS[absenceLevel(p)]}`}>
-              {formatAbsencePercent(p)}
-            </span>
-          </div>
-        );
-      },
+      ...titled('% Ausentismo'),
+      cell: ({ row }) => <AbsencePercentCell value={row.original.porcentajeAusentismo} />,
       filterFn: inMemoryTextFilterFn,
     },
     {
@@ -96,18 +74,11 @@ export function getDailyAbsenceColumns(
       enableSorting: false,
       enableHiding: false,
       cell: ({ row }) => (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          aria-label={`Ver ausentes del ${row.original.fecha}`}
-          onClick={() => onViewEmployees(row.original)}
+        <ViewAbsentButton
+          ariaLabel={`Ver ausentes del ${row.original.fecha}`}
           disabled={row.original.totalAusentes === 0}
-          className="gap-1.5"
-        >
-          <Users className="h-3.5 w-3.5" />
-          Ver ausentes
-        </Button>
+          onClick={() => onViewEmployees(row.original)}
+        />
       ),
     },
   ];

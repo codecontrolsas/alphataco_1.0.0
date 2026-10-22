@@ -23,19 +23,24 @@ import { ArrowLeft, ArrowRight, ClipboardList, Loader2, Save } from 'lucide-reac
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { saveOrderChanges } from '../actions/items.server';
-import { getOrderForManagement, type ExternalWorkshop, type OrderManagementItem, type WorkshopSector } from '../actions/queries.server';
+import {
+  getOrderForManagement,
+  type ExternalWorkshop,
+  type OrderManagementItem,
+  type WorkshopSector,
+} from '../actions/queries.server';
 import { setupAndGenerateWorkOrders } from '../actions/work-orders.server';
 import { AssignRepairTypesDialog } from './AssignRepairTypesDialog';
-import { computeInitialWizardState } from './wizard/initial-state';
 import { Step1Tasks } from './wizard/Step1Tasks';
 import { Step2SectorAssignment } from './wizard/Step2SectorAssignment';
 import { Step3ExecutionOrder } from './wizard/Step3ExecutionOrder';
 import { Step4Confirm } from './wizard/Step4Confirm';
+import { WizardResourceHeader } from './wizard/WizardResourceHeader';
+import { WizardStepIndicator } from './wizard/WizardStepIndicator';
+import { computeInitialWizardState } from './wizard/initial-state';
 import { mapOrderItemToLocal, type LocalItem } from './wizard/types';
 import { useWizardItems } from './wizard/useWizardItems';
 import { useWizardSectors } from './wizard/useWizardSectors';
-import { WizardResourceHeader } from './wizard/WizardResourceHeader';
-import { WizardStepIndicator } from './wizard/WizardStepIndicator';
 
 export type { LocalItem } from './wizard/types';
 
@@ -90,10 +95,7 @@ function ManageOrderWizardSession({
   const sectorsState = useWizardSectors(initial.sectorOrder, items.localItems, items.eligibleItems, sectors);
 
   const canGenerate =
-    sectorsState.sectorOrder.length > 0 &&
-    !!plannedStartDate &&
-    !!plannedEndDate &&
-    plannedEndDate >= plannedStartDate;
+    sectorsState.sectorOrder.length > 0 && !!plannedStartDate && !!plannedEndDate && plannedEndDate >= plannedStartDate;
 
   const invalidateAfterSave = () => {
     invalidateAllMaintenanceQueries(queryClient);
@@ -272,7 +274,6 @@ function ManageOrderWizardSession({
                   onRejectItem={items.handleRejectItem}
                   onRestoreItem={items.handleRestoreItem}
                   onEditRepairTypes={setEditingRepairTypesItem}
-                  onDescriptionChange={items.handleDescriptionChange}
                   onChiefCommentChange={items.handleChiefCommentChange}
                 />
               </>
@@ -303,7 +304,6 @@ function ManageOrderWizardSession({
             {currentStep === 4 && (
               <Step4Confirm
                 localItems={items.localItems}
-                sectors={sectors}
                 sectorAssignments={sectorsState.sectorAssignments}
                 sectorOrder={sectorsState.sectorOrder}
                 repairTypes={repairTypes}
@@ -318,7 +318,13 @@ function ManageOrderWizardSession({
           {/* Navegación */}
           <Separator className="mt-2" />
           <div className="flex items-center justify-between pt-2 shrink-0">
-            <Button type="button" variant="outline" size="sm" onClick={handleBack} disabled={currentStep === 1 || isSavingStep}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleBack}
+              disabled={currentStep === 1 || isSavingStep}
+            >
               <ArrowLeft className="h-4 w-4 mr-1" aria-hidden="true" />
               Anterior
             </Button>

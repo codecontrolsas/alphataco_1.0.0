@@ -1,26 +1,26 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildDateRangeFiltersWhere,
   buildTextFiltersWhere,
   parseSearchParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { exportRowLimitMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   ORDER_LIST_EXPORT_MAX_ROWS,
   assembleOrdersWhere,
   descriptionTextCondition,
   getResourceConditionFacet,
   getResourceFacet,
-  orderListExportTooLargeMessage,
   resolveOrderListScope,
   resourceConditionCondition,
   resourceIdsCondition,
@@ -185,7 +185,13 @@ async function buildWhereClause(
   // Estado: la selección del usuario acotada a los estados del seguimiento, o el default.
   const statusValues = (filters.status ?? []).filter((v) => WORKSHOP_TRACKING_STATUSES.includes(v));
   const statusCondition = {
-    status: { in: statusValues.length ? statusValues : includeCompleted ? WORKSHOP_TRACKING_STATUSES : DEFAULT_TRACKING_STATUSES },
+    status: {
+      in: statusValues.length
+        ? statusValues
+        : includeCompleted
+          ? WORKSHOP_TRACKING_STATUSES
+          : DEFAULT_TRACKING_STATUSES,
+    },
   };
 
   const extra: Record<string, unknown>[] = [statusCondition];
@@ -280,7 +286,7 @@ export async function getAllWorkshopTrackingForExport(
     });
 
     if (data.length > ORDER_LIST_EXPORT_MAX_ROWS) {
-      return { ok: false, message: orderListExportTooLargeMessage('órdenes en seguimiento') };
+      return { ok: false, message: exportRowLimitMessage(ORDER_LIST_EXPORT_MAX_ROWS, 'órdenes en seguimiento') };
     }
 
     return { ok: true, data };

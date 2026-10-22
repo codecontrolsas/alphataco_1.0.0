@@ -596,7 +596,6 @@ export async function getUserPermissionsForUserServer(userId: string) {
 }
 
 export type UserPermissionsData = Awaited<ReturnType<typeof getUserPermissionsForUserServer>>;
-export type UserPermissionEntry = UserPermissionsData[number];
 
 /**
  * Obtiene los roles asignados a un usuario EN la empresa activa (los de otras empresas no
@@ -649,7 +648,6 @@ export async function getUserRolesServer(userId: string) {
 }
 
 export type UserRolesData = Awaited<ReturnType<typeof getUserRolesServer>>;
-export type UserRoleEntry = UserRolesData[number];
 
 /**
  * Obtiene el detalle de un usuario por su share_company_users.id (para la página de detalle).

@@ -1,19 +1,19 @@
 'use client';
 
+import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
 import {
-  DataTable,
-  type DataTableFacetedFilterConfig,
-  type DataTableSearchParams,
-  type DataTableFilterOption,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { dailyReportStatusLabels } from '@/shared/utils/mappers';
+  createFacetFilters,
+  dateRangeFilter,
+  enumFilterOptions,
+} from '@/shared/components/common/DataTable/facet-filters';
+import type { DataTableFacetedFilterConfig, DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { unwrapExportResult } from '@/shared/lib/export-result';
-import { DailyReportPeriodSelector } from './DailyReportPeriodSelector';
-import { BookOpen, CheckCircle2, CircleOff, Clock, XCircle, type LucideIcon } from 'lucide-react';
+import { dailyReportStatusLabels } from '@/shared/utils/mappers';
+import { BookOpen, CheckCircle2, Clock, XCircle, type LucideIcon } from 'lucide-react';
 import moment from 'moment';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   getAllDailyReportsForExport,
   getDailyReportSingleFacet,
@@ -21,10 +21,13 @@ import {
   type DailyReportListItem,
 } from '../actions.server';
 import { HIDDEN_COLUMNS_BY_DEFAULT, getColumns } from '../columns';
+import { DailyReportPeriodSelector } from './DailyReportPeriodSelector';
 
 // ============================================================================
 // ICONOS POR STATUS
 // ============================================================================
+
+const DEFAULT_VISIBLE_FILTERS = ['date', 'status'];
 
 const statusIcons: Record<string, LucideIcon> = {
   abierto: Clock,
@@ -70,99 +73,43 @@ export function _DailyReportDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
-  // Construir helper de permisos desde el map serializable del servidor
-  const permissions = useMemo(
-    () => ({
-      hasPermission: (module: string, tab: string, action: string) =>
-        permissionsMap[`${module}:${tab}:${action}`] === true,
-    }),
-    [permissionsMap]
-  );
-  // Params actuales de la tabla (modo cliente): el export respeta los filtros activos
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-  const handleStateChange = useCallback((params: DataTableSearchParams) => {
-    setCurrentParams(params);
-  }, []);
+  const permissions = usePermissionChecker(permissionsMap);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getDailyReportsPaginated(params), []);
 
-  // Facets lazy: cada filtro pide sus conteos al abrirse, con los filtros actuales de la tabla.
-  const makeFetchFacet = useCallback(
-    (columnId: string, options: DataTableFilterOption[]) =>
-      async (params: DataTableSearchParams): Promise<FacetResult> => {
-        const result = await getDailyReportSingleFacet(columnId, params);
-        if (!result) return { options: [], counts: new Map() };
-        return {
-          options: [
-            ...options,
-            ...(result.counts.has(NULL_FILTER_VALUE)
-              ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-              : []),
-          ],
-          counts: result.counts,
-        };
-      },
-    []
-  );
-
-  // Columnas ocultas por defecto
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((col) => [col, false]));
-    return { ...defaults, ...initialColumnVisibility };
-  }, [initialColumnVisibility]);
-
-  // Filtros visibles por defecto — máximo 3
-  const DEFAULT_VISIBLE_FILTERS = ['date', 'status'];
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    const allFilterIds = ['date', 'status', 'creation_date', 'is_active'];
-    return Object.fromEntries(allFilterIds.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
-  }, [initialFilterVisibility]);
-
-  // ─── Filtros facetados ──────────────────────────────────────────────────────
-  const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
-    () => [
-      // Fecha del parte (dateRange)
-      {
-        columnId: 'date',
-        title: 'Fecha',
-        type: 'dateRange' as const,
-      },
-
-      // Estado (enum NOT NULL, con iconos)
-      {
-        columnId: 'status',
-        title: 'Estado',
-        fetchFacet: makeFetchFacet(
-          'status',
-          Object.entries(dailyReportStatusLabels).map(([value, label]) => ({
-            value,
-            label,
-            icon: statusIcons[value],
-          }))
-        ),
-      },
-
-      // Fecha de creación (dateRange, oculto por defecto)
-      {
-        columnId: 'creation_date',
-        title: 'Fecha de creación',
-        type: 'dateRange' as const,
-      },
-
-      // Activo/Inactivo
-      {
-        columnId: 'is_active',
-        title: 'Activo',
-        fetchFacet: makeFetchFacet('is_active', [
+  // ─── Filtros facetados (lazy: cada filtro pide sus conteos al abrirse, con los filtros actuales) ───
+  const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(() => {
+    const facets = createFacetFilters(getDailyReportSingleFacet);
+    return [
+      dateRangeFilter('date', 'Fecha'),
+      facets.fixed(
+        'status',
+        'Estado',
+        enumFilterOptions(Object.keys(dailyReportStatusLabels), dailyReportStatusLabels, statusIcons),
+        { label: 'Sin asignar' }
+      ),
+      dateRangeFilter('creation_date', 'Fecha de creación'),
+      facets.fixed(
+        'is_active',
+        'Activo',
+        [
           { value: 'true', label: 'Activo', icon: CheckCircle2 },
           { value: 'false', label: 'Inactivo', icon: XCircle },
-        ]),
-      },
-    ],
-    [makeFetchFacet]
-  );
+        ],
+        { label: 'Sin asignar' }
+      ),
+    ];
+  }, []);
+
+  // Filtros visibles por defecto: fecha y estado (si hay preferencia guardada, manda esa)
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   // ─── Columnas ────────────────────────────────────────────────────────────────
   const columns = useMemo(() => getColumns(permissions), [permissions]);
@@ -170,44 +117,38 @@ export function _DailyReportDataTable({
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4">
-    <DailyReportPeriodSelector
-      paramNamespace={paramNamespace}
-      serverFrom={firstParam(searchParams.date_from)}
-      serverTo={firstParam(searchParams.date_to)}
-    />
-    <DataTable
-      columns={columns}
-      data={data}
-      totalRows={totalRows}
-      searchParams={searchParams}
-      queryFn={tableQueryFn}
-      queryKey={['daily-reports', 'list']}
-      onStateChange={handleStateChange}
-      mobileCards
-      searchPlaceholder="Buscar partes diarios..."
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      tableId={tableId}
-      paramNamespace={paramNamespace}
-      showFilterToggle={true}
-      emptyMessage="No hay partes diarios registrados"
-      data-testid="daily-reports-table"
-      exportConfig={{
-        fetchAllData: async () => unwrapExportResult(await getAllDailyReportsForExport(currentParams)),
-        options: {
-          filename: 'partes-diarios',
-          title: 'Listado de Partes Diarios',
-          sheetName: 'Partes Diarios',
-        },
-        formatters: {
-          date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
-          creation_date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
-          status: (val) => dailyReportStatusLabels[val as string] ?? String(val ?? ''),
-          is_active: (val) => (val ? 'Activo' : 'Inactivo'),
-        },
-      }}
-    />
+      <DailyReportPeriodSelector
+        paramNamespace={paramNamespace}
+        serverFrom={firstParam(searchParams.date_from)}
+        serverTo={firstParam(searchParams.date_to)}
+      />
+      <DataTable
+        {...tableProps}
+        columns={columns}
+        data={data}
+        totalRows={totalRows}
+        queryFn={tableQueryFn}
+        queryKey={['daily-reports', 'list']}
+        mobileCards
+        searchPlaceholder="Buscar partes diarios..."
+        paramNamespace={paramNamespace}
+        emptyMessage="No hay partes diarios registrados"
+        data-testid="daily-reports-table"
+        exportConfig={{
+          fetchAllData: async () => unwrapExportResult(await getAllDailyReportsForExport(currentParams)),
+          options: {
+            filename: 'partes-diarios',
+            title: 'Listado de Partes Diarios',
+            sheetName: 'Partes Diarios',
+          },
+          formatters: {
+            date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
+            creation_date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
+            status: (val) => dailyReportStatusLabels[val as string] ?? String(val ?? ''),
+            is_active: (val) => (val ? 'Activo' : 'Inactivo'),
+          },
+        }}
+      />
     </div>
   );
 }

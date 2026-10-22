@@ -1,14 +1,14 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE, stateToPrismaParams } from '@/shared/components/common/DataTable/helpers';
-import { fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
+import { fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { equipmentOwnerCreateSchema } from '../../lib/catalog-input-schemas';
-import { CATALOG_EXPORT_MAX_ROWS, catalogExportFailure, catalogTooLargeMessage } from '../../lib/catalog-table.server';
+import { CATALOG_EXPORT_MAX_ROWS, catalogExportFailure } from '../../lib/catalog-table.server';
 import { requireConfigTabPermission } from '../../lib/config-access.server';
 import { assertEquipmentOwnerReadable } from '../lib/catalog-guards';
 import { catalogAccessError, catalogWriteScope, resolveCatalogAccess } from '../lib/catalog-scope';
@@ -96,7 +96,7 @@ export async function getAllEquipmentOwnersForExport(
       listIds: (take) => prisma.equipment_owners.findMany({ where, orderBy: safeOrderBy, select: { id: true }, take }),
       fetchByIds: (ids) =>
         prisma.equipment_owners.findMany({ where: { AND: [where, { id: { in: ids } }] }, select: OWNER_LIST_SELECT }),
-      tooLargeMessage: catalogTooLargeMessage('titulares'),
+      tooLargeMessage: tooManyRowsMessage('titulares'),
     });
     return { ok: true, data: rows };
   } catch (error) {

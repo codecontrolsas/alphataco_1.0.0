@@ -1,17 +1,18 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { matchesId, titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDateTime, formatDateOnlyAr } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import { formatArgentinaDateTime, formatDateAr } from '@/shared/lib/argentina-time';
 import { Building2, ClipboardList, ExternalLink, Truck, User, Wrench, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { WarehouseStatusBadge } from '../../../components/WarehouseStatusBadge';
-import { DESTINATION_TYPE_LABELS } from '../../../lib/labels';
-import { MOVEMENT_TYPE_UI, REVERSAL_STATUS_UI } from '../../../lib/status-presentation';
-import type { StockDestinationTypeValue } from '../../../schemas/stock-movement';
 import { formatMoney } from '../../../lib/format';
+import { DESTINATION_TYPE_LABELS } from '../../../lib/labels';
+import { REVERSAL_STATUS_UI } from '../../../lib/status-presentation';
+import type { StockDestinationTypeValue } from '../../../schemas/stock-movement';
 import type { MovementListItem, MovementReversalStatus } from './actions.server';
 
 // Iconos de tipo de destino compartidos entre celdas y filtros (consistencia)
@@ -39,15 +40,14 @@ interface MovementColumnsOptions {
 }
 
 /** `occurred_on` es `@db.Date`: llega como medianoche UTC, se toma el día calendario tal cual. */
-export const formatOccurredOn = (value: string | Date) => formatDateAr(new Date(value).toISOString().slice(0, 10));
+export const formatOccurredOn = (value: string | Date) => formatDateOnlyAr(value);
 
 export function getColumns({ canViewPrices, onOpenDetail }: MovementColumnsOptions): ColumnDef<MovementListItem>[] {
   const columns: ColumnDef<MovementListItem>[] = [
     {
       id: 'number',
       accessorKey: 'number',
-      meta: { title: 'Número' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Número" />,
+      ...titled('Número'),
       cell: ({ row }) => (
         <div className="flex items-center gap-1.5">
           <button
@@ -72,31 +72,27 @@ export function getColumns({ canViewPrices, onOpenDetail }: MovementColumnsOptio
     {
       id: 'type',
       accessorKey: 'type',
-      meta: { title: 'Tipo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
+      ...titled('Tipo'),
       cell: ({ row }) => <WarehouseStatusBadge entity="movementType" status={row.original.type} />,
       filterFn: (row, id, value: string[]) => value.includes(row.getValue(id) as string),
     },
     {
       id: 'occurred_on',
       accessorKey: 'occurred_on',
-      meta: { title: 'Fecha' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
+      ...titled('Fecha'),
       cell: ({ row }) => <span>{formatOccurredOn(row.original.occurred_on)}</span>,
     },
     {
       id: 'warehouse',
       accessorFn: (row) => row.warehouse.name,
-      meta: { title: 'Depósito' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Depósito" />,
+      ...titled('Depósito'),
       cell: ({ row }) => <span>{row.original.warehouse.name}</span>,
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.warehouse.id),
+      filterFn: matchesId((r) => r.warehouse.id),
     },
     {
       id: 'target_warehouse',
       accessorFn: (row) => row.target_warehouse?.name ?? '',
-      meta: { title: 'Depósito destino' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Depósito destino" />,
+      ...titled('Depósito destino'),
       cell: ({ row }) => <span>{row.original.target_warehouse?.name ?? '-'}</span>,
       filterFn: (row, _id, value: string[]) => {
         const id = row.original.target_warehouse?.id;
@@ -107,8 +103,7 @@ export function getColumns({ canViewPrices, onOpenDetail }: MovementColumnsOptio
     {
       id: 'destination_type',
       accessorKey: 'destination_type',
-      meta: { title: 'Tipo de destino' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de destino" />,
+      ...titled('Tipo de destino'),
       cell: ({ row }) => {
         const t = row.original.destination_type;
         if (!t) return <span>-</span>;
@@ -138,15 +133,13 @@ export function getColumns({ canViewPrices, onOpenDetail }: MovementColumnsOptio
     {
       id: 'reference',
       accessorKey: 'reference',
-      meta: { title: 'Referencia' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Referencia" />,
+      ...titled('Referencia'),
       cell: ({ row }) => <span>{row.original.reference ?? '-'}</span>,
     },
     {
       id: 'notes',
       accessorKey: 'notes',
-      meta: { title: 'Notas' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Notas" />,
+      ...titled('Notas'),
       cell: ({ row }) => <span>{row.original.notes ?? '-'}</span>,
     },
     {
@@ -157,21 +150,19 @@ export function getColumns({ canViewPrices, onOpenDetail }: MovementColumnsOptio
       enableSorting: false,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => <WarehouseStatusBadge entity="reversal" status={row.original.status} />,
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.status),
+      filterFn: matchesId((r) => r.status),
     },
     {
       id: 'created_by',
       accessorFn: (row) => row.creator.name,
-      meta: { title: 'Creado por' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Creado por" />,
+      ...titled('Creado por'),
       cell: ({ row }) => <span>{row.original.creator.name}</span>,
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.creator.id),
+      filterFn: matchesId((r) => r.creator.id),
     },
     {
       id: 'created_at',
       accessorKey: 'created_at',
-      meta: { title: 'Fecha de carga' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de carga" />,
+      ...titled('Fecha de carga'),
       cell: ({ row }) => <span>{formatArgentinaDateTime(row.original.created_at)}</span>,
     },
   ];
@@ -180,8 +171,7 @@ export function getColumns({ canViewPrices, onOpenDetail }: MovementColumnsOptio
     columns.push({
       id: 'total_cost',
       accessorFn: (row) => (row.total_cost != null ? Number(row.total_cost) : null),
-      meta: { title: 'Total' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Total" />,
+      ...titled('Total'),
       cell: ({ row }) => (
         <span className="font-medium tabular-nums">
           {row.original.total_cost != null ? formatMoney(row.original.total_cost) : '-'}

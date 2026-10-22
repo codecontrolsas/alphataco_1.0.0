@@ -1,3 +1,4 @@
+import { isValidCuit, normalizeCuit } from '@/shared/utils/cuit-text';
 import { z } from 'zod';
 
 /**
@@ -5,26 +6,6 @@ import { z } from 'zod';
  * `FormData` que mandan `CreateCompanyButton`/`EditCompanyButton`, y el path del logo en storage.
  * Sin acceso a la base: la unicidad del CUIT la verifica la server action con Prisma.
  */
-
-/**
- * Dígito verificador del CUIT/CUIL (misma regla que `validarCUIL` de `@/lib/utils`, que no se
- * importa acá porque ese módulo arrastra Prisma y este es puro).
- */
-export function isValidCuit(cuit: string): boolean {
-  const digits = normalizeCuit(cuit);
-  if (!/^\d{11}$/.test(digits)) return false;
-  const coefficients = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
-  let sum = 0;
-  for (let i = 0; i < 10; i++) sum += Number(digits[i]) * coefficients[i];
-  let check = 11 - (sum % 11);
-  if (check === 11) check = 0;
-  return Number(digits[10]) === check;
-}
-
-/** Sólo dígitos: quita guiones y espacios (el input admite "30-71234567-3"). */
-export function normalizeCuit(value: string): string {
-  return value.replace(/[-\s]/g, '');
-}
 
 /** Conserva un `+` inicial y elimina espacios, guiones y paréntesis. */
 export function normalizePhone(value: string): string {
@@ -69,7 +50,10 @@ export const companyFormSchema = z.object({
     .min(4, 'La dirección debe tener al menos 4 caracteres.')
     .max(50, 'La dirección debe tener menos de 50 caracteres.'),
   country: z.string({ required_error: 'El país es requerido' }).trim().min(2, 'Seleccioná un país.'),
-  province_id: z.coerce.number({ invalid_type_error: 'Seleccioná una provincia.' }).int().positive('Seleccioná una provincia.'),
+  province_id: z.coerce
+    .number({ invalid_type_error: 'Seleccioná una provincia.' })
+    .int()
+    .positive('Seleccioná una provincia.'),
   city: z.coerce.number({ invalid_type_error: 'Seleccioná una ciudad.' }).int().positive('Seleccioná una ciudad.'),
   industry: z.string({ required_error: 'La industria es requerida' }).trim().min(2, 'Seleccioná una industria.'),
   by_defect: z.boolean().default(false),

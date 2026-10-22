@@ -2,14 +2,14 @@
 
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
-import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable';
 import {
   buildSearchWhere,
   buildTextFiltersWhere,
   parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
-import { ExportTooLargeError } from '@/shared/lib/export-batches';
+import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
+import { ExportTooLargeError, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { sanitizeFilters } from '@/shared/lib/table-filters';
@@ -109,9 +109,7 @@ export async function getAllMeasureUnitsForExport(
       take: EXPORT_MAX_ROWS + 1,
     });
     if (rows.length > EXPORT_MAX_ROWS) {
-      throw new ExportTooLargeError(
-        `Hay más de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} unidades con los filtros actuales. Acote la exportación con filtros.`
-      );
+      throw new ExportTooLargeError(tooManyRowsMessage('unidades')(EXPORT_MAX_ROWS));
     }
     return { ok: true, data: rows };
   } catch (error) {

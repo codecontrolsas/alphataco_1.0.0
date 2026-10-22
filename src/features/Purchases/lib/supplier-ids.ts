@@ -1,4 +1,4 @@
-import { isValidCuit, normalizeCuit } from '@/features/Empresa/General/lib/company-form';
+import { isValidCuit, normalizeCuit } from '@/shared/utils/cuit-text';
 
 /**
  * Identificadores del proveedor: CUIT y CBU. Logica pura (sin base), la usan el formulario y las
@@ -12,12 +12,6 @@ export function normalizeSupplierCuit(raw: string): string {
 
 export function isValidSupplierCuit(raw: string): boolean {
   return isValidCuit(normalizeSupplierCuit(raw));
-}
-
-/** "30712345678" -> "30-71234567-8". Si no son 11 digitos, lo devuelve como vino. */
-export function formatCuit(value: string | number | bigint): string {
-  const digits = String(value);
-  return /^\d{11}$/.test(digits) ? `${digits.slice(0, 2)}-${digits.slice(2, 10)}-${digits.slice(10)}` : digits;
 }
 
 export function normalizeCbu(raw: string): string {

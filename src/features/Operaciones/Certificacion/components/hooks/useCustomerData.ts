@@ -1,6 +1,7 @@
 import type { CustomerForRowForm } from '@/features/Operaciones/PartesDiarios/actions/comercial-rows.server';
 import { useCallback, useMemo } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
+import { activeServiceItems, activeValidServices } from '../../../lib/customer-services';
 import type { DailyReportRowFormValues } from '../form-types';
 
 /**
@@ -15,7 +16,7 @@ export function useCustomerData(customers: CustomerForRowForm[], form: UseFormRe
   const selectedServiceId = serviceId || null;
 
   const selectedCustomer = useMemo(
-    () => (customerId ? (customers.find((customer) => customer.id === customerId) ?? null) : null),
+    () => (customerId ? customers.find((customer) => customer.id === customerId) ?? null : null),
     [customers, customerId]
   );
 
@@ -24,22 +25,13 @@ export function useCustomerData(customers: CustomerForRowForm[], form: UseFormRe
   const isAreaDisabled = !selectedCustomer?.customer_services?.some((service) => service.service_areas.length > 0);
 
   // Servicios del cliente seleccionado
-  const customerServices = useMemo(() => {
-    if (!selectedCustomer?.customer_services?.length) return [];
-
-    return selectedCustomer.customer_services.filter(
-      (service) => service.is_active && (!service.service_validity || new Date(service.service_validity) >= new Date())
-    );
-  }, [selectedCustomer]);
+  const customerServices = useMemo(() => activeValidServices(selectedCustomer?.customer_services), [selectedCustomer]);
 
   // Ítems del servicio seleccionado
-  const serviceItems = useMemo(() => {
-    if (!selectedServiceId || !selectedCustomer?.customer_services?.length) return [];
-
-    const selectedService = selectedCustomer.customer_services.find((service) => service.id === selectedServiceId);
-
-    return selectedService?.service_items?.filter((item) => item.is_active) || [];
-  }, [selectedCustomer, selectedServiceId]);
+  const serviceItems = useMemo(
+    () => activeServiceItems(selectedCustomer?.customer_services, selectedServiceId),
+    [selectedCustomer, selectedServiceId]
+  );
 
   // Manejar cambio de cliente
   const handleCustomerChange = useCallback(

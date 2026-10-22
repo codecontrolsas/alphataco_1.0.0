@@ -1,4 +1,4 @@
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import type { document_applies } from '@/generated/prisma/enums';
 import { prisma } from '@/shared/lib/prisma';
 import { findScopedDocumentType } from './document-type-scope';

@@ -20,3 +20,25 @@ export function unitAmountText(value: string): string {
   const decimals = (value.split('.')[1] ?? '').replace(/0+$/, '');
   return formatAmountText(value, decimals.length > 2 ? 4 : 2);
 }
+
+/** Detalle de un medio de pago o cobro para el PDF: cuenta, referencia y datos del cheque, separados por " · ". */
+export function pdfPaymentDetail(p: {
+  account: string | null;
+  reference: string | null;
+  checkNumber: string | null;
+  checkBank: string | null;
+  drawerName?: string | null;
+  /** `YYYY-MM-DD` */
+  checkDueOn: string | null;
+}): string {
+  return [
+    p.account,
+    p.reference,
+    p.checkNumber ? `N° ${p.checkNumber}` : null,
+    p.checkBank,
+    p.drawerName ? `librador ${p.drawerName}` : null,
+    p.checkDueOn ? `pago ${pdfDateText(p.checkDueOn)}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}

@@ -4,32 +4,30 @@ import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { NULL_FILTER_VALUE, stateToPrismaParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
-import { getPaymentsSectionCount } from '../../lib/section-counts';
-import { openInvoicePendingMap } from '../../lib/payment-balances';
-import { DUE_INVOICES_EXPORT_MAX_ROWS } from './constants';
+import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
+import { resolveSorts, type SingleFacetResult } from '@/shared/lib/table-list-query';
 import {
   DEFAULT_ORDER_BY,
   INVOICE_SELECT,
   SORT_MAP,
   VALID_SORT_FIELDS,
   buildWhereClause,
-  debtMatches,
-  exportTooLargeMessage,
-  listUnified,
-  loadOpenCheckDebts,
   parseListState,
   resolveCompanyId,
   shape,
   todayDate,
-  todayText,
   type FilterState,
   type InvoiceOrderBy,
   type InvoiceWhere,
-  type OpenDebt,
 } from '../../lib/due-invoices';
+import { debtMatches, loadOpenCheckDebts, todayText, type OpenDebt } from '../../lib/due-invoices-debts';
+import { listUnified } from '../../lib/due-invoices-unified';
+import { openInvoicePendingMap } from '../../lib/payment-balances';
+import { getPaymentsSectionCount } from '../../lib/section-counts';
+import { DUE_INVOICES_EXPORT_MAX_ROWS } from './constants';
 
 const logger = new Logger('features/Purchases/Payments/DueInvoicesList');
 
@@ -69,14 +67,10 @@ export async function getDueInvoicesPaginated(searchParams: DataTableSearchParam
       return { data: shape(ordered, pendingMap), total: sorted.length };
     }
 
-    const resolvedSorts: InvoiceOrderBy[] = [];
-    for (const s of state.sorting) {
-      const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-      const mapper = SORT_MAP[s.id];
-      if (mapper) resolvedSorts.push(...mapper(dir));
-      else if (VALID_SORT_FIELDS.has(s.id)) resolvedSorts.push({ [s.id]: dir });
-    }
-    const orderBy: InvoiceOrderBy[] = resolvedSorts.length ? [...resolvedSorts, { issue_date: 'asc' }] : DEFAULT_ORDER_BY;
+    const resolvedSorts = resolveSorts<InvoiceOrderBy>(state.sorting, VALID_SORT_FIELDS, SORT_MAP);
+    const orderBy: InvoiceOrderBy[] = resolvedSorts.length
+      ? [...resolvedSorts, { issue_date: 'asc' }]
+      : DEFAULT_ORDER_BY;
 
     const [rows, total] = await Promise.all([
       prisma.supplier_invoices.findMany({ where, orderBy, skip, take, select: INVOICE_SELECT }),
@@ -93,7 +87,9 @@ export async function getDueInvoicesPaginated(searchParams: DataTableSearchParam
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllDueInvoicesForExport(searchParams: DataTableSearchParams): Promise<ExportResult<DueInvoiceListItem[]>> {
+export async function getAllDueInvoicesForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<DueInvoiceListItem[]>> {
   const companyId = await resolveCompanyId();
   if (!companyId) return { ok: true, data: [] };
 
@@ -103,23 +99,24 @@ export async function getAllDueInvoicesForExport(searchParams: DataTableSearchPa
     const where = buildWhereClause(companyId, state, pendingMap);
     const today = todayText();
     const debts = (await loadOpenCheckDebts(companyId)).filter((d) => debtMatches(d, state, today));
-    if (debts.length > 0) return { ok: true, data: (await listUnified(where, state, pendingMap, debts, null, companyId)).data };
+    if (debts.length > 0)
+      return { ok: true, data: (await listUnified(where, state, pendingMap, debts, null, companyId)).data };
 
     const orderBy: InvoiceOrderBy[] = [...DEFAULT_ORDER_BY, { id: 'asc' }];
     const rows = await fetchExportRowsInBatches({
       maxRows: DUE_INVOICES_EXPORT_MAX_ROWS,
       listIds: (take) => prisma.supplier_invoices.findMany({ where, orderBy, select: { id: true }, take }),
-      fetchByIds: (ids) => prisma.supplier_invoices.findMany({ where: { id: { in: ids }, company_id: companyId }, select: INVOICE_SELECT }),
-      tooLargeMessage: exportTooLargeMessage,
+      fetchByIds: (ids) =>
+        prisma.supplier_invoices.findMany({
+          where: { id: { in: ids }, company_id: companyId },
+          select: INVOICE_SELECT,
+        }),
+      tooLargeMessage: tooManyRowsMessage('comprobantes'),
     });
     return { ok: true, data: shape(rows, pendingMap) };
   } catch (error) {
     logger.error('Error al exportar vencimientos', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
-    return {
-      ok: false,
-      message: error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar la lista de vencimientos. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de vencimientos. Intente nuevamente.');
   }
 }
 
@@ -149,7 +146,7 @@ export async function getDueInvoicesAttention(): Promise<{ overdue: number } | n
 export async function getDueInvoiceSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
-): Promise<{ counts: Map<string, number>; resolvedOptions?: Array<{ id: string; name: string | null }> } | null> {
+): Promise<SingleFacetResult> {
   const companyId = await resolveCompanyId();
   if (!companyId) return null;
 
@@ -159,27 +156,15 @@ export async function getDueInvoiceSingleFacet(
     const pendingMap = await openInvoicePendingMap(prisma, companyId);
 
     /** WHERE con todos los filtros activos MENOS el de la columna que se esta abriendo. */
-    const crossState = (excludeColumn: string): FilterState => {
-      const base: FilterState = parsed ?? parseListState({});
-      const filters = { ...base.filters };
-      delete filters[excludeColumn];
-      return { ...base, filters };
-    };
-    const crossWhere = (excludeColumn: string): InvoiceWhere => buildWhereClause(companyId, crossState(excludeColumn), pendingMap);
+    const crossState = (excludeColumn: string): FilterState =>
+      withoutOwnFilter(parsed ?? parseListState({}), excludeColumn);
+    const crossWhere = (excludeColumn: string): InvoiceWhere =>
+      buildWhereClause(companyId, crossState(excludeColumn), pendingMap);
     /** Deudas por cheques rechazados que pasan los filtros activos MENOS el de la columna. */
     const crossDebts = async (excludeColumn: string): Promise<OpenDebt[]> => {
       const state = crossState(excludeColumn);
       const today = todayText();
       return (await loadOpenCheckDebts(companyId)).filter((d) => debtMatches(d, state, today));
-    };
-
-    const toFacetMap = (rows: { key: string | number | null; count: number }[]): Map<string, number> => {
-      const map = new Map<string, number>();
-      for (const { key, count } of rows) {
-        const k = key == null ? NULL_FILTER_VALUE : String(key);
-        map.set(k, (map.get(k) ?? 0) + count);
-      }
-      return map;
     };
 
     const where = crossWhere(columnId);

@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { getMovementFormLookups } from '@/features/Warehouses/actions/options.server';
 import { NewRequestForm } from '@/features/Warehouses/Requests/components/NewRequestForm';
 import { ArrowLeft } from 'lucide-react';

@@ -1,7 +1,7 @@
 import { fetchAllContracts } from '@/features/Equipos/EquipoID/actions/customer-catalog-actions';
 import { fetchCustomersWithRelations } from '@/features/Operaciones/Preparte/actions/form-data.server';
 import { NewOrderView } from '@/features/Operaciones/Preparte/NewOrder/NewOrderView';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { redirect } from 'next/navigation';
 
 export async function generateMetadata() {

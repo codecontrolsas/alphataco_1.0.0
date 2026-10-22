@@ -1,15 +1,17 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { treasury_movement_kind } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
-import { NULL_FILTER_VALUE, parseSearchParams } from '@/shared/components/common/DataTable/helpers';
+import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { toFacetMap } from '@/shared/lib/table-facets';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { isoDay } from '../../lib/dates';
 import {
   buildTreasuryDateRangeWhere,
   facetWhere,
@@ -18,7 +20,6 @@ import {
   safePaging,
   textValue,
 } from '../../lib/filter-values';
-import { isoDay } from '../../lib/dates';
 import { MOVEMENT_STATE_LABELS, OPENING_OPERATION_LABEL } from './constants';
 
 const logger = new Logger('features/Treasury/Movements/MovementsList');
@@ -165,7 +166,13 @@ const MOVEMENT_SELECT = {
   customer_receipt_payment: { select: { receipt: { select: { id: true, number: true } } } },
   check_operation: { select: { id: true, number: true } },
   third_party_check_id: true,
-  own_check: { select: { id: true, number: true, payment_order_payment: { select: { payment_order: { select: { id: true, number: true } } } } } },
+  own_check: {
+    select: {
+      id: true,
+      number: true,
+      payment_order_payment: { select: { payment_order: { select: { id: true, number: true } } } },
+    },
+  },
 } as const;
 
 function shape(rows: Prisma.treasury_movementsGetPayload<{ select: typeof MOVEMENT_SELECT }>[]) {
@@ -192,7 +199,11 @@ function shape(rows: Prisma.treasury_movementsGetPayload<{ select: typeof MOVEME
       customerReceipt: receipt ? { id: receipt.id, number: receipt.number } : null,
       // Operacion de cheques (deposito, descuento, rechazo, carga inicial): sin numero = carga inicial
       checkOperation: r.check_operation
-        ? { id: r.check_operation.id, number: r.check_operation.number ?? OPENING_OPERATION_LABEL, checkId: r.third_party_check_id }
+        ? {
+            id: r.check_operation.id,
+            number: r.check_operation.number ?? OPENING_OPERATION_LABEL,
+            checkId: r.third_party_check_id,
+          }
         : null,
       ownCheck: r.own_check ? { id: r.own_check.id, number: r.own_check.number } : null,
     };
@@ -251,21 +262,16 @@ export async function getAllTreasuryMovementsForExport(
       maxRows: EXPORT_LIMIT,
       listIds: (take) => prisma.treasury_movements.findMany({ where, orderBy, select: { id: true }, take }),
       fetchByIds: (ids) =>
-        prisma.treasury_movements.findMany({ where: { id: { in: ids }, company_id: companyId }, select: MOVEMENT_SELECT }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} movimientos con los filtros actuales. Acote la exportación con filtros.`,
+        prisma.treasury_movements.findMany({
+          where: { id: { in: ids }, company_id: companyId },
+          select: MOVEMENT_SELECT,
+        }),
+      tooLargeMessage: tooManyRowsMessage('movimientos'),
     });
     return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar movimientos de tesoreria', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError
-          ? error.message
-          : 'No se pudo exportar la lista de movimientos. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de movimientos. Intente nuevamente.');
   }
 }
 
@@ -288,15 +294,6 @@ export async function getTreasuryMovementSingleFacet(
     const filters = { ...base.filters };
     delete filters[excludeColumn];
     return buildWhereClause(companyId as string, { ...base, filters });
-  }
-
-  function toFacetMap(rows: { key: string | null; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      const k = key == null ? NULL_FILTER_VALUE : key;
-      map.set(k, (map.get(k) ?? 0) + count);
-    }
-    return map;
   }
 
   try {

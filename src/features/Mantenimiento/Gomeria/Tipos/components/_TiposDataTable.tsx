@@ -11,15 +11,16 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { buildEnumFacetResult } from '@/features/Mantenimiento/Gomeria/shared/facet-helpers';
 import { tireTreadTypeLabels } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
+import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
 import { TireTreadType } from '@/generated/prisma/enums';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { buildEnumFacetResult } from '@/shared/components/common/DataTable/facet-results';
 import {
-  DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
   type FacetResult,
-} from '@/shared/components/common/DataTable';
+} from '@/shared/components/common/DataTable/types';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useQueryClient } from '@tanstack/react-query';
@@ -75,13 +76,7 @@ export default function _TiposDataTable({
   const queryClient = useQueryClient();
 
   // ─── Permissions ──────────────────────────────────────────────────────────
-  const permissions = useMemo(
-    () => ({
-      hasPermission: (module: string, tab: string, action: string) =>
-        permissionsMap[`${module}:${tab}:${action}`] === true,
-    }),
-    [permissionsMap]
-  );
+  const permissions = usePermissionChecker(permissionsMap);
 
   const canCreate = permissions.hasPermission('mantenimiento', 'tipos_cubiertas', 'create');
 

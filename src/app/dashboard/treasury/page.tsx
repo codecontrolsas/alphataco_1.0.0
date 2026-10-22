@@ -1,14 +1,12 @@
-import { getCompanyName } from '@/features/Empresa/General/actions/company.server';
+import { companyPageMetadata } from '@/app/_lib/company-metadata';
 import TreasuryComponent from '@/features/Treasury/TreasuryComponent';
-import { cookies } from 'next/headers';
 
 export async function generateMetadata() {
-  const cookiesStore = await cookies();
-  const companyName = cookiesStore.get('actualCompName')?.value ?? (await getCompanyName())?.company_name;
-  if (companyName) {
-    return { title: `Tesorería | ${companyName}`, description: `Cuentas, cajas y movimientos de ${companyName}` };
-  }
-  return { title: 'Tesorería' };
+  return (
+    (await companyPageMetadata('Tesorería', (name) => `Cuentas, cajas y movimientos de ${name}`)) ?? {
+      title: 'Tesorería',
+    }
+  );
 }
 
 export default async function TreasuryPage({

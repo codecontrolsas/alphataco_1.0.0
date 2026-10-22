@@ -1,7 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -47,16 +47,14 @@ export function getColumns({ canUpdate, canDelete }: ColumnPermissions): ColumnD
     // ─── Sistema ──────────────────────────────────────────────────────────────
     {
       accessorKey: 'name',
-      meta: { title: 'Sistema' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Sistema" />,
+      ...titled('Sistema'),
       cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
     },
 
     // ─── Usuario (client_id) ──────────────────────────────────────────────────
     {
       accessorKey: 'client_id',
-      meta: { title: 'Usuario' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Usuario" />,
+      ...titled('Usuario'),
       cell: ({ row }) => <span className="font-mono text-xs">{row.original.client_id}</span>,
     },
 
@@ -64,8 +62,7 @@ export function getColumns({ canUpdate, canDelete }: ColumnPermissions): ColumnD
     {
       id: 'status',
       accessorFn: (row) => (row.revoked_at ? 'revoked' : 'active'),
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const isRevoked = row.original.revoked_at != null;
         const Icon = isRevoked ? Ban : CheckCircle2;
@@ -86,8 +83,7 @@ export function getColumns({ canUpdate, canDelete }: ColumnPermissions): ColumnD
     // ─── Última consulta ──────────────────────────────────────────────────────
     {
       accessorKey: 'last_used_at',
-      meta: { title: 'Última consulta' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Última consulta" />,
+      ...titled('Última consulta'),
       cell: ({ row }) =>
         row.original.last_used_at ? (
           <span>{formatArgentinaDateTime(row.original.last_used_at)}</span>
@@ -99,8 +95,7 @@ export function getColumns({ canUpdate, canDelete }: ColumnPermissions): ColumnD
     // ─── Creado (oculta por defecto) ──────────────────────────────────────────
     {
       accessorKey: 'created_at',
-      meta: { title: 'Creado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
+      ...titled('Creado'),
       cell: ({ row }) => <span>{formatArgentinaDay(row.original.created_at)}</span>,
     },
 
@@ -108,8 +103,7 @@ export function getColumns({ canUpdate, canDelete }: ColumnPermissions): ColumnD
     {
       id: 'creator',
       accessorFn: (row) => row.creator?.fullname ?? '',
-      meta: { title: 'Creado por' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Creado por" />,
+      ...titled('Creado por'),
       cell: ({ row }) => (
         <span>{row.original.creator?.fullname ?? <span className="text-muted-foreground">Sin asignar</span>}</span>
       ),
@@ -123,8 +117,7 @@ export function getColumns({ canUpdate, canDelete }: ColumnPermissions): ColumnD
     // ─── Notas (oculta por defecto) ───────────────────────────────────────────
     {
       accessorKey: 'notes',
-      meta: { title: 'Notas' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Notas" />,
+      ...titled('Notas'),
       cell: ({ row }) => <span className="text-sm">{row.original.notes || '-'}</span>,
     },
 

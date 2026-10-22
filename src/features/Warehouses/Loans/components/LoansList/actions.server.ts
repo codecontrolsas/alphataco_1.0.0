@@ -1,7 +1,7 @@
 'use server';
 
-import { argentinaDate } from '@/features/Jobs/lib/dates';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { destinationSearchConditions } from '@/features/Warehouses/lib/destination-search';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -12,7 +12,8 @@ import {
   parseSearchParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { argentinaDate } from '@/shared/lib/argentina-time';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
@@ -131,17 +132,7 @@ function buildWhereClause(companyId: string, state: FilterState): UnitWhere {
   if (holder) {
     and.push({
       last_movement: {
-        OR: [
-          {
-            employee: {
-              OR: [{ file: contains(holder) }, { lastname: contains(holder) }, { firstname: contains(holder) }],
-            },
-          },
-          { vehicle: { OR: [{ domain: contains(holder) }, { intern_number: contains(holder) }] } },
-          { other_equipment: { intern_number: contains(holder) } },
-          { maintenance_order: { order_number: contains(holder) } },
-          { customer: { name: contains(holder) } },
-        ],
+        OR: destinationSearchConditions(holder),
       },
     });
   }
@@ -231,19 +222,13 @@ export async function getAllLoansForExport(
           where: { AND: [openLoansWhere(companyId), { id: { in: ids } }] },
           select: LOAN_UNIT_SELECT,
         }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} préstamos con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('préstamos'),
       maxRows: EXPORT_MAX_LOANS,
     });
     return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar prestamos', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
-    const message =
-      error instanceof ExportTooLargeError
-        ? error.message
-        : 'No se pudo exportar la lista de préstamos. Intente nuevamente.';
-    return { ok: false, message };
+    return exportFailure(error, 'No se pudo exportar la lista de préstamos. Intente nuevamente.');
   }
 }
 

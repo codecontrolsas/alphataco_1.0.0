@@ -1,6 +1,6 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -11,9 +11,10 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { argentinaDate } from '@/shared/lib/argentina-time';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import { prisma } from '@/shared/lib/prisma';
+import { toFacetMap } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { EXPIRING_WINDOW_DAYS } from '../../../lib/batch-expiry';
@@ -252,20 +253,14 @@ export async function getAllStockForExport(
             where: { id: { in: ids }, company_id: companyId },
             select: STOCK_SELECT(withPrices),
           }),
-        tooLargeMessage: (maxRows) =>
-          `Hay más de ${maxRows.toLocaleString('es-AR')} saldos con los filtros actuales. Acote la exportación con filtros.`,
+        tooLargeMessage: tooManyRowsMessage('saldos'),
       }),
       getBelowMinimumMaterials(companyId),
     ]);
     return { ok: true, data: shape(rows, new Set(belowMin.map((m) => m.id)), withPrices) };
   } catch (error) {
     logger.error('Error al exportar stock', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar el stock. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar el stock. Intente nuevamente.');
   }
 }
 
@@ -292,15 +287,6 @@ export async function getStockSingleFacet(
     delete filters[`${excludeColumn}_to`];
     // Los facets no usan costos: no hace falta el permiso para armar el WHERE.
     return buildWhereClause(companyId, { ...base, filters }, { canViewPrices: false });
-  }
-
-  function toFacetMap(rows: { key: string | null; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      const k = key == null ? NULL_FILTER_VALUE : key;
-      map.set(k, (map.get(k) ?? 0) + count);
-    }
-    return map;
   }
 
   try {
@@ -343,9 +329,7 @@ export async function getStockSingleFacet(
             select: { id: true, category_id: true, unit_id: true },
           })
         : [];
-      const keyOf = new Map(
-        materials.map((m) => [m.id, columnId === 'category' ? m.category_id : m.unit_id] as const)
-      );
+      const keyOf = new Map(materials.map((m) => [m.id, columnId === 'category' ? m.category_id : m.unit_id] as const));
       const counts = toFacetMap(byMaterial.map((r) => ({ key: keyOf.get(r.material_id) ?? null, count: r._count })));
       const ids = [...new Set([...keyOf.values()].filter((id): id is string => id != null))];
       const resolvedOptions = !ids.length

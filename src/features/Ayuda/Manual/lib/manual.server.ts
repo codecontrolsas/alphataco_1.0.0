@@ -1,8 +1,10 @@
-import 'server-only';
 import { navigationLinks } from '@/features/Layout/sidebar/constants/navigation';
 import { Logger } from '@/lib/logger';
 import { cache } from 'react';
-import { COVERAGE_EXCLUSIONS, MANUAL_SECTIONS, READING_PATHS, START_HERE } from '../catalog';
+import 'server-only';
+import { MANUAL_SECTIONS } from '../catalog';
+import { COVERAGE_EXCLUSIONS } from '../catalog/coverage';
+import { READING_PATHS, START_HERE } from '../catalog/home';
 import { checkManualIntegrity } from './integrity';
 import { loadManual, type LoadedManual } from './manual-loader';
 

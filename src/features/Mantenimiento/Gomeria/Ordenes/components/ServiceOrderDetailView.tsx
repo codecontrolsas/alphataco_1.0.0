@@ -9,7 +9,7 @@ import {
   type DiagramAxle,
   type DiagramPosition,
   type TireDiagramHitch,
-} from '@/features/Mantenimiento/Gomeria/shared/TireDiagramRenderer';
+} from '@/features/Mantenimiento/Gomeria/shared/tire-diagram-utils';
 import {
   tireOldDestinationLabels,
   tireServiceActionBadges,

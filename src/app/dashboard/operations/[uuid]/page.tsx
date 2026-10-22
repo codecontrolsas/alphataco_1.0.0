@@ -4,7 +4,7 @@ import { DailyReportHeader } from '@/features/Operaciones/PartesDiarios/detail/D
 import { DailyReportDetailSkeleton } from '@/features/Operaciones/PartesDiarios/detail/fallback/DailyReportDetailSkeleton';
 import { DailyReportHeaderSkeleton } from '@/features/Operaciones/PartesDiarios/detail/fallback/DailyReportHeaderSkeleton';
 import { getCachedDailyReportHeader } from '@/features/Operaciones/PartesDiarios/detail/lib/header-cache';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { ChevronLeft } from 'lucide-react';
 import moment from 'moment';
 import Link from 'next/link';

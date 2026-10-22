@@ -1,7 +1,6 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable';
 import {
   NULL_FILTER_VALUE,
   buildDateRangeFiltersWhere,
@@ -10,19 +9,15 @@ import {
   parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
-import { fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
+import { fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { contractTypeCreateSchema, contractTypeUpdateSchema } from '../../lib/catalog-input-schemas';
-import {
-  CATALOG_EXPORT_MAX_ROWS,
-  buildIsActiveWhere,
-  catalogExportFailure,
-  catalogTooLargeMessage,
-} from '../../lib/catalog-table.server';
+import { CATALOG_EXPORT_MAX_ROWS, buildIsActiveWhere, catalogExportFailure } from '../../lib/catalog-table.server';
 import { requireConfigTabPermission } from '../../lib/config-access.server';
 
 // ============================================================================
@@ -142,7 +137,7 @@ export async function getAllContractTypesForExport(
       listIds: (take) => prisma.types_of_contract.findMany({ where, orderBy: safeOrderBy, select: { id: true }, take }),
       fetchByIds: (ids) =>
         prisma.types_of_contract.findMany({ where: { id: { in: ids }, company_id: companyId }, select: LIST_SELECT }),
-      tooLargeMessage: catalogTooLargeMessage('tipos de contrato'),
+      tooLargeMessage: tooManyRowsMessage('tipos de contrato'),
     });
     return { ok: true, data: rows };
   } catch (error) {

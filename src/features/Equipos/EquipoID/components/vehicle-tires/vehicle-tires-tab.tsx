@@ -1,4 +1,4 @@
-import type { DataTableSearchParams } from '@/shared/components/common/DataTable';
+import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { Suspense } from 'react';
 import { VehicleTiresSkeleton } from './fallback/VehicleTiresSkeleton';
 import { VehicleTireDiagramSection } from './vehicle-tire-diagram-section';

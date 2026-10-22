@@ -11,7 +11,8 @@ import { toast } from 'sonner';
 import { createPreparte, logPreparteChange } from '../actions/mutations.server';
 import { DEFAULT_ITEM_ROW, type Contrato, type ItemRow } from '../components/preparte-form/types';
 import { formSchema, type PreparteItem } from '../schemas/preparte-form';
-import { useContratos, usePreparteChangeLogsInvalidation, usePreparteFormDependentOptions, useServiceItems } from './index';
+import { useContratos, usePreparteFormDependentOptions, useServiceItems } from '@/features/Operaciones/Preparte/hooks/usePreparteFormOptions';
+import { usePreparteChangeLogsInvalidation } from '@/features/Operaciones/Preparte/hooks/usePreparteChangeLogs';
 
 const logger = new Logger('PreparteForm');
 

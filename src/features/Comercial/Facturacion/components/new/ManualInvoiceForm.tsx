@@ -7,6 +7,7 @@ import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Logger } from '@/lib/logger';
 import { ARCA_CURRENCY_BY_ISO, type SupportedCurrency } from '@/shared/lib/arca/catalogs';
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertTriangle, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
@@ -16,7 +17,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { createManualInvoiceDraft } from '../../actions/invoice-drafts-create.server';
 import { manualInvoiceSchema, type ManualInvoiceInput } from '../../schemas/invoice';
-import { INVOICING_TAB_HREF, customerHref, formatCuitText, invoiceHref } from '../../utils/invoice-links';
+import { INVOICING_TAB_HREF, customerHref, invoiceHref } from '../../utils/invoice-links';
 
 const logger = new Logger('features/Comercial/Facturacion/new-manual');
 

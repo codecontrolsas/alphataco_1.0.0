@@ -1,7 +1,6 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable';
 import {
   NULL_FILTER_VALUE,
   buildDateRangeFiltersWhere,
@@ -10,19 +9,15 @@ import {
   parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
-import { fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
+import { fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { equipmentTypeCreateSchema } from '../../lib/catalog-input-schemas';
-import {
-  CATALOG_EXPORT_MAX_ROWS,
-  buildIsActiveWhere,
-  catalogExportFailure,
-  catalogTooLargeMessage,
-} from '../../lib/catalog-table.server';
+import { CATALOG_EXPORT_MAX_ROWS, buildIsActiveWhere, catalogExportFailure } from '../../lib/catalog-table.server';
 import { requireConfigTabPermission } from '../../lib/config-access.server';
 import { assertChecklistTemplatesOwned, assertTypesReadable } from '../lib/catalog-guards';
 import { catalogAccessError, catalogReadScope, catalogWriteScope, resolveCatalogAccess } from '../lib/catalog-scope';
@@ -171,7 +166,7 @@ export async function getAllEquipmentTypesForExport(
       maxRows: CATALOG_EXPORT_MAX_ROWS,
       listIds: (take) => prisma.type.findMany({ where, orderBy: safeOrderBy, select: { id: true }, take }),
       fetchByIds: (ids) => prisma.type.findMany({ where: { AND: [where, { id: { in: ids } }] }, select: LIST_SELECT }),
-      tooLargeMessage: catalogTooLargeMessage('tipos de unidad'),
+      tooLargeMessage: tooManyRowsMessage('tipos de unidad'),
     });
     return { ok: true, data: rows };
   } catch (error) {

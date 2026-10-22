@@ -2,12 +2,10 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  DataTable,
-  DataTableColumnHeader,
-  inMemoryTextFilterFn,
-  type DataTableFacetedFilterConfig,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
+import { inMemoryTextFilterFn } from '@/shared/components/common/DataTable/in-memory';
+import { type DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable/types';
 import type { ColumnDef } from '@tanstack/react-table';
 import { MapPin } from 'lucide-react';
 import { useMemo } from 'react';
@@ -38,24 +36,21 @@ export function getAreaColumns(
   const columns: ColumnDef<AreaRow>[] = [
     {
       accessorKey: 'nombre',
-      meta: { title: 'Nombre' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
+      ...titled('Nombre'),
       cell: ({ row }) => <span className="font-medium">{row.original.nombre}</span>,
       filterFn: inMemoryTextFilterFn,
     },
     {
       id: 'descripcion_corta',
       accessorFn: (row) => row.descripcion_corta ?? '',
-      meta: { title: 'Descripción' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
+      ...titled('Descripción'),
       cell: ({ row }) => row.original.descripcion_corta || <span className="text-muted-foreground">-</span>,
       filterFn: inMemoryTextFilterFn,
     },
     {
       id: 'provinces',
       accessorFn: (row) => provinceNames(row),
-      meta: { title: 'Provincias' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Provincias" />,
+      ...titled('Provincias'),
       enableSorting: false,
       cell: ({ row }) => {
         const names = provinceNames(row.original);

@@ -1,6 +1,6 @@
 'use client';
 
-import type { DataTableSearchParams } from '@/shared/components/common/DataTable';
+import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import { _VehiclesByOwnerDataTable } from './_VehiclesByOwnerDataTable';
 

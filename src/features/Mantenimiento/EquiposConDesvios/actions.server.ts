@@ -1,6 +1,6 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -11,6 +11,7 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { CACHE_TAGS, CACHE_TTL } from '@/shared/constants/cache';
+import { exportRowLimitMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
@@ -383,7 +384,7 @@ export async function getAllEquipmentsWithDeviationsForExport(
     if (dataset.length > EXPORT_MAX_ROWS) {
       return {
         ok: false,
-        message: `La exportación de equipos con desvíos supera el máximo de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`,
+        message: exportRowLimitMessage(EXPORT_MAX_ROWS, 'equipos con desvíos'),
       };
     }
 

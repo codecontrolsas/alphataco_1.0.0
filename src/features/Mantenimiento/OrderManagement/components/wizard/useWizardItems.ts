@@ -2,12 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import type { OrderManagementItem } from '../../actions/queries.server';
 import type { OrderChangeSet } from '../../schemas/order-changes';
-import {
-  buildRepairTypeBaseline,
-  emptyChanges,
-  mapOrderItemToLocal,
-  type LocalItem,
-} from './types';
+import { buildRepairTypeBaseline, emptyChanges, mapOrderItemToLocal, type LocalItem } from './types';
 
 /**
  * Estado del paso 1 del wizard: ítems locales + cambios pendientes de guardar.
@@ -111,7 +106,9 @@ export function useWizardItems(initialItems: LocalItem[], repairTypes: Array<{ i
   );
 
   const handleRejectItem = useCallback((itemId: string, reason: string) => {
-    setLocalItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, _rejected: true, _rejectionReason: reason } : i)));
+    setLocalItems((prev) =>
+      prev.map((i) => (i.id === itemId ? { ...i, _rejected: true, _rejectionReason: reason } : i))
+    );
     setPendingChanges((prev) => ({ ...prev, rejections: [...(prev.rejections || []), { itemId, reason }] }));
     toast.info('Item rechazado');
   }, []);
@@ -124,7 +121,9 @@ export function useWizardItems(initialItems: LocalItem[], repairTypes: Array<{ i
       const updatedRejections = (prev.rejections || []).filter((r) => r.itemId !== itemId);
       // Si ya estaba rechazado en la base (no es un rechazo pendiente), se registra como restauración
       const wasPendingRejection = (prev.rejections || []).some((r) => r.itemId === itemId);
-      const updatedRestorations = wasPendingRejection ? prev.restorations || [] : [...(prev.restorations || []), itemId];
+      const updatedRestorations = wasPendingRejection
+        ? prev.restorations || []
+        : [...(prev.restorations || []), itemId];
       return { ...prev, rejections: updatedRejections, restorations: updatedRestorations };
     });
     toast.info('Item restaurado');
@@ -184,17 +183,6 @@ export function useWizardItems(initialItems: LocalItem[], repairTypes: Array<{ i
     [localItems, repairTypes, baseline]
   );
 
-  const handleDescriptionChange = useCallback((itemId: string, newDescription: string) => {
-    setLocalItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, description: newDescription } : i)));
-    setPendingChanges((prev) => ({
-      ...prev,
-      descriptionUpdates: [
-        ...prev.descriptionUpdates.filter((u) => u.itemId !== itemId),
-        { itemId, description: newDescription },
-      ],
-    }));
-  }, []);
-
   const handleChiefCommentChange = useCallback((itemId: string, comment: string) => {
     setLocalItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, workshop_chief_comment: comment } : i)));
     setPendingChanges((prev) => ({
@@ -225,7 +213,6 @@ export function useWizardItems(initialItems: LocalItem[], repairTypes: Array<{ i
     handleRejectItem,
     handleRestoreItem,
     handleUpdateRepairTypes,
-    handleDescriptionChange,
     handleChiefCommentChange,
     replaceFromServer,
   };

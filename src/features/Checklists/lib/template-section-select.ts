@@ -1,0 +1,48 @@
+/** Select Prisma de una sección de plantilla con sus items y los items reutilizables del catálogo. */
+export const templateSectionSelect = {
+  id: true,
+  template_id: true,
+  section_id: true,
+  code: true,
+  name: true,
+  order_index: true,
+  is_required: true,
+  is_specific: true,
+  created_at: true,
+  checklist_sections: {
+    select: { id: true, code: true, name: true, description: true, is_reusable: true },
+  },
+  checklist_template_items: {
+    orderBy: { order_index: 'asc' },
+    select: {
+      id: true,
+      template_id: true,
+      section_id: true,
+      item_id: true,
+      code: true,
+      label: true,
+      description: true,
+      input_type: true,
+      options: true,
+      is_critical: true,
+      requires_certification: true,
+      certification_validity_days: true,
+      requires_side_validation: true,
+      order_index: true,
+      validation_rules: true,
+      checklist_items: {
+        select: {
+          id: true,
+          code: true,
+          label: true,
+          description: true,
+          input_type: true,
+          options: true,
+          is_critical: true,
+          requires_side_validation: true,
+          default_value: true,
+        },
+      },
+    },
+  },
+} as const;

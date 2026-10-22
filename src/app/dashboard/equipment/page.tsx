@@ -1,26 +1,13 @@
-import { getCompanyName } from '@/features/Empresa/General/actions/company.server';
+import { companyPageMetadata } from '@/app/_lib/company-metadata';
 import EquiposComponent from '@/features/Equipos/EquiposComponent';
-import { getUserPermissionsMapServer } from '@/features/Permissions';
-import { cookies } from 'next/headers';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { redirect } from 'next/navigation';
 
 export async function generateMetadata() {
-  const cookiesStore = await cookies();
-  const companyName = cookiesStore.get('actualCompName')?.value;
-  if (companyName) {
-    return {
-      title: `Equipos | ${companyName}`,
-      description: `Página de equipos de ${companyName} con información general, comercial, HR y equipos`,
-    };
-  } else {
-    const actualCompany = await getCompanyName();
-    if (actualCompany) {
-      return {
-        title: `Equipos | ${actualCompany.company_name}`,
-        description: `Página de equipos de ${actualCompany.company_name} con información general, comercial, HR y equipos`,
-      };
-    }
-  }
+  return companyPageMetadata(
+    'Equipos',
+    (name) => `Página de equipos de ${name} con información general, comercial, HR y equipos`
+  );
 }
 
 export default async function Equipment({

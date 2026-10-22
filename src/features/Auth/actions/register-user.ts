@@ -7,7 +7,7 @@ import { Logger } from '@/lib/logger';
 import { COMPANY_USERS_INVALIDATION } from '@/shared/constants/cache-invalidation-map';
 import { withActor } from '@/shared/lib/actor';
 import { createCredential, createPasswordSetupLink, normalizeEmail } from '@/shared/lib/auth-credentials';
-import { sendInvitationEmail } from '@/shared/lib/mail';
+import { sendInvitationEmail } from '@/shared/lib/mail/templates/auth';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';

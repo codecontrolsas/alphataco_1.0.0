@@ -1,4 +1,13 @@
-import { HeaderBlock, Kv, PDF_COLORS, basePdfStyles } from '@/shared/lib/pdf/pdf-layout';
+import {
+  HeaderBlock,
+  Kv,
+  PDF_COLORS,
+  PartyBox,
+  PaymentMethodsList,
+  TotalLine,
+  WithholdingsTable,
+  basePdfStyles,
+} from '@/shared/lib/pdf/pdf-layout';
 import type { PdfLogo, ReactPdf } from '@/shared/lib/pdf/types';
 import type { Styles } from '@react-pdf/renderer';
 import 'server-only';
@@ -13,20 +22,6 @@ import type { PaymentPdfData } from './payment-pdf-data';
 const s = {
   ...basePdfStyles,
   headerRight: { width: 190, alignItems: 'flex-end' },
-  sectionTitle: { fontFamily: 'Helvetica-Bold', fontSize: 9, marginTop: 6, marginBottom: 3 },
-  colMain: { flex: 1 },
-  colMid: { width: 120 },
-  colAmount: { width: 90, textAlign: 'right' },
-  totals: { alignSelf: 'flex-end', width: 240, marginTop: 8 },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 },
-  grandTotal: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: PDF_COLORS.ink,
-    paddingTop: 3,
-    marginTop: 2,
-  },
   kv: { flexDirection: 'row', marginBottom: 3 },
   kvLabel: { width: 130, color: PDF_COLORS.muted },
   signature: {
@@ -55,15 +50,7 @@ export function PaymentOrderPdfDocument(rp: ReactPdf, data: PaymentPdfData, logo
           </Text>
         ) : null}
         {Header(rp, data, logo, data.title, data.number)}
-        <View style={s.box}>
-          <Text style={s.boxTitle}>PROVEEDOR</Text>
-          <Text style={s.bold}>{data.supplier.name}</Text>
-          <Text>
-            CUIT {data.supplier.cuit}
-            {data.supplier.vatCondition ? ` · ${data.supplier.vatCondition}` : ''}
-          </Text>
-          {data.supplier.address ? <Text style={s.muted}>{data.supplier.address}</Text> : null}
-        </View>
+        {PartyBox(rp, s, 'PROVEEDOR', data.supplier)}
 
         <Text style={s.sectionTitle}>Qué se paga</Text>
         <View style={s.tableHead}>
@@ -77,63 +64,19 @@ export function PaymentOrderPdfDocument(rp: ReactPdf, data: PaymentPdfData, logo
           </View>
         ))}
 
-        {data.withholdings.length > 0 ? (
-          <>
-            <Text style={s.sectionTitle}>Retenciones</Text>
-            <View style={s.tableHead}>
-              <Text style={[s.th, s.colMain]}>Impuesto</Text>
-              <Text style={[s.th, s.colMid]}>Certificado</Text>
-              <Text style={[s.th, s.colAmount]}>Importe</Text>
-            </View>
-            {data.withholdings.map((w, i) => (
-              <View key={i} style={s.tableRow} wrap={false}>
-                <Text style={[s.td, s.colMain]}>{w.tax}</Text>
-                <Text style={[s.td, s.colMid]}>{w.certificate}</Text>
-                <Text style={[s.td, s.colAmount]}>{w.amount}</Text>
-              </View>
-            ))}
-          </>
-        ) : null}
+        {WithholdingsTable(rp, s, 'Retenciones', data.withholdings)}
 
         <View style={s.totals}>
-          <View style={s.totalRow}>
-            <Text>Comprobantes</Text>
-            <Text>{data.totals.invoices}</Text>
-          </View>
-          {data.totals.hasAdvance ? (
-            <View style={s.totalRow}>
-              <Text>Anticipo</Text>
-              <Text>{data.totals.advance}</Text>
-            </View>
-          ) : null}
-          {data.totals.hasCredits ? (
-            <View style={s.totalRow}>
-              <Text>Notas de crédito y anticipos aplicados</Text>
-              <Text>-{data.totals.credits}</Text>
-            </View>
-          ) : null}
-          <View style={s.totalRow}>
-            <Text>Retenciones</Text>
-            <Text>-{data.totals.withholdings}</Text>
-          </View>
-          <View style={s.grandTotal}>
-            <Text style={s.bold}>Neto pagado</Text>
-            <Text style={s.bold}>{data.totals.net}</Text>
-          </View>
+          {TotalLine(rp, s, 'Comprobantes', data.totals.invoices)}
+          {data.totals.hasAdvance ? TotalLine(rp, s, 'Anticipo', data.totals.advance) : null}
+          {data.totals.hasCredits
+            ? TotalLine(rp, s, 'Notas de crédito y anticipos aplicados', `-${data.totals.credits}`)
+            : null}
+          {TotalLine(rp, s, 'Retenciones', `-${data.totals.withholdings}`)}
+          {TotalLine(rp, s, 'Neto pagado', data.totals.net, true)}
         </View>
 
-        {data.payments.length > 0 ? (
-          <>
-            <Text style={s.sectionTitle}>Medios de pago</Text>
-            {data.payments.map((p, i) => (
-              <View key={i} style={s.tableRow} wrap={false}>
-                <Text style={[s.td, s.colMid]}>{p.method}</Text>
-                <Text style={[s.td, s.colMain]}>{p.detail}</Text>
-                <Text style={[s.td, s.colAmount]}>{p.amount}</Text>
-              </View>
-            ))}
-          </>
-        ) : null}
+        {PaymentMethodsList(rp, s, 'Medios de pago', data.payments)}
 
         {data.notes ? (
           <View style={[s.box, { marginTop: 10 }]}>

@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { getExpiryInfo } from '@/features/Documentacion/shared/lib/document-expiry';
-import { PermissionGuard } from '@/features/Permissions';
+import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import type { ActionSlug, AllTabSlugs } from '@/features/Permissions/permissions-map';
 import { documentStateBadges, documentStateLabels } from '@/shared/utils/mappers';
 import type { LucideIcon } from 'lucide-react';

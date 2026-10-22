@@ -1,6 +1,6 @@
 import AllDeliveriesList from '@/features/Clothing/AllDeliveries/AllDeliveriesList/AllDeliveriesList';
-import { AllDeliveriesTableSkeleton } from '@/features/Clothing/AllDeliveries/AllDeliveriesList/fallback/AllDeliveriesTableSkeleton';
 import { DeliveryPageClient } from '@/features/Clothing/ClothingDelivery/components/DeliveryPageClient';
+import { ClothingTableSkeleton } from '@/features/Clothing/fallback/ClothingTableSkeleton';
 import { Suspense } from 'react';
 
 interface ClothingDeliveryPageProps {
@@ -15,7 +15,7 @@ export default async function ClothingDeliveryPage({ searchParams }: ClothingDel
     <DeliveryPageClient
       initialEmployeeId={employeeId}
       listSlot={
-        <Suspense fallback={<AllDeliveriesTableSkeleton />}>
+        <Suspense fallback={<ClothingTableSkeleton />}>
           <AllDeliveriesList searchParams={resolvedSearchParams} />
         </Suspense>
       }

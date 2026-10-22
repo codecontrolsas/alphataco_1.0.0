@@ -4,11 +4,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PAYMENT_METHOD_LABELS } from '@/features/Purchases/schemas/payment-orders';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
+import { DownloadPdfButton } from '@/shared/components/common/DownloadPdfButton';
 import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
 import { SectionCard } from '@/shared/components/common/SectionCard';
-import { DownloadPdfButton } from '@/shared/components/common/DownloadPdfButton';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ban, FileText } from 'lucide-react';
 import Link from 'next/link';
@@ -16,17 +17,16 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { cancelReceipt, getReceiptPdf } from '../../actions/receipts.server';
-import type { ReceiptDetail } from '../../lib/receipt-types';
 import { attachWithholdingCertificate } from '../../actions/withholdings.server';
 import { CancelReasonDialog } from '../../components/CancelReasonDialog';
-import { formatInCurrency } from '../../lib/currency-format';
-import { invalidateTreasury } from '../../lib/invalidate';
-import { RECEIPT_STATUS_UI } from '../../lib/status-presentation';
-import { formatArgentinaDateTime } from '../../lib/today';
-import { CERTIFICATE_MAX_BYTES, CUSTOMER_WITHHOLDING_TAX_LABELS } from '../../schemas/receipts';
 import { TreasuryStatusBadge } from '../../components/TreasuryStatusBadge';
-import { SendReceiptDialog } from './SendReceiptDialog';
+import { formatInCurrency } from '../../lib/currency-format';
 import { formatDay } from '../../lib/dates';
+import { invalidateTreasury } from '../../lib/invalidate';
+import type { ReceiptDetail } from '../../lib/receipt-types';
+import { RECEIPT_STATUS_UI } from '../../lib/status-presentation';
+import { CERTIFICATE_MAX_BYTES, CUSTOMER_WITHHOLDING_TAX_LABELS } from '../../schemas/receipts';
+import { SendReceiptDialog } from './SendReceiptDialog';
 
 const dateTime = (value: string) => formatArgentinaDateTime(value);
 const pesos = (value: string) => formatInCurrency(value, 'ARS');
@@ -52,7 +52,9 @@ export function ReceiptDetailView({
       <RecordHeader
         identity={
           <div className="space-y-2">
-            <h1 className="text-2xl font-semibold">{detail.number ? `Recibo ${detail.number}` : 'Borrador de recibo'}</h1>
+            <h1 className="text-2xl font-semibold">
+              {detail.number ? `Recibo ${detail.number}` : 'Borrador de recibo'}
+            </h1>
             <TreasuryStatusBadge ui={RECEIPT_STATUS_UI[detail.status]} />
           </div>
         }
@@ -60,7 +62,11 @@ export function ReceiptDetailView({
           <>
             {detail.number && <DownloadPdfButton load={() => getReceiptPdf(detail.id)} />}
             {confirmed && can.update && (
-              <SendReceiptDialog receiptId={detail.id} number={detail.number ?? ''} defaultEmail={detail.customer.email} />
+              <SendReceiptDialog
+                receiptId={detail.id}
+                number={detail.number ?? ''}
+                defaultEmail={detail.customer.email}
+              />
             )}
             {confirmed && can.delete && (
               <Button type="button" size="sm" variant="destructive" onClick={() => setCancelling(true)}>
@@ -82,9 +88,14 @@ export function ReceiptDetailView({
           </Field>
           <Field label="Fecha del cobro" value={formatDay(detail.date)} mono />
           {detail.confirmedAt && (
-            <Field label="Confirmado" value={`${dateTime(detail.confirmedAt)}${detail.confirmedBy ? ` por ${detail.confirmedBy}` : ''}`} />
+            <Field
+              label="Confirmado"
+              value={`${dateTime(detail.confirmedAt)}${detail.confirmedBy ? ` por ${detail.confirmedBy}` : ''}`}
+            />
           )}
-          {detail.sentAt && <Field label="Enviado" value={`${dateTime(detail.sentAt)} a ${detail.sentTo.join(', ')}`} />}
+          {detail.sentAt && (
+            <Field label="Enviado" value={`${dateTime(detail.sentAt)} a ${detail.sentTo.join(', ')}`} />
+          )}
           {detail.notes && <Field label="Notas" value={detail.notes} />}
         </FieldGrid>
         {detail.status === 'CANCELLED' && (
@@ -96,7 +107,8 @@ export function ReceiptDetailView({
       </SectionCard>
 
       <SectionCard title="Qué se cobró">
-          <div className="overflow-x-auto"><Table>
+        <div className="overflow-x-auto">
+          <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Concepto</TableHead>
@@ -150,42 +162,44 @@ export function ReceiptDetailView({
                 </TableRow>
               ))}
             </TableBody>
-          </Table></div>
-          <dl className="ml-auto mt-4 grid max-w-sm grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-sm tabular-nums">
-            <dt className="text-muted-foreground">Comprobantes</dt>
-            <dd className="text-right">{pesos(detail.totals.invoices)}</dd>
-            {detail.totals.advance !== '0.00' && (
-              <>
-                <dt className="text-muted-foreground">Cobro a cuenta</dt>
-                <dd className="text-right">{pesos(detail.totals.advance)}</dd>
-              </>
-            )}
-            {detail.totals.advancesApplied !== '0.00' && (
-              <>
-                <dt className="text-muted-foreground">Anticipos aplicados</dt>
-                <dd className="text-right">−{pesos(detail.totals.advancesApplied)}</dd>
-              </>
-            )}
-            {detail.totals.withholdings !== '0.00' && (
-              <>
-                <dt className="text-muted-foreground">Retenciones</dt>
-                <dd className="text-right">−{pesos(detail.totals.withholdings)}</dd>
-              </>
-            )}
-            <dt className="font-semibold">Recibido</dt>
-            <dd className="text-right font-semibold">{pesos(detail.totals.received)}</dd>
-            {detail.totals.fxDifference !== '0.00' && (
-              <>
-                <dt className="text-muted-foreground">Diferencia de cambio (informativa)</dt>
-                <dd className="text-right">{pesos(detail.totals.fxDifference)}</dd>
-              </>
-            )}
-          </dl>
-        </SectionCard>
+          </Table>
+        </div>
+        <dl className="ml-auto mt-4 grid max-w-sm grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-sm tabular-nums">
+          <dt className="text-muted-foreground">Comprobantes</dt>
+          <dd className="text-right">{pesos(detail.totals.invoices)}</dd>
+          {detail.totals.advance !== '0.00' && (
+            <>
+              <dt className="text-muted-foreground">Cobro a cuenta</dt>
+              <dd className="text-right">{pesos(detail.totals.advance)}</dd>
+            </>
+          )}
+          {detail.totals.advancesApplied !== '0.00' && (
+            <>
+              <dt className="text-muted-foreground">Anticipos aplicados</dt>
+              <dd className="text-right">−{pesos(detail.totals.advancesApplied)}</dd>
+            </>
+          )}
+          {detail.totals.withholdings !== '0.00' && (
+            <>
+              <dt className="text-muted-foreground">Retenciones</dt>
+              <dd className="text-right">−{pesos(detail.totals.withholdings)}</dd>
+            </>
+          )}
+          <dt className="font-semibold">Recibido</dt>
+          <dd className="text-right font-semibold">{pesos(detail.totals.received)}</dd>
+          {detail.totals.fxDifference !== '0.00' && (
+            <>
+              <dt className="text-muted-foreground">Diferencia de cambio (informativa)</dt>
+              <dd className="text-right">{pesos(detail.totals.fxDifference)}</dd>
+            </>
+          )}
+        </dl>
+      </SectionCard>
 
       {detail.withholdings.length > 0 && (
         <SectionCard title="Retenciones sufridas">
-            <div className="overflow-x-auto"><Table>
+          <div className="overflow-x-auto">
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Impuesto</TableHead>
@@ -227,13 +241,15 @@ export function ReceiptDetailView({
                   </TableRow>
                 ))}
               </TableBody>
-            </Table></div>
-          </SectionCard>
+            </Table>
+          </div>
+        </SectionCard>
       )}
 
       {detail.payments.length > 0 && (
         <SectionCard title="Medios">
-            <div className="overflow-x-auto"><Table>
+          <div className="overflow-x-auto">
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Medio</TableHead>
@@ -294,8 +310,9 @@ export function ReceiptDetailView({
                   </TableRow>
                 ))}
               </TableBody>
-            </Table></div>
-          </SectionCard>
+            </Table>
+          </div>
+        </SectionCard>
       )}
 
       <CancelReasonDialog

@@ -194,7 +194,6 @@ export function AddTaskDialog({
     if (otherErrors.description) setOtherErrors((prev) => ({ ...prev, description: undefined }));
   };
 
-  const hasSectorRepairTypes = !isLoadingSectorTypes && sectorRepairTypes.length > 0;
   const hasNoSectorRepairTypes = !isLoadingSectorTypes && sectorRepairTypes.length === 0;
 
   return (

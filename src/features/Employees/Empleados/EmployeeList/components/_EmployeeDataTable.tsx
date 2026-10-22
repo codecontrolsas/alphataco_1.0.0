@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
+import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
 import {
   affiliate_status_enum,
   cost_type_enum,
@@ -13,13 +14,15 @@ import {
   reason_for_termination_enum,
   status_type,
 } from '@/generated/prisma/enums';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
 import {
-  DataTable,
-  type DataTableFacetedFilterConfig,
-  type DataTableSearchParams,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+  createFacetFilters,
+  dateRangeFilter,
+  enumFilterOptions,
+  textFilter,
+} from '@/shared/components/common/DataTable/facet-filters';
+import type { DataTableFacetedFilterConfig, DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import {
@@ -35,10 +38,10 @@ import {
   reasonForTerminationLabels,
 } from '@/shared/utils/mappers';
 import type { LucideIcon } from 'lucide-react';
-import { CircleOff, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import moment from 'moment';
 import Link from 'next/link';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   getAllEmployeesForExport,
   getEmployeeSingleFacet,
@@ -74,44 +77,12 @@ interface EmployeeDataTableProps {
   initialFilterVisibility?: Record<string, boolean>;
 }
 
-// ============================================================================
-// HELPERS — builders para reducir boilerplate en fetchFacet
-// ============================================================================
+// Filtros visibles de entrada (distintos para activos e inactivos); el resto se activa desde el toggle.
+const DEFAULT_VISIBLE_FILTERS_ACTIVE = ['status', 'hierarchy', 'company_positions'];
+const DEFAULT_VISIBLE_FILTERS_INACTIVE = ['reason_for_termination', 'status', 'hierarchy'];
 
-/** Construye FacetResult para enums: opciones estáticas + counts del servidor */
-function buildEnumFacetResult(
-  enumValues: string[],
-  labels: Record<string, string>,
-  icons: Record<string, LucideIcon | undefined>,
-  counts: Map<string, number>
-): FacetResult {
-  return {
-    options: [
-      ...enumValues.map((value) => ({
-        value,
-        label: labels[value] ?? value,
-        icon: icons[value],
-      })),
-      ...(counts.has(NULL_FILTER_VALUE) ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }] : []),
-    ],
-    counts,
-  };
-}
-
-/** Construye FacetResult para FK/M:M: opciones del servidor + counts */
-function buildFkFacetResult(
-  resolvedOptions: Array<{ id: string; name: string | null }> | undefined,
-  counts: Map<string, number>,
-  nullLabel = 'Sin asignar'
-): FacetResult {
-  return {
-    options: [
-      ...(resolvedOptions?.map((o) => ({ value: o.id, label: o.name ?? '' })) ?? []),
-      ...(counts.has(NULL_FILTER_VALUE) ? [{ value: NULL_FILTER_VALUE, label: nullLabel, icon: CircleOff }] : []),
-    ],
-    counts,
-  };
-}
+const WITHOUT_ASSIGNMENT = { label: 'Sin afectar' };
+const UNASSIGNED = { label: 'Sin asignar' };
 
 // ============================================================================
 // COMPONENT
@@ -127,21 +98,7 @@ export default function _EmployeeDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: EmployeeDataTableProps) {
-  // Build hasPermission helper from serializable map (inside client component)
-  const permissions = useMemo(
-    () => ({
-      hasPermission: (module: string, tab: string, action: string) =>
-        permissionsMap[`${module}:${tab}:${action}`] === true,
-    }),
-    [permissionsMap]
-  );
-
-  // ─── Client-side navigation: estado reactivo para queries dependientes ──────
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-
-  const handleStateChange = useCallback((params: DataTableSearchParams) => {
-    setCurrentParams(params);
-  }, []);
+  const permissions = usePermissionChecker(permissionsMap);
 
   // queryFn para fetch client-side de datos de tabla
   const tableQueryFn = useCallback(
@@ -152,189 +109,97 @@ export default function _EmployeeDataTable({
   // Columns
   const columns = useMemo(() => getColumns(permissions, isActive), [permissions, isActive]);
 
-  // Initial column visibility: merge defaults with saved preferences
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults: Record<string, boolean> = {};
-    for (const col of HIDDEN_COLUMNS_BY_DEFAULT) {
-      defaults[col] = false;
-    }
-    return { ...defaults, ...initialColumnVisibility };
-  }, [initialColumnVisibility]);
-
-  // ─── fetchFacet factories: cada filtro tiene su fetchFacet lazy ────────────
-
-  // Helper genérico para enum facets
-  const makeEnumFetchFacet = useCallback(
-    (
+  // ─── Filtros facetados con lazy-load ───────────────────────────────────────
+  const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(() => {
+    const facets = createFacetFilters((columnId, params) => getEmployeeSingleFacet(columnId, isActive, params));
+    const enumFacet = (
       columnId: string,
-      enumValues: string[],
+      title: string,
+      values: Record<string, string>,
       labels: Record<string, string>,
       icons: Record<string, LucideIcon | undefined>
-    ) => {
-      return async (params: DataTableSearchParams): Promise<FacetResult> => {
-        const result = await getEmployeeSingleFacet(columnId, isActive, params);
-        return buildEnumFacetResult(enumValues, labels, icons, result.counts);
-      };
-    },
-    [isActive]
-  );
+    ) => facets.fixed(columnId, title, enumFilterOptions(Object.values(values), labels, icons), UNASSIGNED);
 
-  // Helper genérico para FK/M:M facets
-  const makeFkFetchFacet = useCallback(
-    (columnId: string, nullLabel = 'Sin asignar') => {
-      return async (params: DataTableSearchParams): Promise<FacetResult> => {
-        const result = await getEmployeeSingleFacet(columnId, isActive, params);
-        return buildFkFacetResult(result.resolvedOptions, result.counts, nullLabel);
-      };
-    },
-    [isActive]
-  );
-
-  // ─── Filtros facetados con lazy-load ───────────────────────────────────────
-  const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
-    () => [
+    return [
       // ── Enums ──────────────────────────────────────────────────────────────
-      {
-        columnId: 'status',
-        title: 'Estado',
-        fetchFacet: makeEnumFetchFacet('status', Object.values(status_type), employeeStatusLabels, employeeStatusIcons),
-      },
-      {
-        columnId: 'gender',
-        title: 'Genero',
-        fetchFacet: makeEnumFetchFacet('gender', Object.values(gender_enum), genderLabels, genderIcons),
-      },
-      {
-        columnId: 'nationality',
-        title: 'Nacionalidad',
-        fetchFacet: makeEnumFetchFacet(
-          'nationality',
-          Object.values(nationality_enum),
-          nationalityLabels,
-          nationalityIcons
-        ),
-      },
-      {
-        columnId: 'document_type',
-        title: 'Tipo de Documento',
-        fetchFacet: makeEnumFetchFacet(
-          'document_type',
-          Object.values(document_type_enum),
-          documentTypeLabels,
-          documentTypeIcons
-        ),
-      },
-      {
-        columnId: 'marital_status',
-        title: 'Estado Civil',
-        fetchFacet: makeEnumFetchFacet(
-          'marital_status',
-          Object.values(marital_status_enum),
-          maritalStatusLabels,
-          maritalStatusIcons
-        ),
-      },
-      {
-        columnId: 'level_of_education',
-        title: 'Nivel de Educacion',
-        fetchFacet: makeEnumFetchFacet(
-          'level_of_education',
-          Object.values(level_of_education_enum),
-          levelOfEducationLabels,
-          levelOfEducationIcons
-        ),
-      },
-      {
-        columnId: 'cost_type',
-        title: 'Tipo de costo',
-        fetchFacet: makeEnumFetchFacet('cost_type', Object.values(cost_type_enum), costTypeLabels, costTypeIcons),
-      },
-      {
-        columnId: 'affiliate_status',
-        title: 'Estado de afiliacion',
-        fetchFacet: makeEnumFetchFacet(
-          'affiliate_status',
-          Object.values(affiliate_status_enum),
-          affiliateStatusLabels,
-          affiliateStatusIcons
-        ),
-      },
-      {
-        columnId: 'reason_for_termination',
-        title: 'Motivo de baja',
-        fetchFacet: makeEnumFetchFacet(
-          'reason_for_termination',
-          Object.values(reason_for_termination_enum),
-          reasonForTerminationLabels,
-          reasonForTerminationIcons
-        ),
-      },
+      enumFacet('status', 'Estado', status_type, employeeStatusLabels, employeeStatusIcons),
+      enumFacet('gender', 'Genero', gender_enum, genderLabels, genderIcons),
+      enumFacet('nationality', 'Nacionalidad', nationality_enum, nationalityLabels, nationalityIcons),
+      enumFacet('document_type', 'Tipo de Documento', document_type_enum, documentTypeLabels, documentTypeIcons),
+      enumFacet('marital_status', 'Estado Civil', marital_status_enum, maritalStatusLabels, maritalStatusIcons),
+      enumFacet(
+        'level_of_education',
+        'Nivel de Educacion',
+        level_of_education_enum,
+        levelOfEducationLabels,
+        levelOfEducationIcons
+      ),
+      enumFacet('cost_type', 'Tipo de costo', cost_type_enum, costTypeLabels, costTypeIcons),
+      enumFacet(
+        'affiliate_status',
+        'Estado de afiliacion',
+        affiliate_status_enum,
+        affiliateStatusLabels,
+        affiliateStatusIcons
+      ),
+      enumFacet(
+        'reason_for_termination',
+        'Motivo de baja',
+        reason_for_termination_enum,
+        reasonForTerminationLabels,
+        reasonForTerminationIcons
+      ),
 
       // ── FK UUID ────────────────────────────────────────────────────────────
-      { columnId: 'hierarchy', title: 'Sector', fetchFacet: makeFkFetchFacet('hierarchy') },
-      { columnId: 'company_positions', title: 'Puesto', fetchFacet: makeFkFetchFacet('company_positions') },
-      { columnId: 'types_of_contract', title: 'Tipo de Contrato', fetchFacet: makeFkFetchFacet('types_of_contract') },
-      { columnId: 'work_diagram', title: 'Diagrama', fetchFacet: makeFkFetchFacet('work_diagram') },
-      { columnId: 'workshop_sectors', title: 'Sectores de taller', fetchFacet: makeFkFetchFacet('workshop_sectors') },
-      { columnId: 'category', title: 'Categoria', fetchFacet: makeFkFetchFacet('category') },
-      { columnId: 'covenant', title: 'Convenio', fetchFacet: makeFkFetchFacet('covenant') },
-      { columnId: 'guild', title: 'Sindicato', fetchFacet: makeFkFetchFacet('guild') },
-      { columnId: 'cost_center', title: 'Centro de costo', fetchFacet: makeFkFetchFacet('cost_center') },
-      { columnId: 'countries', title: 'Pais de nacimiento', fetchFacet: makeFkFetchFacet('countries') },
+      facets.lookup('hierarchy', 'Sector', undefined, UNASSIGNED),
+      facets.lookup('company_positions', 'Puesto', undefined, UNASSIGNED),
+      facets.lookup('types_of_contract', 'Tipo de Contrato', undefined, UNASSIGNED),
+      facets.lookup('work_diagram', 'Diagrama', undefined, UNASSIGNED),
+      facets.lookup('workshop_sectors', 'Sectores de taller', undefined, UNASSIGNED),
+      facets.lookup('category', 'Categoria', undefined, UNASSIGNED),
+      facets.lookup('covenant', 'Convenio', undefined, UNASSIGNED),
+      facets.lookup('guild', 'Sindicato', undefined, UNASSIGNED),
+      facets.lookup('cost_center', 'Centro de costo', undefined, UNASSIGNED),
+      facets.lookup('countries', 'Pais de nacimiento', undefined, UNASSIGNED),
 
       // ── FK BigInt ──────────────────────────────────────────────────────────
-      { columnId: 'province', title: 'Provincia', fetchFacet: makeFkFetchFacet('province') },
-      { columnId: 'city', title: 'Ciudad', fetchFacet: makeFkFetchFacet('city') },
+      facets.lookup('province', 'Provincia', undefined, UNASSIGNED),
+      facets.lookup('city', 'Ciudad', undefined, UNASSIGNED),
 
       // ── M:M ────────────────────────────────────────────────────────────────
-      {
-        columnId: 'contractor_employee',
-        title: 'Afectaciones',
-        fetchFacet: makeFkFetchFacet('contractor_employee', 'Sin afectar'),
-      },
-      {
-        columnId: 'empleado_aptitudes',
-        title: 'Aptitudes tecnicas',
-        fetchFacet: makeFkFetchFacet('empleado_aptitudes', 'Sin afectar'),
-      },
+      facets.lookup('contractor_employee', 'Afectaciones', undefined, WITHOUT_ASSIGNMENT),
+      facets.lookup('empleado_aptitudes', 'Aptitudes tecnicas', undefined, WITHOUT_ASSIGNMENT),
 
       // ── Filtros de texto libre ─────────────────────────────────────────────
-      { columnId: 'fullName', title: 'Nombre', type: 'text' as const, placeholder: 'Buscar por nombre...' },
-      { columnId: 'email', title: 'Email', type: 'text' as const, placeholder: 'Buscar por email...' },
-      { columnId: 'cuil', title: 'CUIL', type: 'text' as const, placeholder: 'Buscar por CUIL...' },
-      {
-        columnId: 'document_number',
-        title: 'Documento',
-        type: 'text' as const,
-        placeholder: 'Buscar por documento...',
-      },
-      { columnId: 'phone', title: 'Telefono', type: 'text' as const, placeholder: 'Buscar por telefono...' },
-      { columnId: 'street', title: 'Calle', type: 'text' as const, placeholder: 'Buscar por calle...' },
-      { columnId: 'street_number', title: 'Altura', type: 'text' as const, placeholder: 'Buscar por altura...' },
-      { columnId: 'postal_code', title: 'CP', type: 'text' as const, placeholder: 'Buscar por CP...' },
-      { columnId: 'file', title: 'Legajo', type: 'text' as const, placeholder: 'Buscar legajo...' },
-      { columnId: 'normal_hours', title: 'Horas', type: 'text' as const, placeholder: 'Buscar por horas...' },
-      { columnId: 'born_date', title: 'Nacimiento', type: 'text' as const, placeholder: 'Buscar por nacimiento...' },
+      textFilter('fullName', 'Nombre', 'Buscar por nombre...'),
+      textFilter('email', 'Email', 'Buscar por email...'),
+      textFilter('cuil', 'CUIL', 'Buscar por CUIL...'),
+      textFilter('document_number', 'Documento', 'Buscar por documento...'),
+      textFilter('phone', 'Telefono', 'Buscar por telefono...'),
+      textFilter('street', 'Calle', 'Buscar por calle...'),
+      textFilter('street_number', 'Altura', 'Buscar por altura...'),
+      textFilter('postal_code', 'CP', 'Buscar por CP...'),
+      textFilter('file', 'Legajo', 'Buscar legajo...'),
+      textFilter('normal_hours', 'Horas', 'Buscar por horas...'),
+      textFilter('born_date', 'Nacimiento', 'Buscar por nacimiento...'),
 
       // ── Filtros de rango de fechas ─────────────────────────────────────────
-      { columnId: 'date_of_admission', title: 'Fecha de ingreso', type: 'dateRange' as const },
-      { columnId: 'created_at', title: 'Fecha de creacion', type: 'dateRange' as const },
-      { columnId: 'termination_date', title: 'Fecha de baja', type: 'dateRange' as const },
-    ],
-    [makeEnumFetchFacet, makeFkFetchFacet, isActive]
-  );
+      dateRangeFilter('date_of_admission', 'Fecha de ingreso'),
+      dateRangeFilter('created_at', 'Fecha de creacion'),
+      dateRangeFilter('termination_date', 'Fecha de baja'),
+    ];
+  }, [isActive]);
 
-  // Filtros visibles por defecto: solo los 3 más comunes (distintos para activos/inactivos).
   // Las preferencias guardadas tienen prioridad; el resto de filtros arranca oculto.
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    const defaultVisible = isActive
-      ? ['status', 'hierarchy', 'company_positions']
-      : ['reason_for_termination', 'status', 'hierarchy'];
-    return Object.fromEntries(facetedFilters.map((f) => [f.columnId, defaultVisible.includes(f.columnId)]));
-  }, [initialFilterVisibility, facetedFilters, isActive]);
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: isActive ? DEFAULT_VISIBLE_FILTERS_ACTIVE : DEFAULT_VISIBLE_FILTERS_INACTIVE,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   // ─── Botón de creación protegido por permisos (solo en tab activos) ─────────
   const toolbarActions = isActive ? (
@@ -354,21 +219,14 @@ export default function _EmployeeDataTable({
       columns={columns}
       data={data}
       totalRows={totalRows}
-      searchParams={searchParams}
-      tableId={tableId}
-      paramNamespace={tableId}
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
+      {...tableProps}
       toolbarActions={toolbarActions}
       showSearch
       mobileCards
       searchPlaceholder="Buscar por legajo, nombre o CUIL"
-      showFilterToggle
       // Client-side navigation: fetch instantáneo via React Query, sin router.push
       queryFn={tableQueryFn}
       queryKey={['employees-paginated', isActive]}
-      onStateChange={handleStateChange}
       enableRowSelection
       showRowSelection
       emptyMessage="No se encontraron empleados"

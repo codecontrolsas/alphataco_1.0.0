@@ -1,4 +1,4 @@
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import { fetchAllWorkshopSectors, fetchInternalWorkshops } from '../../actions/workshops.server';

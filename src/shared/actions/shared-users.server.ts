@@ -1,11 +1,8 @@
 'use server';
 
-import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
 import { assertCompanyAccess } from '@/shared/lib/tenant';
-
-const logger = new Logger('shared/shared-users');
 
 /**
  * Rol del usuario de sesión dentro de una empresa: el `profile.role` de su fila en

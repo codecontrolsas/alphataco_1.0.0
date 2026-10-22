@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 
 /** Lectura de Gráficos de KPIs: exige `view` en Configuración › KPIs › Gráficos. */
 export async function assertCanViewKpiCharts(): Promise<void> {

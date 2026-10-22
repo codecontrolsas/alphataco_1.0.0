@@ -1,9 +1,9 @@
+import { isUuid } from '@/shared/lib/uuid';
 import { describe, expect, it } from 'vitest';
 import {
   INT4_MAX,
   buildTreasuryDateRangeWhere,
   facetWhere,
-  isUuid,
   ownEntry,
   parseAmountText,
   parseBoundedInt,
@@ -114,7 +114,9 @@ describe('facetWhere', () => {
   });
   it('enum: solo valores permitidos', () => {
     expect(facetWhere('status', ['NOPE'], { kind: 'enum', allowed: ['DRAFT', 'CONFIRMED'] })).toBeNull();
-    expect(facetWhere('status', ['DRAFT', 'NOPE'], { kind: 'enum', allowed: ['DRAFT', 'CONFIRMED'] })).toEqual({ status: 'DRAFT' });
+    expect(facetWhere('status', ['DRAFT', 'NOPE'], { kind: 'enum', allowed: ['DRAFT', 'CONFIRMED'] })).toEqual({
+      status: 'DRAFT',
+    });
   });
   it('columna NOT NULL: el centinela de "sin asignar" se ignora', () => {
     expect(facetWhere('customer_id', ['__null__'], { kind: 'uuid' })).toBeNull();
@@ -129,7 +131,10 @@ describe('facetWhere', () => {
 
 describe('buildTreasuryDateRangeWhere', () => {
   it('columna @db.Date: el día tal cual, en UTC', () => {
-    const where = buildTreasuryDateRangeWhere({ date_from: ['2026-03-01'], date_to: ['2026-03-31'] }, { dateColumns: ['date'] });
+    const where = buildTreasuryDateRangeWhere(
+      { date_from: ['2026-03-01'], date_to: ['2026-03-31'] },
+      { dateColumns: ['date'] }
+    );
     expect(where).toEqual({
       date: { gte: new Date('2026-03-01T00:00:00.000Z'), lte: new Date('2026-03-31T00:00:00.000Z') },
     });
@@ -144,15 +149,22 @@ describe('buildTreasuryDateRangeWhere', () => {
     });
   });
   it('un registro de las 22:00 argentinas (01:00 UTC del día siguiente) cae en el día argentino', () => {
-    const where = buildTreasuryDateRangeWhere({ created_at_to: ['2026-03-01'] }, { timestampColumns: ['created_at'] }) as {
+    const where = buildTreasuryDateRangeWhere(
+      { created_at_to: ['2026-03-01'] },
+      { timestampColumns: ['created_at'] }
+    ) as {
       created_at: { lte: Date };
     };
     expect(new Date('2026-03-02T01:00:00.000Z').getTime()).toBeLessThanOrEqual(where.created_at.lte.getTime());
   });
   it('fechas imposibles o ausentes se ignoran', () => {
-    expect(buildTreasuryDateRangeWhere({ date_from: ['2026-02-31'], date_to: ['2026-13-01'] }, { dateColumns: ['date'] })).toEqual({});
+    expect(
+      buildTreasuryDateRangeWhere({ date_from: ['2026-02-31'], date_to: ['2026-13-01'] }, { dateColumns: ['date'] })
+    ).toEqual({});
     expect(buildTreasuryDateRangeWhere({}, { dateColumns: ['date'], timestampColumns: ['created_at'] })).toEqual({});
-    expect(buildTreasuryDateRangeWhere({ date_from: ['2026-02-31'], date_to: ['2026-03-05'] }, { dateColumns: ['date'] })).toEqual({
+    expect(
+      buildTreasuryDateRangeWhere({ date_from: ['2026-02-31'], date_to: ['2026-03-05'] }, { dateColumns: ['date'] })
+    ).toEqual({
       date: { lte: new Date('2026-03-05T00:00:00.000Z') },
     });
   });

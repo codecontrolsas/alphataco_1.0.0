@@ -1,5 +1,5 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildStorageFileUrl, parseStorageFileUrl } from '@/shared/lib/storage-url';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * `movePreparteFile` contra el RustFS del compose. Corre sólo con `DATABASE_URL` (el módulo
@@ -57,7 +57,7 @@ describe.skipIf(!RUN)('movePreparteFile (integración contra RustFS)', () => {
   });
 
   it('mueve la imagen temporal a la ruta del pedido y devuelve la URL versionada', async () => {
-    const { movePreparteFile } = await import('./mutations.server');
+    const { movePreparteFile } = await import('./move-preparte-file.server');
     await upload(`${COMPANY_ID}/nueva.jpg`, 'primera foto');
 
     const url = await movePreparteFile(
@@ -77,7 +77,7 @@ describe.skipIf(!RUN)('movePreparteFile (integración contra RustFS)', () => {
   });
 
   it('reemplaza la imagen cuando el pedido ya tenía una (camino de reintento)', async () => {
-    const { movePreparteFile } = await import('./mutations.server');
+    const { movePreparteFile } = await import('./move-preparte-file.server');
     await upload(`${COMPANY_ID}/nueva.jpg`, 'primera foto');
     await movePreparteFile(buildStorageFileUrl(BUCKET, `${COMPANY_ID}/nueva.jpg`), CLIENTE, CONTRATO, PEDIDO);
 
@@ -97,7 +97,7 @@ describe.skipIf(!RUN)('movePreparteFile (integración contra RustFS)', () => {
   });
 
   it('la URL versionada del reemplazo es distinta de la anterior', async () => {
-    const { movePreparteFile } = await import('./mutations.server');
+    const { movePreparteFile } = await import('./move-preparte-file.server');
     await upload(`${COMPANY_ID}/nueva.jpg`, 'primera foto');
     const first = await movePreparteFile(
       buildStorageFileUrl(BUCKET, `${COMPANY_ID}/nueva.jpg`),
@@ -119,7 +119,7 @@ describe.skipIf(!RUN)('movePreparteFile (integración contra RustFS)', () => {
   });
 
   it('mover a la misma ruta es idempotente y no pierde el archivo', async () => {
-    const { movePreparteFile } = await import('./mutations.server');
+    const { movePreparteFile } = await import('./move-preparte-file.server');
     await upload(TARGET, 'ya estaba en su lugar');
 
     const url = await movePreparteFile(buildStorageFileUrl(BUCKET, TARGET), CLIENTE, CONTRATO, PEDIDO);
@@ -129,13 +129,13 @@ describe.skipIf(!RUN)('movePreparteFile (integración contra RustFS)', () => {
   });
 
   it('rechaza una imagen de otra empresa', async () => {
-    const { movePreparteFile } = await import('./mutations.server');
+    const { movePreparteFile } = await import('./move-preparte-file.server');
     const ajena = buildStorageFileUrl(BUCKET, '99999999-9999-4999-8999-99999999bbb2/ajena.jpg');
     await expect(movePreparteFile(ajena, CLIENTE, CONTRATO, PEDIDO)).rejects.toThrow(/no pertenece a la empresa/i);
   });
 
   it('rechaza una URL que no es del bucket de preparte', async () => {
-    const { movePreparteFile } = await import('./mutations.server');
+    const { movePreparteFile } = await import('./move-preparte-file.server');
     const otroBucket = buildStorageFileUrl('logo', `${COMPANY_ID}/logo/logo.png`);
     await expect(movePreparteFile(otroBucket, CLIENTE, CONTRATO, PEDIDO)).rejects.toThrow(/no es un archivo válido/i);
   });

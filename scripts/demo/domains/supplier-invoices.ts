@@ -9,20 +9,28 @@
 import { Prisma } from '../../../src/generated/prisma/client.ts';
 import type { Ctx } from '../lib/ctx.ts';
 import { demoId } from '../lib/ids.ts';
+import { centsText } from '../lib/money.ts';
 import { NEUQUEN_PROVINCE } from './catalogs.ts';
 
 const RATES: Record<number, number> = { 4: 10.5, 5: 21, 6: 27 };
 const LETTERS: Record<number, 'A' | 'B' | 'C'> = { 1: 'A', 2: 'A', 3: 'A', 11: 'C' };
-const LABELS: Record<number, string> = { 1: 'Factura A', 3: 'Nota de Crédito A', 11: 'Factura C' };
 
-const unitCost = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 4 });
-const cents = (value: number) => (value / 100).toFixed(2);
+const unitCost = new Intl.NumberFormat('es-AR', {
+  style: 'currency',
+  currency: 'ARS',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 4,
+});
 
 type DemoLine =
   | { orderKey: string; quantity: number; price: number; rate: number | null }
   | { category: string; description: string; net: number; rate: number | null };
 
-type DemoTax = { kind: 'VAT_PERCEPTION' | 'GROSS_INCOME_PERCEPTION' | 'INTERNAL_TAX' | 'OTHER_TAX'; amount: number; description?: string };
+type DemoTax = {
+  kind: 'VAT_PERCEPTION' | 'GROSS_INCOME_PERCEPTION' | 'INTERNAL_TAX' | 'OTHER_TAX';
+  amount: number;
+  description?: string;
+};
 
 interface DemoInvoice {
   key: string;
@@ -71,7 +79,11 @@ export async function seedSupplierInvoices(ctx: Ctx): Promise<string> {
     });
     const line = order.lines[0]!;
     const material = line.request_line.material;
-    const label = material ? (material.code ? `[${material.code}] ${material.name}` : material.name) : (line.request_line.description ?? '');
+    const label = material
+      ? material.code
+        ? `[${material.code}] ${material.name}`
+        : material.name
+      : line.request_line.description ?? '';
     return { id: line.id, orderNumber: order.number, orderPrice: line.unit_price.toNumber(), label };
   };
 
@@ -152,7 +164,9 @@ export async function seedSupplierInvoices(ctx: Ctx): Promise<string> {
       salesPoint: 10,
       number: 123456,
       day: -6,
-      lines: [{ category: 'Luz', description: 'Energía eléctrica Base Neuquén, período anterior', net: 185000, rate: 6 }],
+      lines: [
+        { category: 'Luz', description: 'Energía eléctrica Base Neuquén, período anterior', net: 185000, rate: 6 },
+      ],
       taxes: (net) => [{ kind: 'GROSS_INCOME_PERCEPTION', amount: Math.round(net * 0.02) }],
       status: 'CONFORMING',
       cae: true,
@@ -199,8 +213,8 @@ export async function seedSupplierInvoices(ctx: Ctx): Promise<string> {
           quantity: l.quantity,
           unit_price: l.price,
           vat_rate_id: letter === 'C' ? null : l.rate,
-          net_total: cents(net),
-          vat_amount: cents(vat),
+          net_total: centsText(net),
+          vat_amount: centsText(vat),
         });
       } else {
         lines.push({
@@ -208,16 +222,22 @@ export async function seedSupplierInvoices(ctx: Ctx): Promise<string> {
           expense_category: { connect: { id: demoId('expense_category', l.category) } },
           description: l.description,
           vat_rate_id: letter === 'C' ? null : l.rate,
-          net_total: cents(net),
-          vat_amount: cents(vat),
+          net_total: centsText(net),
+          vat_amount: centsText(vat),
         });
       }
     }
-    const vat = [...bases.entries()].map(([rate, base]) => ({ vat_rate_id: rate, base: cents(base), amount: cents(Math.round((base * RATES[rate]!) / 100)) }));
+    const vat = [...bases.entries()].map(([rate, base]) => ({
+      vat_rate_id: rate,
+      base: centsText(base),
+      amount: centsText(Math.round((base * RATES[rate]!) / 100)),
+    }));
     const vatTotal = vat.reduce((acc, v) => acc + Math.round(Number(v.amount) * 100), 0);
     const taxes = (plan.taxes?.(netTotal) ?? []).filter((t) => t.amount > 0);
-    const sumKind = (...kinds: DemoTax['kind'][]) => taxes.filter((t) => kinds.includes(t.kind)).reduce((acc, t) => acc + t.amount, 0);
-    const total = netTotal + vatTotal + sumKind('VAT_PERCEPTION', 'GROSS_INCOME_PERCEPTION', 'INTERNAL_TAX', 'OTHER_TAX');
+    const sumKind = (...kinds: DemoTax['kind'][]) =>
+      taxes.filter((t) => kinds.includes(t.kind)).reduce((acc, t) => acc + t.amount, 0);
+    const total =
+      netTotal + vatTotal + sumKind('VAT_PERCEPTION', 'GROSS_INCOME_PERCEPTION', 'INTERNAL_TAX', 'OTHER_TAX');
     const issue = cal.ymd(plan.day);
 
     await tx.supplier_invoices.create({
@@ -233,14 +253,14 @@ export async function seedSupplierInvoices(ctx: Ctx): Promise<string> {
         vat_period: issue.slice(0, 7),
         cae: plan.cae ? `7${String(plan.salesPoint).padStart(4, '0')}${String(plan.number).padStart(9, '0')}` : null,
         cae_due_date: plan.cae ? new Date(`${cal.ymd(plan.day + 10)}T00:00:00.000Z`) : null,
-        net_taxed: cents(netTotal),
+        net_taxed: centsText(netTotal),
         net_untaxed: '0.00',
         exempt: '0.00',
-        vat_total: cents(vatTotal),
-        vat_perceptions: cents(sumKind('VAT_PERCEPTION')),
-        gross_income_perceptions: cents(sumKind('GROSS_INCOME_PERCEPTION')),
-        other_taxes: cents(sumKind('INTERNAL_TAX', 'OTHER_TAX')),
-        total: cents(total),
+        vat_total: centsText(vatTotal),
+        vat_perceptions: centsText(sumKind('VAT_PERCEPTION')),
+        gross_income_perceptions: centsText(sumKind('GROSS_INCOME_PERCEPTION')),
+        other_taxes: centsText(sumKind('INTERNAL_TAX', 'OTHER_TAX')),
+        total: centsText(total),
         related_invoice_id: plan.related ? ids.get(plan.related)! : null,
         status: plan.status,
         observations: observations as Prisma.InputJsonValue,
@@ -258,7 +278,7 @@ export async function seedSupplierInvoices(ctx: Ctx): Promise<string> {
         taxes: {
           create: taxes.map((t) => ({
             kind: t.kind,
-            amount: cents(t.amount),
+            amount: centsText(t.amount),
             description: t.description ?? null,
             province_id: t.kind === 'GROSS_INCOME_PERCEPTION' ? BigInt(NEUQUEN_PROVINCE) : null,
           })),

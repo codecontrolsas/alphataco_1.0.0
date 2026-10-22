@@ -3,10 +3,11 @@ import {
   fetchAllEquipmentBasicData,
   fetchAllOtherEquipmentBasicData,
 } from '@/features/Mantenimiento/actions/equipment-basic';
+import { normalizeSearchText } from '@/shared/utils/search-text';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { getChecklistTemplatesForEquipment, getCurrentUserForSupervisorCheck } from '../actions/queries.server';
-import { MAX_RESOURCE_RESULTS, normalizeSearchText } from '../components/nuevo-pedido/SelectableCard';
+import { MAX_RESOURCE_RESULTS } from '../components/nuevo-pedido/SelectableCard';
 import { REQUEST_TYPE_ORDER, type ResourceOption } from '../components/nuevo-pedido/types';
 import { getWizardSteps } from '../lib/steps';
 import type { NewRequestState } from './useNewRequestState';

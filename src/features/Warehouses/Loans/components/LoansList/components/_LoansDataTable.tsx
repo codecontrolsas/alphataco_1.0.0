@@ -1,21 +1,20 @@
 'use client';
 
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { createFacetFilters } from '@/shared/components/common/DataTable/facet-filters';
 import {
-  DataTable,
   type DataTableExportConfig,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+} from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { formatDateAr } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
-import { CircleOff } from 'lucide-react';
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, type ReactNode } from 'react';
+import { destinationTypeIcons } from '../../../../Movements/components/MovementsList/columns';
 import { DESTINATION_TYPE_LABELS } from '../../../../lib/labels';
 import { WAREHOUSE_QUERY_KEYS } from '../../../../lib/query-keys';
 import { STOCK_DESTINATION_TYPES, type StockDestinationTypeValue } from '../../../../schemas/stock-movement';
-import { destinationTypeIcons } from '../../../../Movements/components/MovementsList/columns';
 import { getAllLoansForExport, getLoanSingleFacet, getLoansPaginated, type LoanListItem } from '../actions.server';
 import { HIDDEN_COLUMNS_BY_DEFAULT, getColumns } from '../columns';
 
@@ -32,7 +31,7 @@ interface Props {
 
 const DEFAULT_VISIBLE_FILTERS = ['destination_type', 'holder', 'since'];
 
-const EMPTY_FACET: FacetResult = { options: [], counts: new Map() };
+const facets = createFacetFilters(getLoanSingleFacet);
 
 export function _LoansDataTable({
   data,
@@ -44,42 +43,24 @@ export function _LoansDataTable({
   initialFilterVisibility,
   topSlot,
 }: Props) {
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-  const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getLoansPaginated(params), []);
 
   const canReturn = permissionsMap['almacenes:prestamos:create'] === true;
   const canWriteOff = permissionsMap['almacenes:prestamos:delete'] === true;
   const columns = useMemo(() => getColumns({ canReturn, canWriteOff }), [canReturn, canWriteOff]);
 
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((c) => [c, false]));
-    return { ...defaults, ...initialColumnVisibility };
-  }, [initialColumnVisibility]);
-
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
-      {
-        columnId: 'destination_type',
-        title: 'Tipo de destino',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getLoanSingleFacet('destination_type', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: [
-              ...STOCK_DESTINATION_TYPES.map((value) => ({
-                value,
-                label: DESTINATION_TYPE_LABELS[value],
-                icon: destinationTypeIcons[value],
-              })),
-              ...(result.counts.has(NULL_FILTER_VALUE)
-                ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-                : []),
-            ],
-            counts: result.counts,
-          };
-        },
-      },
+      facets.fixed(
+        'destination_type',
+        'Tipo de destino',
+        STOCK_DESTINATION_TYPES.map((value) => ({
+          value,
+          label: DESTINATION_TYPE_LABELS[value],
+          icon: destinationTypeIcons[value],
+        })),
+        { label: 'Sin asignar' }
+      ),
       {
         columnId: 'holder',
         title: 'Tenedor',
@@ -89,17 +70,27 @@ export function _LoansDataTable({
       { columnId: 'since', title: 'Desde', type: 'dateRange' as const },
       { columnId: 'material_code', title: 'Código', type: 'text' as const, placeholder: 'Buscar por código...' },
       { columnId: 'material', title: 'Material', type: 'text' as const, placeholder: 'Buscar por material...' },
-      { columnId: 'serial_number', title: 'Número de serie', type: 'text' as const, placeholder: 'Buscar por serie...' },
+      {
+        columnId: 'serial_number',
+        title: 'Número de serie',
+        type: 'text' as const,
+        placeholder: 'Buscar por serie...',
+      },
       { columnId: 'days', title: 'Días en préstamo', type: 'text' as const, placeholder: 'Cantidad exacta de días...' },
       { columnId: 'exit', title: 'Salida', type: 'text' as const, placeholder: 'Buscar por número de salida...' },
     ],
     []
   );
 
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) return initialFilterVisibility;
-    return Object.fromEntries(facetedFilters.map((f) => [f.columnId, DEFAULT_VISIBLE_FILTERS.includes(f.columnId)]));
-  }, [initialFilterVisibility, facetedFilters]);
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   const exportConfig: DataTableExportConfig<LoanListItem> = useMemo(
     () => ({
@@ -107,7 +98,7 @@ export function _LoansDataTable({
       options: { filename: 'prestamos', title: 'Préstamos abiertos', sheetName: 'Préstamos' },
       formatters: {
         destination_type: (value) =>
-          value ? (DESTINATION_TYPE_LABELS[value as StockDestinationTypeValue] ?? String(value)) : '',
+          value ? DESTINATION_TYPE_LABELS[value as StockDestinationTypeValue] ?? String(value) : '',
         since: (value) => (value ? formatDateAr(value as string) : ''),
         days: (value) => (value == null || value === '' ? '' : String(value)),
       },
@@ -119,23 +110,16 @@ export function _LoansDataTable({
     <>
       {topSlot}
       <DataTable
-      columns={columns}
-      data={data}
-      totalRows={totalRows}
-      searchParams={searchParams}
-      tableId={tableId}
-      paramNamespace={tableId}
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      showFilterToggle
-      queryFn={tableQueryFn}
-      queryKey={[...WAREHOUSE_QUERY_KEYS.loans]}
-      onStateChange={handleStateChange}
-      searchPlaceholder="Buscar por material, código o número de serie"
-      emptyMessage="No hay préstamos abiertos"
-      exportConfig={exportConfig}
-      data-testid="warehouse-loans-table"
+        columns={columns}
+        data={data}
+        totalRows={totalRows}
+        {...tableProps}
+        queryFn={tableQueryFn}
+        queryKey={[...WAREHOUSE_QUERY_KEYS.loans]}
+        searchPlaceholder="Buscar por material, código o número de serie"
+        emptyMessage="No hay préstamos abiertos"
+        exportConfig={exportConfig}
+        data-testid="warehouse-loans-table"
       />
     </>
   );

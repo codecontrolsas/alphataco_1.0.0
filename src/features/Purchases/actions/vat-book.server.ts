@@ -4,7 +4,7 @@ import JSZip from 'jszip';
 import { argentinaDate } from '@/shared/lib/argentina-time';
 import { AMOUNT_SCALE, formatScaled, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { VAT_RATE_LABELS, isVatRateId } from '@/shared/lib/arca/catalogs';
 import { prisma } from '@/shared/lib/prisma';

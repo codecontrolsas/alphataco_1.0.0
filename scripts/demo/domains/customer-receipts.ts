@@ -15,21 +15,16 @@
  * numeración. Como el resto de la demo, no importa `src/` con alias: las cuentas se hacen acá en
  * centavos y `verify` controla pendientes, anticipos y el impacto en las cuentas.
  */
-import type { Ctx } from '../lib/ctx.ts';
 import { customerId } from '../data/customers.ts';
+import type { Ctx } from '../lib/ctx.ts';
 import { addPdf, withoutTriggers } from '../lib/ctx.ts';
 import { toDmy } from '../lib/dates.ts';
 import { demoId } from '../lib/ids.ts';
+import { C, money } from '../lib/money.ts';
 
 export const CUSTOMER_DOCUMENTS_BUCKET = 'customer-documents';
 
-const C = (value: number) => BigInt(Math.round(value * 100));
 const ZERO = BigInt(0);
-const money = (cents: bigint) => {
-  const negative = cents < ZERO;
-  const abs = negative ? -cents : cents;
-  return `${negative ? '-' : ''}${abs / BigInt(100)}.${String(abs % BigInt(100)).padStart(2, '0')}`;
-};
 /** Mitad hacia arriba (montos positivos). */
 const divRound = (n: bigint, d: bigint) => (n * BigInt(2) + d) / (d * BigInt(2));
 const vat21 = (net: bigint) => divRound(net * BigInt(21), BigInt(100));
@@ -92,18 +87,105 @@ export async function seedCustomerReceipts(ctx: Ctx): Promise<void> {
 
   // ── Comprobantes ─────────────────────────────────────────────────────────────
   const invoices: DemoInvoice[] = [
-    { key: 'andes-1', customer: 'andes', cbteType: 1, issueDay: -55, dueDay: -25, net: C(4_000_000), description: 'Servicio de transporte de cargas, agosto' },
-    { key: 'andes-2', customer: 'andes', cbteType: 1, issueDay: -35, dueDay: -5, net: C(2_500_000), description: 'Hidrogrúa con operador, septiembre' },
-    { key: 'vaca-usd', customer: 'vaca_muerta', cbteType: 1, issueDay: -15, dueDay: 15, net: C(10_000), description: 'Torres de iluminación en locación', currency: 'USD', rate: 1050 },
-    { key: 'petro-1', customer: 'petro_comahue', cbteType: 1, issueDay: -40, dueDay: -10, net: C(1_000_000), description: 'Movimiento de materiales en yacimiento' },
-    { key: 'petro-2', customer: 'petro_comahue', cbteType: 1, issueDay: -30, dueDay: -1, net: C(1_000_000), description: 'Movimiento de materiales en yacimiento' },
-    { key: 'nqn-1', customer: 'neuquen_og', cbteType: 1, issueDay: -20, dueDay: 10, net: C(800_000), description: 'Traslado de personal base-locación' },
-    { key: 'nqn-2', customer: 'neuquen_og', cbteType: 1, issueDay: -10, dueDay: 20, net: C(500_000), description: 'Camioneta 4x4 con chofer' },
-    { key: 'vaca-ars', customer: 'vaca_muerta', cbteType: 1, issueDay: -8, dueDay: 22, net: C(1_500_000), description: 'Camión chasis con caja' },
-    { key: 'andes-nd', customer: 'andes', cbteType: 2, issueDay: -2, dueDay: 28, net: C(100_000), description: 'Intereses por pago fuera de término', associated: 'andes-2' },
-    { key: 'nqn-nc', customer: 'neuquen_og', cbteType: 3, issueDay: -5, dueDay: null, net: C(100_000), description: 'Bonificación por demora en el servicio', associated: 'nqn-2' },
+    {
+      key: 'andes-1',
+      customer: 'andes',
+      cbteType: 1,
+      issueDay: -55,
+      dueDay: -25,
+      net: C(4_000_000),
+      description: 'Servicio de transporte de cargas, agosto',
+    },
+    {
+      key: 'andes-2',
+      customer: 'andes',
+      cbteType: 1,
+      issueDay: -35,
+      dueDay: -5,
+      net: C(2_500_000),
+      description: 'Hidrogrúa con operador, septiembre',
+    },
+    {
+      key: 'vaca-usd',
+      customer: 'vaca_muerta',
+      cbteType: 1,
+      issueDay: -15,
+      dueDay: 15,
+      net: C(10_000),
+      description: 'Torres de iluminación en locación',
+      currency: 'USD',
+      rate: 1050,
+    },
+    {
+      key: 'petro-1',
+      customer: 'petro_comahue',
+      cbteType: 1,
+      issueDay: -40,
+      dueDay: -10,
+      net: C(1_000_000),
+      description: 'Movimiento de materiales en yacimiento',
+    },
+    {
+      key: 'petro-2',
+      customer: 'petro_comahue',
+      cbteType: 1,
+      issueDay: -30,
+      dueDay: -1,
+      net: C(1_000_000),
+      description: 'Movimiento de materiales en yacimiento',
+    },
+    {
+      key: 'nqn-1',
+      customer: 'neuquen_og',
+      cbteType: 1,
+      issueDay: -20,
+      dueDay: 10,
+      net: C(800_000),
+      description: 'Traslado de personal base-locación',
+    },
+    {
+      key: 'nqn-2',
+      customer: 'neuquen_og',
+      cbteType: 1,
+      issueDay: -10,
+      dueDay: 20,
+      net: C(500_000),
+      description: 'Camioneta 4x4 con chofer',
+    },
+    {
+      key: 'vaca-ars',
+      customer: 'vaca_muerta',
+      cbteType: 1,
+      issueDay: -8,
+      dueDay: 22,
+      net: C(1_500_000),
+      description: 'Camión chasis con caja',
+    },
+    {
+      key: 'andes-nd',
+      customer: 'andes',
+      cbteType: 2,
+      issueDay: -2,
+      dueDay: 28,
+      net: C(100_000),
+      description: 'Intereses por pago fuera de término',
+      associated: 'andes-2',
+    },
+    {
+      key: 'nqn-nc',
+      customer: 'neuquen_og',
+      cbteType: 3,
+      issueDay: -5,
+      dueDay: null,
+      net: C(100_000),
+      description: 'Bonificación por demora en el servicio',
+      associated: 'nqn-2',
+    },
   ];
-  const totals = new Map<string, { total: bigint; currency: 'ARS' | 'USD'; rate: number; cbteType: number; customer: string; number: number }>();
+  const totals = new Map<
+    string,
+    { total: bigint; currency: 'ARS' | 'USD'; rate: number; cbteType: number; customer: string; number: number }
+  >();
   const counters = new Map<number, number>();
   const customers = new Map<string, { name: string; cuit: bigint }>();
   for (const key of new Set(invoices.map((i) => i.customer))) {
@@ -119,7 +201,14 @@ export async function seedCustomerReceipts(ctx: Ctx): Promise<void> {
       const vat = vat21(inv.net);
       const total = inv.net + vat;
       const currency = inv.currency ?? 'ARS';
-      totals.set(inv.key, { total, currency, rate: inv.rate ?? 1, cbteType: inv.cbteType, customer: inv.customer, number });
+      totals.set(inv.key, {
+        total,
+        currency,
+        rate: inv.rate ?? 1,
+        cbteType: inv.cbteType,
+        customer: inv.customer,
+        number,
+      });
       const customer = customers.get(inv.customer)!;
       return {
         id: invoiceId(inv.key),
@@ -169,7 +258,12 @@ export async function seedCustomerReceipts(ctx: Ctx): Promise<void> {
       })),
     });
     await tx.invoice_vat.createMany({
-      data: invoices.map((inv) => ({ invoice_id: invoiceId(inv.key), vat_rate_id: 5, base_amount: money(inv.net), vat_amount: money(vat21(inv.net)) })),
+      data: invoices.map((inv) => ({
+        invoice_id: invoiceId(inv.key),
+        vat_rate_id: 5,
+        base_amount: money(inv.net),
+        vat_amount: money(vat21(inv.net)),
+      })),
     });
   });
   const total = (key: string) => totals.get(key)!.total;
@@ -211,7 +305,14 @@ export async function seedCustomerReceipts(ctx: Ctx): Promise<void> {
       day: -1,
       status: 'CONFIRMED',
       lines: [{ kind: 'INVOICE', invoice: 'vaca-usd', applied: vacaUsd, rate: 1100 }],
-      payments: [{ method: 'ECHECK', account: 'cartera', amount: vacaUsdArs, check: { number: '40012877', bank: 'Banco Galicia', dueIn: 30 } }],
+      payments: [
+        {
+          method: 'ECHECK',
+          account: 'cartera',
+          amount: vacaUsdArs,
+          check: { number: '40012877', bank: 'Banco Galicia', dueIn: 30 },
+        },
+      ],
     },
     {
       key: 're-petro-1',
@@ -275,7 +376,10 @@ export async function seedCustomerReceipts(ctx: Ctx): Promise<void> {
         const inv = totals.get(l.invoice)!;
         const rate = l.rate ?? 1;
         const ars = divRound(l.applied * BigInt(Math.round(rate * 1_000_000)), BigInt(1_000_000));
-        const fx = inv.currency === 'ARS' ? ZERO : divRound(l.applied * BigInt(Math.round((rate - inv.rate) * 1_000_000)), BigInt(1_000_000));
+        const fx =
+          inv.currency === 'ARS'
+            ? ZERO
+            : divRound(l.applied * BigInt(Math.round((rate - inv.rate) * 1_000_000)), BigInt(1_000_000));
         invoicesTotal += ars;
         fxTotal += fx;
         return {
@@ -292,13 +396,23 @@ export async function seedCustomerReceipts(ctx: Ctx): Promise<void> {
       }
       if (l.kind === 'ADVANCE') {
         advanceTotal += l.amount;
-        return { ...base, kind: 'ADVANCE' as const, currency: 'ARS', applied_amount: money(l.amount), amount_ars: money(l.amount), description: l.description };
+        return {
+          ...base,
+          kind: 'ADVANCE' as const,
+          currency: 'ARS',
+          applied_amount: money(l.amount),
+          amount_ars: money(l.amount),
+          description: l.description,
+        };
       }
       appliedTotal += l.amount;
       return {
         ...base,
         kind: 'ADVANCE_APPLIED' as const,
-        source_line_id: lineId(l.source, receipts.find((x) => x.key === l.source)!.lines.findIndex((x) => x.kind === 'ADVANCE')),
+        source_line_id: lineId(
+          l.source,
+          receipts.find((x) => x.key === l.source)!.lines.findIndex((x) => x.kind === 'ADVANCE')
+        ),
         currency: 'ARS',
         applied_amount: money(l.amount),
         amount_ars: money(l.amount),
@@ -333,13 +447,15 @@ export async function seedCustomerReceipts(ctx: Ctx): Promise<void> {
         confirmed_at: numbered ? confirmedAt : null,
         cancelled_by: cancelled ? actorId : null,
         cancelled_at: cancelled ? cal.at(r.day + 2, 10) : null,
-        cancel_reason: cancelled ? (r.cancelReason ?? 'Anulado') : null,
+        cancel_reason: cancelled ? r.cancelReason ?? 'Anulado' : null,
       },
     });
     await tx.customer_receipt_lines.createMany({ data: lines });
 
     for (const [i, w] of (r.withholdings ?? []).entries()) {
-      const key = w.pdf ? `${company.id}/${cust(r.customer)}/withholdings/${cal.ymd(r.day)}-certificado-${w.tax.toLowerCase()}.pdf` : null;
+      const key = w.pdf
+        ? `${company.id}/${cust(r.customer)}/withholdings/${cal.ymd(r.day)}-certificado-${w.tax.toLowerCase()}.pdf`
+        : null;
       if (key) {
         await addPdf(ctx, CUSTOMER_DOCUMENTS_BUCKET, key, {
           title: 'Certificado de retención',
@@ -409,7 +525,7 @@ export async function seedCustomerReceipts(ctx: Ctx): Promise<void> {
           created_at: confirmedAt,
           cancelled_by: cancelled ? actorId : null,
           cancelled_at: cancelled ? cal.at(r.day + 2, 10) : null,
-          cancel_reason: cancelled ? (r.cancelReason ?? 'Anulado') : null,
+          cancel_reason: cancelled ? r.cancelReason ?? 'Anulado' : null,
         },
       });
       if (!cancelled && dueDay <= 0) expected[p.account] += p.amount;
@@ -436,7 +552,14 @@ export async function seedCustomerReceipts(ctx: Ctx): Promise<void> {
           },
         });
         await tx.third_party_check_events.create({
-          data: { check_id: checkId, to_status: 'IN_PORTFOLIO', date: cal.day(r.day), receipt_id: receiptId(r.key), user_id: actorId, created_at: confirmedAt },
+          data: {
+            check_id: checkId,
+            to_status: 'IN_PORTFOLIO',
+            date: cal.day(r.day),
+            receipt_id: receiptId(r.key),
+            user_id: actorId,
+            created_at: confirmedAt,
+          },
         });
       }
     }
@@ -464,7 +587,10 @@ export async function seedCustomerReceipts(ctx: Ctx): Promise<void> {
  * ningún anticipo en negativo, cada medio confirmado con su movimiento y el impacto de los cobros
  * en cada cuenta (movimientos vigentes con fecha ≤ hoy).
  */
-async function verify(ctx: Ctx, want: { pending: Record<string, bigint>; accounts: Record<AccountKey, bigint> }): Promise<void> {
+async function verify(
+  ctx: Ctx,
+  want: { pending: Record<string, bigint>; accounts: Record<AccountKey, bigint> }
+): Promise<void> {
   const { tx, company, cal } = ctx;
   for (const [key, expected] of Object.entries(want.pending)) {
     const rows = await tx.$queryRaw<{ pending: string }[]>`
@@ -476,7 +602,8 @@ async function verify(ctx: Ctx, want: { pending: Record<string, bigint>; account
     `;
     const got = BigInt(Math.round(Number(rows[0]?.pending ?? 'NaN') * 100));
     // El borrador reserva: "vaca-ars" queda en 0 libre.
-    if (got !== expected) throw new Error(`demo cobranzas: el pendiente de ${key} da ${money(got)} y se esperaba ${money(expected)}`);
+    if (got !== expected)
+      throw new Error(`demo cobranzas: el pendiente de ${key} da ${money(got)} y se esperaba ${money(expected)}`);
   }
 
   const negative = await tx.$queryRaw<{ n: bigint }[]>`
@@ -494,7 +621,8 @@ async function verify(ctx: Ctx, want: { pending: Record<string, bigint>; account
     WHERE r.company_id = ${company.id}::uuid AND r.status <> 'DRAFT'
       AND NOT EXISTS (SELECT 1 FROM treasury_movements m WHERE m.customer_receipt_payment_id = p.id)
   `;
-  if (Number(orphan[0]?.n ?? 0) > 0) throw new Error('demo cobranzas: hay medios de recibos confirmados sin movimiento');
+  if (Number(orphan[0]?.n ?? 0) > 0)
+    throw new Error('demo cobranzas: hay medios de recibos confirmados sin movimiento');
 
   for (const key of Object.keys(want.accounts) as AccountKey[]) {
     const rows = await tx.$queryRaw<{ total: string }[]>`
@@ -502,6 +630,9 @@ async function verify(ctx: Ctx, want: { pending: Record<string, bigint>; account
       WHERE account_id = ${account(key)}::uuid AND kind = 'CUSTOMER_RECEIPT' AND cancelled_at IS NULL AND date <= ${cal.today}::date
     `;
     const got = BigInt(Math.round(Number(rows[0]?.total ?? '0') * 100));
-    if (got !== want.accounts[key]) throw new Error(`demo cobranzas: los cobros en ${key} dan ${money(got)} y se esperaba ${money(want.accounts[key])}`);
+    if (got !== want.accounts[key])
+      throw new Error(
+        `demo cobranzas: los cobros en ${key} dan ${money(got)} y se esperaba ${money(want.accounts[key])}`
+      );
   }
 }

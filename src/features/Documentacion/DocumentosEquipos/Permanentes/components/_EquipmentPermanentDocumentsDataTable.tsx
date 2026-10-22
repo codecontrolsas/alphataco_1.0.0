@@ -7,15 +7,13 @@ import {
   formatExportDay,
   formatExportDbDate,
 } from '@/features/Documentacion/lists-shared/document-list-export';
+import { useDocumentListFacets } from '@/features/Documentacion/lists-shared/use-document-list-table';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
 import {
-  useDocumentListFacets,
-  useDocumentListTable,
-} from '@/features/Documentacion/lists-shared/use-document-list-table';
-import {
-  DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
-} from '@/shared/components/common/DataTable';
+} from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { contractTypeVehiclesLabels } from '@/shared/utils/mappers';
 import { useCallback, useMemo } from 'react';
@@ -39,30 +37,6 @@ interface Props {
 
 const DEFAULT_VISIBLE_FILTER_IDS = ['state', 'vehicle', 'document_type', 'contractor'];
 
-const ALL_FILTER_IDS = [
-  'state',
-  'vehicle',
-  'document_type',
-  'mandatory',
-  'multiresource',
-  'contractor',
-  'validity',
-  'created_at',
-  'deny_reason',
-  'serie',
-  'policy_number',
-  'vehicle_type',
-  'vehicle_subtype',
-  'vehicle_brand',
-  'vehicle_year',
-  'vehicle_owner',
-  'vehicle_sector',
-  'vehicle_chassis',
-  'vehicle_engine',
-  'vehicle_contract_type',
-  'vehicle_contract_expiration',
-];
-
 export function _EquipmentPermanentDocumentsDataTable({
   data,
   totalRows,
@@ -72,15 +46,6 @@ export function _EquipmentPermanentDocumentsDataTable({
   initialFilterVisibility,
   equipmentId,
 }: Props) {
-  // Parámetros vigentes (para exportar con los filtros activos) y visibilidad de columnas/filtros.
-  const { currentParams, handleStateChange, columnVisibility, filterVisibility } = useDocumentListTable({
-    searchParams,
-    initialColumnVisibility,
-    initialFilterVisibility,
-    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
-    allFilterIds: ALL_FILTER_IDS,
-    defaultVisibleFilterIds: DEFAULT_VISIBLE_FILTER_IDS,
-  });
   const { makeEnumFetchFacet, makeStateFetchFacet, makeFkFetchFacet, makeBooleanFetchFacet } = useDocumentListFacets(
     getEquipmentPermanentDocumentsSingleFacet,
     equipmentId
@@ -89,12 +54,6 @@ export function _EquipmentPermanentDocumentsDataTable({
   const tableQueryFn = useCallback(
     (params: DataTableSearchParams) => getEquipmentPermanentDocumentsPaginated(params, equipmentId),
     [equipmentId]
-  );
-
-  // Export sin paginar: la action devuelve el mensaje si se pasa del tope de filas.
-  const fetchAllRows = useCallback(
-    async () => unwrapExportResult(await getAllEquipmentPermanentDocumentsForExport(currentParams, equipmentId)),
-    [currentParams, equipmentId]
   );
 
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
@@ -230,21 +189,32 @@ export function _EquipmentPermanentDocumentsDataTable({
     [makeEnumFetchFacet, makeStateFetchFacet, makeFkFetchFacet, makeBooleanFetchFacet]
   );
 
+  // Parámetros vigentes (para exportar con los filtros activos) y props comunes de la tabla.
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTER_IDS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
+
+  // Export sin paginar: la action devuelve el mensaje si se pasa del tope de filas.
+  const fetchAllRows = useCallback(
+    async () => unwrapExportResult(await getAllEquipmentPermanentDocumentsForExport(currentParams, equipmentId)),
+    [currentParams, equipmentId]
+  );
+
   return (
     <DataTable
+      {...tableProps}
       columns={columns}
       data={data}
       totalRows={totalRows}
-      searchParams={searchParams}
       searchPlaceholder="Dominio o documento"
       showSearch
       mobileCards
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={columnVisibility}
-      initialFilterVisibility={filterVisibility}
-      tableId={tableId}
-      paramNamespace={tableId}
-      showFilterToggle={true}
       emptyMessage="No hay documentos permanentes de equipos registrados"
       data-testid="equipment-permanent-documents-table"
       toolbarActions={
@@ -260,7 +230,6 @@ export function _EquipmentPermanentDocumentsDataTable({
       queryFn={tableQueryFn}
       queryKey={['equipment-permanent-docs', equipmentId ?? 'all']}
       queryStaleTimeMs={5_000}
-      onStateChange={handleStateChange}
       exportConfig={{
         fetchAllData: fetchAllRows,
         options: {

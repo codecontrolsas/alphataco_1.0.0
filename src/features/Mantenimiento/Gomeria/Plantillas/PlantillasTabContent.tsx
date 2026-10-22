@@ -1,4 +1,4 @@
-import { getUserPermissionsMapServer } from '@/features/Permissions';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
 import { Suspense } from 'react';
 import TemplatesList from './TemplatesList';

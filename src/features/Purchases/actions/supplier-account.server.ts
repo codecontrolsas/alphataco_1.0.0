@@ -1,13 +1,13 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { openCheckDebtsOfSupplier } from '@/features/Treasury/lib/rejected-checks';
 import { argentinaDate } from '@/shared/lib/argentina-time';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { UUID_RE } from '../lib/action-errors';
+import { isUuid } from '@/shared/lib/uuid';
 import { isCreditNoteCbte, supplierInvoiceLabel } from '../lib/invoices';
 import { openAdvancesOfSupplier, openInvoicesOfSupplier } from '../lib/payment-balances';
-import { openCheckDebtsOfSupplier } from '@/features/Treasury/lib/rejected-checks';
 import { cents, money } from '../lib/payment-totals';
 
 /**
@@ -21,16 +21,27 @@ import { cents, money } from '../lib/payment-totals';
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function getSupplierAccount(supplierId: string, range: { from?: string; to?: string } = {}) {
-  if (!UUID_RE.test(supplierId)) return null;
+  if (!isUuid(supplierId)) return null;
   if (!(await checkPermissionServer('compras', 'pagos', 'view'))) return null;
   const companyId = await getActiveCompanyId();
-  const supplier = await prisma.suppliers.findFirst({ where: { id: supplierId, company_id: companyId }, select: { id: true, name: true } });
+  const supplier = await prisma.suppliers.findFirst({
+    where: { id: supplierId, company_id: companyId },
+    select: { id: true, name: true },
+  });
   if (!supplier) return null;
 
   const [invoices, orders, openInvoices, advances, rejectedChecks] = await Promise.all([
     prisma.supplier_invoices.findMany({
       where: { company_id: companyId, supplier_id: supplierId, status: { in: ['CONFORMING', 'APPROVED'] } },
-      select: { id: true, cbte_type: true, sales_point: true, number: true, issue_date: true, due_date: true, total: true },
+      select: {
+        id: true,
+        cbte_type: true,
+        sales_point: true,
+        number: true,
+        issue_date: true,
+        due_date: true,
+        total: true,
+      },
     }),
     prisma.payment_orders.findMany({
       where: { company_id: companyId, supplier_id: supplierId, status: 'PAID' },
@@ -98,7 +109,12 @@ export async function getSupplierAccount(supplierId: string, range: { from?: str
         ownCheck: c.source === 'OWN',
       })
     ),
-  ].sort((a, b) => a.date.localeCompare(b.date) || (a.kind === 'PAYMENT' ? 1 : 0) - (b.kind === 'PAYMENT' ? 1 : 0) || a.label.localeCompare(b.label));
+  ].sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      (a.kind === 'PAYMENT' ? 1 : 0) - (b.kind === 'PAYMENT' ? 1 : 0) ||
+      a.label.localeCompare(b.label)
+  );
 
   const from = range.from && DATE_RE.test(range.from) ? range.from : null;
   const to = range.to && DATE_RE.test(range.to) ? range.to : null;
@@ -117,8 +133,12 @@ export async function getSupplierAccount(supplierId: string, range: { from?: str
 
   const today = argentinaDate();
   const debts = openInvoices.filter((i) => !isCreditNoteCbte(i.cbteType));
-  const overdue = debts.filter((i) => i.dueDate && i.dueDate.toISOString().slice(0, 10) < today).reduce((acc, i) => acc + cents(i.pending), BigInt(0));
-  const upcoming = debts.filter((i) => !i.dueDate || i.dueDate.toISOString().slice(0, 10) >= today).reduce((acc, i) => acc + cents(i.pending), BigInt(0));
+  const overdue = debts
+    .filter((i) => i.dueDate && i.dueDate.toISOString().slice(0, 10) < today)
+    .reduce((acc, i) => acc + cents(i.pending), BigInt(0));
+  const upcoming = debts
+    .filter((i) => !i.dueDate || i.dueDate.toISOString().slice(0, 10) >= today)
+    .reduce((acc, i) => acc + cents(i.pending), BigInt(0));
 
   return {
     supplier,

@@ -1,4 +1,4 @@
-import { getPurchaseReceiptDetail } from '@/features/Purchases/actions/receipts.server';
+import { getPurchaseReceiptDetail } from '@/features/Purchases/actions/receipt-queries.server';
 import { PurchaseReceiptPage } from '@/features/Purchases/Receipts/ReceiptPages';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';

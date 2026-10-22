@@ -5,7 +5,7 @@ import { ContractTypeTableSkeleton } from '@/features/Empresa/RRHH/ContractTypes
 import DiagramTypeList from '@/features/Empresa/RRHH/DiagramTypes/DiagramTypeList';
 import { DiagramTypeTableSkeleton } from '@/features/Empresa/RRHH/DiagramTypes/fallback/DiagramTypeTableSkeleton';
 import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
-import { ViewManagerServer } from '@/features/TabsManager';
+import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
 import { CatalogTableSurface } from '@/shared/components/common/CatalogFormSheet';
 import { Suspense } from 'react';
 import AptitudesList from './AptitudesTecnicas/AptitudesList';

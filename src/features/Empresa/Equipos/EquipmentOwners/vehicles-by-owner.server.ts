@@ -1,13 +1,13 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE, stateToPrismaParams } from '@/shared/components/common/DataTable/helpers';
-import { fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
+import { fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { CATALOG_EXPORT_MAX_ROWS, catalogExportFailure, catalogTooLargeMessage } from '../../lib/catalog-table.server';
+import { CATALOG_EXPORT_MAX_ROWS, catalogExportFailure } from '../../lib/catalog-table.server';
 import { requireConfigTabPermission } from '../../lib/config-access.server';
 import type { VehicleByOwnerListItem } from './lib/owners-types';
 import {
@@ -94,7 +94,7 @@ export async function getAllVehiclesByOwnerForExport(
       listIds: (take) => prisma.vehicles.findMany({ where, orderBy: safeOrderBy, select: { id: true }, take }),
       fetchByIds: (ids) =>
         prisma.vehicles.findMany({ where: { AND: [where, { id: { in: ids } }] }, select: VEHICLE_LIST_SELECT }),
-      tooLargeMessage: catalogTooLargeMessage('equipos'),
+      tooLargeMessage: tooManyRowsMessage('equipos'),
     });
     return { ok: true, data: rows };
   } catch (error) {
@@ -197,7 +197,6 @@ export async function getVehicleByOwnerSingleFacet(
             ? await prisma.type.findMany({ where: { id: { in: typeIds } }, select: { id: true, name: true } })
             : [];
 
-        const nameMap = new Map(types.map((t) => [t.id, t.name]));
         const counts = new Map<string, number>();
         for (const r of rows) {
           counts.set(r.type as string, r._count);

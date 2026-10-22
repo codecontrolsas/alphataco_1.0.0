@@ -33,7 +33,7 @@ vi.mock('@/shared/utils/cache-invalidation', () => ({ invalidateCacheTags: vi.fn
 
 /** El mail no se envía: lo que importa es el enlace que lleva, así que se captura. */
 const sentInvitations: Array<{ to: string; url: string }> = [];
-vi.mock('@/shared/lib/mail', () => ({
+vi.mock('@/shared/lib/mail/templates/auth', () => ({
   sendInvitationEmail: vi.fn(async (params: { to: string; url: string }) => {
     sentInvitations.push({ to: params.to, url: params.url });
     return true;

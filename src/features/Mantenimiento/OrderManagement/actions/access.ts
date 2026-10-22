@@ -1,10 +1,13 @@
 import 'server-only';
 
-import type { Prisma } from '@/generated/prisma/client';
 import { isMaintenanceOrderStatus, nextMaintenanceOrderStatuses } from '@/features/Mantenimiento/lib/order-status';
 import { lockMaintenanceOrder } from '@/features/Mantenimiento/shared/order-lock';
 import { OrderTransitionError } from '@/features/Mantenimiento/shared/order-transition';
-import { checkMultiplePermissionsServer, checkPermissionServer } from '@/features/Permissions/actionsServer';
+import {
+  checkMultiplePermissionsServer,
+  checkPermissionServer,
+} from '@/features/Permissions/actions/permissions.server';
+import type { Prisma } from '@/generated/prisma/client';
 
 /**
  * Permisos de servidor de la gestión de órdenes del taller.
@@ -66,18 +69,6 @@ export async function requireOrderManagementReadAccess(): Promise<void> {
 }
 
 /**
- * Número de orden: lo dispara la aprobación de entrada a taller (tabs de pedidos) además de la
- * gestión. Alcanza `update` en cualquiera de ellas.
- */
-const ORDER_NUMBER_TABS = [
-  'gestion_ordenes',
-  'ordenes_mantenimiento',
-  'pedidos_pendientes',
-  'pedidos_confirmados',
-  'maintenance_orders',
-] as const;
-
-/**
  * Estado terminal: la máquina de `lib/order-status.ts` no admite ninguna salida
  * (`completed`, `rejected`). Un estado desconocido no se considera terminal.
  */
@@ -100,6 +91,7 @@ export async function lockEditableOrder(tx: Prisma.TransactionClient, orderId: s
 
 /** Convierte los rechazos esperados en `{ ok: false, message }`; el resto se relanza. */
 export function toFailure(error: unknown): { ok: false; message: string } {
-  if (error instanceof OrderManagementError || error instanceof OrderTransitionError) return { ok: false, message: error.message };
+  if (error instanceof OrderManagementError || error instanceof OrderTransitionError)
+    return { ok: false, message: error.message };
   throw error;
 }

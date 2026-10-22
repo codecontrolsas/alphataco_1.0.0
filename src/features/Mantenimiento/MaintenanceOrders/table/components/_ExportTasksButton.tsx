@@ -19,7 +19,7 @@ import {
   WORK_ORDER_ITEM_STATUS_LABELS,
   type WorkOrderItemStatus,
 } from '@/features/Mantenimiento/shared/work-order-types';
-import type { DataTableSearchParams } from '@/shared/components/common/DataTable';
+import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { exportToExcel, type ExcelColumn } from '@/shared/lib/excel-export';

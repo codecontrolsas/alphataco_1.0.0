@@ -1,5 +1,5 @@
 import { Skeleton } from '@/components/ui/skeleton';
-import { ViewManagerServer } from '@/features/TabsManager';
+import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
 import { Suspense } from 'react';
 import DiagramFormUpdatedWrapper from './DiagramFormUpdatedWrapper';
 import DiagramMassive from './DiagramMassive';

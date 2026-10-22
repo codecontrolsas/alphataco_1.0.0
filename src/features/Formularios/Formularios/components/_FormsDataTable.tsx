@@ -1,19 +1,25 @@
 'use client';
 
+import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
 import {
-  DataTable,
-  type DataTableExportConfig,
-  type DataTableFacetedFilterConfig,
-  type DataTableSearchParams,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+  createFacetFilters,
+  dateRangeFilter,
+  enumFilterOptions,
+  textFilter,
+} from '@/shared/components/common/DataTable/facet-filters';
+import type {
+  DataTableExportConfig,
+  DataTableFacetedFilterConfig,
+  DataTableSearchParams,
+} from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { formSourceLabels } from '@/shared/utils/mappers';
 import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, CircleOff, XCircle } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { CheckCircle2, XCircle } from 'lucide-react';
+import { useCallback, useMemo } from 'react';
 import {
   getAllFormsForExport,
   getFormsPaginated,
@@ -41,32 +47,24 @@ const DEFAULT_VISIBLE_FILTERS = ['is_active', 'source', 'created_at'];
 
 const SOURCES = ['checklist_template', 'custom_form'] as const;
 
-const EMPTY_FACET: FacetResult = { options: [], counts: new Map() };
+const facets = createFacetFilters(getFormsSingleFacet);
 
-// ─── fetchFacet lazy por columna (estables: viven fuera del componente) ───────
-async function fetchIsActiveFacet(params: DataTableSearchParams): Promise<FacetResult> {
-  const result = await getFormsSingleFacet('is_active', params);
-  if (!result) return EMPTY_FACET;
-  return {
-    options: [
+const facetedFilters: DataTableFacetedFilterConfig[] = [
+  facets.fixed(
+    'is_active',
+    'Estado',
+    [
       { value: 'true', label: 'Activo', icon: CheckCircle2 },
       { value: 'false', label: 'Inactivo', icon: XCircle },
-      ...(result.counts.has(NULL_FILTER_VALUE)
-        ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-        : []),
     ],
-    counts: result.counts,
-  };
-}
-
-async function fetchSourceFacet(params: DataTableSearchParams): Promise<FacetResult> {
-  const result = await getFormsSingleFacet('source', params);
-  if (!result) return EMPTY_FACET;
-  return {
-    options: SOURCES.map((value) => ({ value, label: formSourceLabels[value], icon: formSourceIcons[value] })),
-    counts: result.counts,
-  };
-}
+    { label: 'Sin asignar' }
+  ),
+  facets.fixed('source', 'Tipo', enumFilterOptions(SOURCES, formSourceLabels, formSourceIcons)),
+  textFilter('name', 'Nombre', 'Filtrar por nombre...'),
+  textFilter('description', 'Descripción', 'Filtrar por descripción...'),
+  textFilter('code', 'Código', 'Filtrar por código...'),
+  dateRangeFilter('created_at', 'Fecha de creación'),
+];
 
 // ============================================================================
 // CLIENT COMPONENT
@@ -81,18 +79,18 @@ export function _FormsDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
-  // Helper de permisos desde el map serializable del servidor (sin re-fetch en el cliente)
-  const permissions = useMemo(
-    () => ({
-      hasPermission: (module: string, tab: string, action: string) =>
-        permissionsMap[`${module}:${tab}:${action}`] === true,
-    }),
-    [permissionsMap]
-  );
+  const permissions = usePermissionChecker(permissionsMap);
 
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
   // Client-side mode: filtros, orden y paginación sin re-renderizar la página
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-  const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getFormsPaginated(params), []);
 
   // La unión de las dos fuentes se arma en memoria con tope por fuente: si los filtros dejan más filas que
@@ -103,36 +101,6 @@ export function _FormsDataTable({
     staleTime: 30 * 1000,
   });
   const isTruncated = coverage != null && coverage.shown < coverage.total;
-
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((col) => [col, false]));
-    return { ...defaults, ...initialColumnVisibility };
-  }, [initialColumnVisibility]);
-
-  const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
-    () => [
-      { columnId: 'is_active', title: 'Estado', fetchFacet: fetchIsActiveFacet },
-      { columnId: 'source', title: 'Tipo', fetchFacet: fetchSourceFacet },
-      { columnId: 'name', title: 'Nombre', type: 'text' as const, placeholder: 'Filtrar por nombre...' },
-      {
-        columnId: 'description',
-        title: 'Descripción',
-        type: 'text' as const,
-        placeholder: 'Filtrar por descripción...',
-      },
-      { columnId: 'code', title: 'Código', type: 'text' as const, placeholder: 'Filtrar por código...' },
-      { columnId: 'created_at', title: 'Fecha de creación', type: 'dateRange' as const },
-    ],
-    []
-  );
-
-  // Filtros visibles por defecto — máximo 3 (las preferencias guardadas tienen prioridad)
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    return Object.fromEntries(facetedFilters.map((f) => [f.columnId, DEFAULT_VISIBLE_FILTERS.includes(f.columnId)]));
-  }, [initialFilterVisibility, facetedFilters]);
 
   const columns = useMemo(() => getColumns(permissions), [permissions]);
 
@@ -174,17 +142,10 @@ export function _FormsDataTable({
         columns={columns}
         data={data}
         totalRows={totalRows}
-        searchParams={searchParams}
+        {...tableProps}
         queryFn={tableQueryFn}
         queryKey={['forms-list']}
-        onStateChange={handleStateChange}
         searchPlaceholder="Buscar formularios por nombre, descripción o código..."
-        facetedFilters={facetedFilters}
-        initialColumnVisibility={mergedColumnVisibility}
-        initialFilterVisibility={mergedFilterVisibility}
-        tableId={tableId}
-        paramNamespace={tableId}
-        showFilterToggle={true}
         emptyMessage="No hay formularios registrados"
         data-testid="forms-table"
         exportConfig={exportConfig}

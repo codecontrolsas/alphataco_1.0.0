@@ -3,20 +3,16 @@
 import { Logger } from '@/lib/logger';
 import { NULL_FILTER_VALUE, parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { prisma } from '@/shared/lib/prisma';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { ExportTooLargeError, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
-import { runFacet, toFacetMap, withoutOwnFilter, type FacetConfig } from '@/shared/lib/table-facets';
+import { prisma } from '@/shared/lib/prisma';
 import { employeeLabel, vehicleLabel } from '@/shared/lib/resource-labels';
+import { runFacet, toFacetMap, withoutOwnFilter, type FacetConfig } from '@/shared/lib/table-facets';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { SHARED_ROW_FACETS } from '../../lib/row-facets';
 import { mapCertificationRow } from '../lib/map-row';
-import {
-  buildOrderBy,
-  buildWhereClause,
-  CERTIFICATION_ROW_SELECT,
-  MAX_PAGE_SIZE,
-} from '../lib/row-query';
+import { CERTIFICATION_ROW_SELECT, MAX_PAGE_SIZE, buildOrderBy, buildWhereClause } from '../lib/row-query';
 
 const logger = new Logger('features/Operaciones/Certificacion/queries');
 
@@ -67,7 +63,7 @@ export type CertificationRow = Awaited<ReturnType<typeof getCertificationRowsPag
 
 /**
  * Líneas del tablero para el Excel: respeta los filtros activos y el orden por defecto, sin paginar.
- * Se trae por tandas y con tope (`EXPORT_MAX_ROWS`, ver `Operaciones/lib/export-batches.ts`).
+ * Se trae por tandas y con tope (`EXPORT_MAX_ROWS`, ver `shared/lib/export-batches.ts`).
  *
  * Devuelve `ExportResult` en vez de lanzar cuando se supera el tope: Next enmascara el mensaje de un error
  * lanzado desde una server action en producción y el usuario no vería "acote la exportación".
@@ -85,8 +81,7 @@ export async function getCertificationRowsForExport(
       listIds: (take) => prisma.dailyreportrows.findMany({ where, orderBy, select: { id: true }, take }),
       fetchByIds: (ids) =>
         prisma.dailyreportrows.findMany({ where: { id: { in: ids } }, select: CERTIFICATION_ROW_SELECT }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} líneas con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('líneas'),
     });
     return { ok: true, data: rows.map(mapCertificationRow) };
   } catch (error) {
@@ -102,92 +97,9 @@ export async function getCertificationRowsForExport(
 
 type FacetWhere = ReturnType<typeof buildWhereClause>;
 
-/** Facetas de una sola columna, resueltas por el motor genérico `runFacet` (`Operaciones/lib/facets`). */
+/** Facetas de una sola columna, resueltas por el motor genérico `runFacet` (`shared/lib/table-facets`). */
 const FACET_CONFIG: Record<string, FacetConfig<FacetWhere>> = {
-  status: {
-    kind: 'direct',
-    group: async (where) =>
-      (await prisma.dailyreportrows.groupBy({ by: ['status'], where, _count: true })).map((r) => ({
-        key: r.status,
-        count: r._count,
-      })),
-  },
-  type_service: {
-    kind: 'direct',
-    group: async (where) =>
-      (await prisma.dailyreportrows.groupBy({ by: ['type_service'], where, _count: true })).map((r) => ({
-        key: r.type_service,
-        count: r._count,
-      })),
-  },
-  working_day: {
-    kind: 'direct',
-    group: async (where) =>
-      (await prisma.dailyreportrows.groupBy({ by: ['working_day'], where, _count: true })).map((r) => ({
-        key: r.working_day,
-        count: r._count,
-      })),
-  },
-  customer: {
-    kind: 'lookup',
-    group: async (where) =>
-      (await prisma.dailyreportrows.groupBy({ by: ['customer_id'], where, _count: true })).map((r) => ({
-        key: r.customer_id,
-        count: r._count,
-      })),
-    lookup: async (ids) => {
-      const rows = await prisma.customers.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
-      return new Map(rows.map((c) => [c.id, { value: c.id, label: c.name }]));
-    },
-  },
-  service: {
-    kind: 'lookup',
-    group: async (where) =>
-      (await prisma.dailyreportrows.groupBy({ by: ['service_id'], where, _count: true })).map((r) => ({
-        key: r.service_id,
-        count: r._count,
-      })),
-    lookup: async (ids) => {
-      const rows = await prisma.customer_services.findMany({
-        where: { id: { in: ids } },
-        select: { id: true, service_name: true },
-      });
-      return new Map(rows.map((s) => [s.id, { value: s.id, label: s.service_name ?? s.id }]));
-    },
-  },
-  item: {
-    kind: 'lookup',
-    group: async (where) =>
-      (await prisma.dailyreportrows.groupBy({ by: ['item_id'], where, _count: true })).map((r) => ({
-        key: r.item_id,
-        count: r._count,
-      })),
-    lookup: async (ids) => {
-      const rows = await prisma.service_items.findMany({
-        where: { id: { in: ids } },
-        select: { id: true, item_name: true },
-      });
-      return new Map(rows.map((i) => [i.id, { value: i.id, label: i.item_name ?? i.id }]));
-    },
-  },
-  // sector_service_id → service_sectors → sectors (la opción es el sector real)
-  sector: {
-    kind: 'lookup',
-    group: async (where) =>
-      (await prisma.dailyreportrows.groupBy({ by: ['sector_service_id'], where, _count: true })).map((r) => ({
-        key: r.sector_service_id,
-        count: r._count,
-      })),
-    lookup: async (ids) => {
-      const rows = await prisma.service_sectors.findMany({
-        where: { id: { in: ids } },
-        select: { id: true, sectors: { select: { id: true, name: true } } },
-      });
-      return new Map(
-        rows.flatMap((ss) => (ss.sectors ? [[ss.id, { value: ss.sectors.id, label: ss.sectors.name }] as const] : []))
-      );
-    },
-  },
+  ...SHARED_ROW_FACETS,
   // areas_service_id → service_areas → areas_cliente (la celda muestra `nombre`: la opción también)
   area: {
     kind: 'lookup',

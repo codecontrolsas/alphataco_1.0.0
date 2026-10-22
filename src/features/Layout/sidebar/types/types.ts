@@ -1,13 +1,6 @@
 import type { fetchUserCompanies } from '@/shared/actions/company.actions';
 import type { CurrentUserProfile } from '../actions/user-profile';
 
-export interface AccessibleModule {
-  module_id: string;
-  module_slug: string;
-  module_name: string;
-  module_icon: string;
-}
-
 /**
  * Empresa tal como la devuelve la capa de datos (Prisma), no el tipo generado de Supabase:
  * `database.types` es lo último que queda de PostgREST y no tiene por qué tipar la UI.

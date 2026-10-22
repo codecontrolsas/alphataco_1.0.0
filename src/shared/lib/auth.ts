@@ -10,7 +10,7 @@ import {
   consumeAttempt,
   type RateLimitRule,
 } from '@/shared/lib/login-rate-limit';
-import { sendPasswordResetEmail } from '@/shared/lib/mail';
+import { sendPasswordResetEmail } from '@/shared/lib/mail/templates/auth';
 import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
 import { resolveDefaultCompanyId } from '@/shared/lib/session-claims';
 import { betterAuth } from 'better-auth';

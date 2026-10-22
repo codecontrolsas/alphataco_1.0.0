@@ -4,16 +4,16 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatMoney } from '@/features/Warehouses/lib/format';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
-import { StackedCell } from '@/shared/components/common/StackedCell';
+import { matchesId, titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { StackedCell } from '@/shared/components/common/StackedCell';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Eye, FileText, Smartphone, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { CHECK_KIND_LABELS, CHECK_STATUS_LABELS, type CheckStatus } from '../../lib/check-transitions';
+import { formatDay } from '../../lib/dates';
 import { CHECK_STATUS_UI, DEPOSIT_WARNING_UI, TONE_TO_BADGE } from '../../lib/status-presentation';
 import type { CheckListItem } from './actions.server';
-import { formatDay } from '../../lib/dates';
 
 export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['drawer_cuit', 'issue_date', 'bank', 'kind'];
 
@@ -57,8 +57,7 @@ export function getColumns(): ColumnDef<CheckListItem>[] {
     {
       id: 'number',
       accessorFn: (row) => row.number,
-      meta: { title: 'Número' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Número" />,
+      ...titled('Número'),
       cell: ({ row }) => (
         <Link href={`/dashboard/treasury/checks/${row.original.id}`} className="text-brand-ink block hover:underline">
           <StackedCell primary={row.original.number} secondary={row.original.bank} mono maxWidthClass="max-w-[200px]" />
@@ -68,15 +67,13 @@ export function getColumns(): ColumnDef<CheckListItem>[] {
     {
       id: 'bank',
       accessorFn: (row) => row.bank,
-      meta: { title: 'Banco' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Banco" />,
+      ...titled('Banco'),
       cell: ({ row }) => <span>{row.original.bank}</span>,
     },
     {
       id: 'kind',
       accessorFn: (row) => CHECK_KIND_LABELS[row.kind],
-      meta: { title: 'Tipo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
+      ...titled('Tipo'),
       cell: ({ row }) => {
         const Icon = checkKindIcons[row.original.kind];
         return (
@@ -86,56 +83,49 @@ export function getColumns(): ColumnDef<CheckListItem>[] {
           </Badge>
         );
       },
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.kind),
+      filterFn: matchesId((r) => r.kind),
     },
     {
       id: 'drawer_name',
       accessorFn: (row) => row.drawerName,
-      meta: { title: 'Librador' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Librador" />,
+      ...titled('Librador'),
       cell: ({ row }) => <StackedCell primary={row.original.drawerName} secondary={row.original.drawerCuit} />,
     },
     {
       id: 'drawer_cuit',
       accessorFn: (row) => row.drawerCuit,
-      meta: { title: 'CUIT' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="CUIT" />,
+      ...titled('CUIT'),
       cell: ({ row }) => <span className="font-mono text-sm tabular-nums">{row.original.drawerCuit}</span>,
     },
     {
       id: 'customer',
       accessorFn: (row) => row.customer.name,
-      meta: { title: 'Cliente' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Cliente" />,
+      ...titled('Cliente'),
       cell: ({ row }) => <span className="font-medium">{row.original.customer.name}</span>,
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.customer.id),
+      filterFn: matchesId((r) => r.customer.id),
     },
     {
       id: 'amount',
       accessorFn: (row) => row.amount,
-      meta: { title: 'Importe' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Importe" />,
+      ...titled('Importe'),
       cell: ({ row }) => <span className="font-medium tabular-nums">{formatMoney(row.original.amount)}</span>,
     },
     {
       id: 'issue_date',
       accessorFn: (row) => row.issueDate,
-      meta: { title: 'Emisión' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Emisión" />,
+      ...titled('Emisión'),
       cell: ({ row }) => <span className="tabular-nums">{formatValueDate(row.original.issueDate)}</span>,
     },
     {
       id: 'payment_date',
       accessorFn: (row) => row.paymentDate,
-      meta: { title: 'Fecha de pago' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de pago" />,
+      ...titled('Fecha de pago'),
       cell: ({ row }) => <span className="tabular-nums">{formatValueDate(row.original.paymentDate)}</span>,
     },
     {
       id: 'deposit_deadline',
       accessorFn: (row) => row.depositDeadline,
-      meta: { title: 'Vence para depositar' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Vence para depositar" />,
+      ...titled('Vence para depositar'),
       cell: ({ row }) => {
         const warning = row.original.depositWarning;
         const ui = warning === 'OK' ? null : DEPOSIT_WARNING_UI[warning];
@@ -155,8 +145,7 @@ export function getColumns(): ColumnDef<CheckListItem>[] {
     {
       id: 'status',
       accessorFn: (row) => CHECK_STATUS_LABELS[row.status],
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const ui = CHECK_STATUS_UI[row.original.status];
         return (
@@ -166,23 +155,25 @@ export function getColumns(): ColumnDef<CheckListItem>[] {
           </Badge>
         );
       },
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.status),
+      filterFn: matchesId((r) => r.status),
     },
     {
       id: 'portfolio',
       accessorFn: (row) => row.portfolio.name,
-      meta: { title: 'Cartera' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Cartera" />,
+      ...titled('Cartera'),
       cell: ({ row }) => <span>{row.original.portfolio.name}</span>,
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.portfolio.id),
+      filterFn: matchesId((r) => r.portfolio.id),
     },
     {
       id: 'destination',
       accessorFn: (row) => row.destination,
-      meta: { title: 'Destino' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Destino" />,
+      ...titled('Destino'),
       cell: ({ row }) =>
-        row.original.destination ? <span>{row.original.destination}</span> : <span className="text-muted-foreground">—</span>,
+        row.original.destination ? (
+          <span>{row.original.destination}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
       filterFn: (row, _id, value: string[]) => {
         const id = row.original.destinationId;
         if (id == null) return value.includes(NULL_FILTER_VALUE);

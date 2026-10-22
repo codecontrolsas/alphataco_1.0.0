@@ -1,18 +1,14 @@
 'use server';
 
+import { buildClothingCatalogWhere, isActiveFacet } from '@/features/Clothing/lib/catalog-list-query';
+import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
-import {
-  buildDateRangeFiltersWhere,
-  buildFiltersWhere,
-  buildSearchWhere,
-  buildTextFiltersWhere,
-  NULL_FILTER_VALUE,
-  parseSearchParams,
-  stateToPrismaParams,
-} from '@/shared/components/common/DataTable/helpers';
+import { parseSearchParams, stateToPrismaParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
+import { createCrossWhere } from '@/shared/lib/table-facets';
+import { resolveSorts, type SingleFacetResult } from '@/shared/lib/table-list-query';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('Clothing/ClothingBrands/actions.server');
 
@@ -29,33 +25,16 @@ const TEXT_FILTER_COLUMNS = ['name'];
 /** Columnas de rango de fecha */
 const DATE_RANGE_COLUMNS = ['created_at'];
 
-/** Columnas manejadas manualmente (excluir de buildFiltersWhere) */
-const MANUALLY_HANDLED_COLUMNS = [
-  ...TEXT_FILTER_COLUMNS,
-  ...DATE_RANGE_COLUMNS.flatMap((c) => [`${c}_from`, `${c}_to`]),
-];
-
 // ============================================================================
 // HELPERS INTERNOS
 // ============================================================================
 
-/** Construye el WHERE clause compartido entre paginated, export y facets. */
 function buildWhereClause(companyId: string, state: ReturnType<typeof parseSearchParams>) {
-  const searchWhere = buildSearchWhere(state.search, ['name']);
-
-  const filtersWhere = buildFiltersWhere(state.filters, {}, { exclude: MANUALLY_HANDLED_COLUMNS });
-
-  const textFiltersWhere = buildTextFiltersWhere(state.filters, TEXT_FILTER_COLUMNS);
-
-  const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, DATE_RANGE_COLUMNS);
-
-  return {
-    company_id: companyId,
-    ...searchWhere,
-    ...filtersWhere,
-    ...textFiltersWhere,
-    ...dateFiltersWhere,
-  };
+  return buildClothingCatalogWhere(companyId, state, {
+    searchColumns: ['name'],
+    textColumns: TEXT_FILTER_COLUMNS,
+    dateColumns: DATE_RANGE_COLUMNS,
+  });
 }
 
 // ============================================================================
@@ -70,16 +49,12 @@ export async function getClothingBrandsPaginated(searchParams: DataTableSearchPa
     const { skip, take } = stateToPrismaParams(state);
     const where = buildWhereClause(companyId, state);
 
-    // Safe orderBy: multi-sort, solo campos válidos
-    const resolvedSorts: Record<string, unknown>[] = [];
-    for (const s of state.sorting) {
-      if (VALID_SORT_FIELDS.has(s.id)) {
-        const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-        resolvedSorts.push({ [s.id]: dir });
-      }
-    }
-    // Inactivos al final, luego por nombre
-    const safeOrderBy = [{ is_active: 'desc' as const }, ...resolvedSorts, { name: 'asc' as const }];
+    // Safe orderBy: multi-sort, solo campos válidos. Inactivos al final, luego por nombre
+    const safeOrderBy = [
+      { is_active: 'desc' as const },
+      ...resolveSorts<Prisma.clothing_brandsOrderByWithRelationInput>(state.sorting, VALID_SORT_FIELDS),
+      { name: 'asc' as const },
+    ];
 
     const [data, total] = await Promise.all([
       prisma.clothing_brands.findMany({
@@ -146,50 +121,22 @@ export async function getAllClothingBrandsForExport(searchParams: DataTableSearc
 export async function getClothingBrandsSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
-): Promise<{
-  counts: Map<string, number>;
-  resolvedOptions?: Array<{ id: string; name: string | null }>;
-} | null> {
+): Promise<SingleFacetResult> {
   const companyId = await getActiveCompanyId();
-  const baseWhere = { company_id: companyId };
-
-  let parsedState: ReturnType<typeof parseSearchParams> | null = null;
-  if (searchParams && Object.keys(searchParams).length > 0) {
-    parsedState = parseSearchParams(searchParams);
-  }
-
-  const hasActiveFilters = parsedState && (Object.keys(parsedState.filters).length > 0 || parsedState.search);
-
-  function crossWhere(excludeColumn: string) {
-    if (!parsedState || !hasActiveFilters) return baseWhere;
-    const modified = { ...parsedState, filters: { ...parsedState.filters } };
-    delete modified.filters[excludeColumn];
-    delete modified.filters[`${excludeColumn}_from`];
-    delete modified.filters[`${excludeColumn}_to`];
-    return buildWhereClause(companyId, modified);
-  }
-
-  function toFacetMap(rows: { key: string | null | undefined; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      if (key == null) {
-        map.set(NULL_FILTER_VALUE, (map.get(NULL_FILTER_VALUE) ?? 0) + count);
-      } else {
-        map.set(String(key), count);
-      }
-    }
-    return map;
-  }
+  const crossWhere = createCrossWhere<Prisma.clothing_brandsWhereInput>(
+    searchParams,
+    { company_id: companyId },
+    (state) => buildWhereClause(companyId, state)
+  );
 
   try {
-    const where = crossWhere(columnId);
-
-    // ── Boolean: is_active ──
     if (columnId === 'is_active') {
-      const rows = await prisma.clothing_brands.groupBy({ by: ['is_active'], where, _count: true });
-      return {
-        counts: toFacetMap(rows.map((r) => ({ key: String(r.is_active), count: r._count }))),
-      };
+      const rows = await prisma.clothing_brands.groupBy({
+        by: ['is_active'],
+        where: crossWhere('is_active'),
+        _count: true,
+      });
+      return isActiveFacet(rows);
     }
 
     logger.warn('Facet column not recognized for clothing brands', { data: { columnId } });

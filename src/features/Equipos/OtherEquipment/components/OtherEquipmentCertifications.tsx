@@ -23,7 +23,7 @@ import {
   getOtherEquipmentCertifications,
   type OtherEquipmentCertification,
 } from '@/features/Equipos/OtherEquipment/actions/actionsServer';
-import { PermissionGuard } from '@/features/Permissions';
+import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { Logger } from '@/lib/logger';
 import { argentinaDate, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { zodResolver } from '@hookform/resolvers/zod';

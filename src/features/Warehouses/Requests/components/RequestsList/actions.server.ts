@@ -1,6 +1,8 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { getPurchaseRequestsForMaterialRequest } from '@/features/Purchases/actions/request-queries.server';
+import { destinationSearchConditions } from '@/features/Warehouses/lib/destination-search';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -9,15 +11,25 @@ import {
   buildSearchWhere,
   buildTextFiltersWhere,
   NULL_FILTER_VALUE,
-  parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
-import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
-import { getPurchaseRequestsForMaterialRequest } from '@/features/Purchases/actions/request-queries.server';
+import { profileFacetOptions } from '@/shared/lib/table-facet-lookups';
+import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
+import { dateRangeKeys } from '@/shared/lib/table-filters';
+import {
+  isOneOf,
+  isUuidOrNull,
+  parseValidatedListState,
+  profileDisplayName,
+  resolveSorts,
+  type SingleFacetResult,
+} from '@/shared/lib/table-list-query';
+import { isUuid } from '@/shared/lib/uuid';
+import { getMaterialRequestDetail } from '../../../actions/requests.server';
 import { DESTINATION_SELECT, destinationLabel } from '../../../lib/labels';
 import {
   requestScopeConditions,
@@ -26,7 +38,6 @@ import {
 } from '../../../lib/request-scope';
 import { MATERIAL_REQUEST_STATUSES } from '../../../lib/request-state-machine';
 import { STOCK_DESTINATION_TYPES } from '../../../schemas/stock-movement';
-import { getMaterialRequestDetail } from '../../../actions/requests.server';
 
 const logger = new Logger('features/Warehouses/Requests/RequestsList');
 
@@ -76,17 +87,13 @@ const ALLOWED_FILTER_KEYS: ReadonlySet<string> = new Set([
 /** Tope de filas del export. */
 const EXPORT_MAX_ROWS = 10_000;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /** Valores validos por columna con lista cerrada (un valor ajeno haria fallar a Prisma). */
 const VALID_VALUES: Record<string, (value: string) => boolean> = {
-  status: (v) => (MATERIAL_REQUEST_STATUSES as readonly string[]).includes(v),
+  status: isOneOf(MATERIAL_REQUEST_STATUSES),
   destination_type: (v) => v === NULL_FILTER_VALUE || (STOCK_DESTINATION_TYPES as readonly string[]).includes(v),
-  requester: (v) => UUID_RE.test(v),
-  decider: (v) => v === NULL_FILTER_VALUE || UUID_RE.test(v),
+  requester: isUuid,
+  decider: isUuidOrNull,
 };
-
-const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
 
 // ============================================================================
 // HELPERS INTERNOS
@@ -94,15 +101,7 @@ const contains = (value: string) => ({ contains: value, mode: 'insensitive' as c
 
 /** Estado de la tabla ya parseado, con solo los filtros permitidos y sus valores validos. */
 function parseListState(searchParams: DataTableSearchParams) {
-  const state = sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
-  for (const [column, isValid] of Object.entries(VALID_VALUES)) {
-    const values = state.filters[column];
-    if (!values) continue;
-    const valid = values.filter(isValid);
-    if (valid.length > 0) state.filters[column] = valid;
-    else delete state.filters[column];
-  }
-  return state;
+  return parseValidatedListState(searchParams, ALLOWED_FILTER_KEYS, VALID_VALUES);
 }
 
 /** WHERE compartido entre paginated, export y facets (incluye la visibilidad). */
@@ -120,13 +119,7 @@ function buildWhereClause(scope: Scope, state: FilterState): RequestWhere {
   const dest = f[DESTINATION_FILTER]?.[0]?.trim();
   if (dest) {
     and.push({
-      OR: [
-        { employee: { OR: [{ file: contains(dest) }, { lastname: contains(dest) }, { firstname: contains(dest) }] } },
-        { vehicle: { OR: [{ domain: contains(dest) }, { intern_number: contains(dest) }] } },
-        { other_equipment: { intern_number: contains(dest) } },
-        { maintenance_order: { order_number: contains(dest) } },
-        { customer: { name: contains(dest) } },
-      ],
+      OR: destinationSearchConditions(dest),
     });
   }
 
@@ -168,8 +161,6 @@ async function getProgressByRequest(requestIds: string[]): Promise<Map<string, {
   return new Map(rows.map((r) => [r.request_id, { done: r.done, total: r.total }]));
 }
 
-const profileName = (p: { fullname: string | null; email: string | null }) => p.fullname ?? p.email ?? '-';
-
 async function shape(rows: Prisma.material_requestsGetPayload<{ select: typeof REQUEST_SELECT }>[]) {
   const progress = await getProgressByRequest(rows.map((r) => r.id));
   return rows.map((r) => ({
@@ -180,8 +171,8 @@ async function shape(rows: Prisma.material_requestsGetPayload<{ select: typeof R
     notes: r.notes,
     destination_type: r.destination_type,
     destination: destinationLabel(r),
-    requester: { id: r.requester.id, name: profileName(r.requester) },
-    decider: r.decider ? { id: r.decider.id, name: profileName(r.decider) } : null,
+    requester: { id: r.requester.id, name: profileDisplayName(r.requester) },
+    decider: r.decider ? { id: r.decider.id, name: profileDisplayName(r.decider) } : null,
     progress: progress.get(r.id) ?? { done: 0, total: 0 },
   }));
 }
@@ -199,14 +190,11 @@ export async function getRequestsPaginated(searchParams: DataTableSearchParams) 
     const { skip, take } = stateToPrismaParams(state);
     const where = buildWhereClause(scope, state);
 
-    const resolvedSorts: RequestOrderBy[] = [];
-    for (const s of state.sorting) {
-      const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-      const fkMapper = FK_SORT_MAP[s.id];
-      if (fkMapper) resolvedSorts.push(fkMapper(dir));
-      else if (VALID_SORT_FIELDS.has(s.id)) resolvedSorts.push({ [s.id]: dir });
-    }
-    const orderBy: RequestOrderBy[] = [...resolvedSorts, { created_at: 'desc' }, { number: 'desc' }];
+    const orderBy: RequestOrderBy[] = [
+      ...resolveSorts<RequestOrderBy>(state.sorting, VALID_SORT_FIELDS, FK_SORT_MAP),
+      { created_at: 'desc' },
+      { number: 'desc' },
+    ];
 
     const [rows, total] = await Promise.all([
       prisma.material_requests.findMany({ where, orderBy, skip, take, select: REQUEST_SELECT }),
@@ -242,18 +230,12 @@ export async function getAllRequestsForExport(
           where: { id: { in: ids }, company_id: scope.companyId },
           select: REQUEST_SELECT,
         }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} pedidos con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('pedidos'),
     });
     return { ok: true, data: await shape(rows) };
   } catch (error) {
     logger.error('Error al exportar pedidos', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar la lista de pedidos. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de pedidos. Intente nuevamente.');
   }
 }
 
@@ -264,7 +246,7 @@ export async function getAllRequestsForExport(
 export async function getRequestSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
-): Promise<{ counts: Map<string, number>; resolvedOptions?: Array<{ id: string; name: string | null }> } | null> {
+): Promise<SingleFacetResult> {
   const scope = await resolveScope();
   if (!scope) return null;
 
@@ -272,29 +254,7 @@ export async function getRequestSingleFacet(
 
   /** WHERE con todos los filtros activos MENOS el de la columna que se esta abriendo. */
   function crossWhere(excludeColumn: string): RequestWhere {
-    const base: FilterState = parsed ?? parseListState({});
-    const filters = { ...base.filters };
-    delete filters[excludeColumn];
-    return buildWhereClause(scope as Scope, { ...base, filters });
-  }
-
-  function toFacetMap(rows: { key: string | null; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      const k = key == null ? NULL_FILTER_VALUE : key;
-      map.set(k, (map.get(k) ?? 0) + count);
-    }
-    return map;
-  }
-
-  async function resolveProfiles(ids: string[]) {
-    if (ids.length === 0) return [];
-    const profiles = await prisma.profile.findMany({
-      where: { id: { in: ids } },
-      select: { id: true, fullname: true, email: true },
-      orderBy: { fullname: 'asc' },
-    });
-    return profiles.map((p) => ({ id: p.id, name: profileName(p) }));
+    return buildWhereClause(scope as Scope, withoutOwnFilter(parsed ?? parseListState({}), excludeColumn));
   }
 
   try {
@@ -314,7 +274,7 @@ export async function getRequestSingleFacet(
       const rows = await prisma.material_requests.groupBy({ by: ['requested_by'], where, _count: true });
       return {
         counts: toFacetMap(rows.map((r) => ({ key: r.requested_by, count: r._count }))),
-        resolvedOptions: await resolveProfiles(rows.map((r) => r.requested_by)),
+        resolvedOptions: await profileFacetOptions(rows.map((r) => r.requested_by)),
       };
     }
 
@@ -323,7 +283,7 @@ export async function getRequestSingleFacet(
       const ids = rows.map((r) => r.decided_by).filter((id): id is string => id != null);
       return {
         counts: toFacetMap(rows.map((r) => ({ key: r.decided_by, count: r._count }))),
-        resolvedOptions: await resolveProfiles(ids),
+        resolvedOptions: await profileFacetOptions(ids),
       };
     }
 
@@ -357,11 +317,11 @@ export async function getRequestsAttention(): Promise<{ pendingApproval: number;
     ]);
     const base = requestScopeConditions(scope);
     const [pendingApproval, toDeliver] = await Promise.all([
-      canApprove
-        ? prisma.material_requests.count({ where: { AND: [...base, { status: 'PENDING_APPROVAL' }] } })
-        : 0,
+      canApprove ? prisma.material_requests.count({ where: { AND: [...base, { status: 'PENDING_APPROVAL' }] } }) : 0,
       canDeliver
-        ? prisma.material_requests.count({ where: { AND: [...base, { status: { in: [...AWAITING_DELIVERY_STATUSES] } }] } })
+        ? prisma.material_requests.count({
+            where: { AND: [...base, { status: { in: [...AWAITING_DELIVERY_STATUSES] } }] },
+          })
         : 0,
     ]);
     return { pendingApproval, toDeliver };

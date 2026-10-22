@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Logger } from '@/lib/logger';
-import { sendErrorReport } from '@/lib/utils/sendErrorReport';
+import { useSendErrorReport } from '@/shared/hooks/useSendErrorReport';
 import { AlertTriangle, Copy, Loader2, Mail, RefreshCw } from 'lucide-react';
 import posthog from 'posthog-js';
 import { useEffect, useState } from 'react';
@@ -13,7 +13,7 @@ const logger = new Logger('AppError');
 
 export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   const [errorDetails, setErrorDetails] = useState<string>('');
-  const [sending, setSending] = useState(false);
+  const { sending, sendErrorByEmail } = useSendErrorReport(error, 'Aplicacion');
 
   useEffect(() => {
     logger.error('Application Error', { data: { message: error.message, digest: error.digest } });
@@ -38,30 +38,6 @@ URL: ${window.location.href}
   const copyErrorToClipboard = () => {
     navigator.clipboard.writeText(errorDetails);
     toast.success('Error copiado al portapapeles');
-  };
-
-  const sendErrorByEmail = async () => {
-    setSending(true);
-    try {
-      const result = await sendErrorReport({
-        message: error.message,
-        stack: error.stack,
-        digest: error.digest,
-        url: window.location.href,
-        userAgent: navigator.userAgent,
-        source: 'Aplicacion',
-      });
-
-      if (result.success) {
-        toast.success('Reporte enviado al equipo de desarrollo');
-      } else {
-        toast.error('No se pudo enviar el reporte', { description: result.error });
-      }
-    } catch {
-      toast.error('Error al enviar el reporte');
-    } finally {
-      setSending(false);
-    }
   };
 
   return (

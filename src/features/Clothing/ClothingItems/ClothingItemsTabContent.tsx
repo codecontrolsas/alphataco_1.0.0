@@ -1,6 +1,6 @@
+import { ClothingTableSkeleton } from '@/features/Clothing/fallback/ClothingTableSkeleton';
 import { Suspense } from 'react';
 import ClothingItemsList from './ClothingItemsList/ClothingItemsList';
-import { ClothingItemsTableSkeleton } from './ClothingItemsList/fallback/ClothingItemsTableSkeleton';
 
 // ============================================================================
 // TYPES
@@ -17,7 +17,7 @@ interface ClothingItemsTabContentProps {
 
 export default async function ClothingItemsTabContent({ searchParams, permissions }: ClothingItemsTabContentProps) {
   return (
-    <Suspense fallback={<ClothingItemsTableSkeleton />}>
+    <Suspense fallback={<ClothingTableSkeleton rows={8} withAction />}>
       <ClothingItemsList searchParams={searchParams} permissionsMap={permissions} />
     </Suspense>
   );

@@ -21,14 +21,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, ShieldCheck, X } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import {
-  assignRoleToUserServer,
-  getAllRolesWithCounts,
-  removeRoleFromUserServer,
-  type AllRolePermissionsMap,
-  type RoleWithCount,
-  type UserRolesData,
-} from '../../actions.server';
+import { assignRoleToUserServer, getAllRolesWithCounts, removeRoleFromUserServer, type AllRolePermissionsMap, type RoleWithCount, type UserRolesData } from '@/features/Permissions/actions/roles.server';
 import { equipmentTypeVisibilityKeys } from '../../hooks/useEquipmentTypeVisibility';
 import { userPermissionKeys } from '../../hooks/useUserPermissionEditor';
 

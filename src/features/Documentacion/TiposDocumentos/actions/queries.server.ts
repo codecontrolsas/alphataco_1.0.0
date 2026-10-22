@@ -15,7 +15,7 @@ import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import type { ComplianceType } from '../../shared/compliance';
+import type { ComplianceType } from '@/features/Documentacion/shared/compliance/types';
 import { parseDocumentConditions, typeAppliesTo } from '../../shared/compliance/applicability';
 import { loadComplianceDataset } from '../../shared/compliance/server/dataset.server';
 import {

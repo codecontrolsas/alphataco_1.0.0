@@ -3,8 +3,7 @@
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
+import { SelectFormField } from '@/shared/components/common/form-fields';
 import { useQuery } from '@tanstack/react-query';
 import { useFormContext } from 'react-hook-form';
 import {
@@ -22,6 +21,11 @@ import {
 } from '../../actions.server';
 import type { EmployeeWorkDataValues } from '../../schemas/employee-schema';
 import { AptitudesCard, ContractorsCard } from './employee-work-data-cards';
+
+const COST_TYPE_OPTIONS = [
+  { id: 'Directo', name: 'Directo' },
+  { id: 'Indirecto', name: 'Indirecto' },
+];
 
 /**
  * Datos laborales del legajo. Toma el form del contexto para poder reutilizarse tal cual
@@ -210,101 +214,36 @@ export function EmployeeWorkDataForm() {
         />
 
         {/* Sector */}
-        <FormField
+        <SelectFormField
           control={form.control}
           name="hierarchical_position"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Sector *</FormLabel>
-              {loadingHierarchy ? (
-                <Skeleton className="h-9 w-full" />
-              ) : (
-                <Select onValueChange={handleHierarchicalPositionChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccione el sector" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {hierarchicalPositions.map((position) => (
-                      <SelectItem key={position.id} value={position.id}>
-                        {position.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              <FormMessage />
-            </FormItem>
-          )}
+          label="Sector *"
+          placeholder="Seleccione el sector"
+          options={hierarchicalPositions}
+          loading={loadingHierarchy}
+          onValueChange={handleHierarchicalPositionChange}
         />
 
         {/* Puesto en la empresa */}
-        <FormField
+        <SelectFormField
           control={form.control}
           name="company_position"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Puesto en la empresa *</FormLabel>
-              {loadingCompanyPositions ? (
-                <Skeleton className="h-9 w-full" />
-              ) : (
-                <Select
-                  onValueChange={handleCompanyPositionChange}
-                  defaultValue={field.value}
-                  disabled={!selectedHierarchicalPosition}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={
-                          !selectedHierarchicalPosition ? 'Primero seleccione un sector' : 'Seleccione el puesto'
-                        }
-                      />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {filteredCompanyPositions.map((position) => (
-                      <SelectItem key={position.id} value={position.id}>
-                        {position.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              <FormMessage />
-            </FormItem>
-          )}
+          label="Puesto en la empresa *"
+          placeholder={!selectedHierarchicalPosition ? 'Primero seleccione un sector' : 'Seleccione el puesto'}
+          options={filteredCompanyPositions}
+          loading={loadingCompanyPositions}
+          disabled={!selectedHierarchicalPosition}
+          onValueChange={handleCompanyPositionChange}
         />
 
         {/* Diagrama de trabajo */}
-        <FormField
+        <SelectFormField
           control={form.control}
           name="workflow_diagram"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Diagrama de trabajo *</FormLabel>
-              {loadingWorkDiagrams ? (
-                <Skeleton className="h-9 w-full" />
-              ) : (
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccione el diagrama" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {workDiagrams.map((diagram) => (
-                      <SelectItem key={diagram.id} value={diagram.id}>
-                        {diagram.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              <FormMessage />
-            </FormItem>
-          )}
+          label="Diagrama de trabajo *"
+          placeholder="Seleccione el diagrama"
+          options={workDiagrams}
+          loading={loadingWorkDiagrams}
         />
 
         {/* Horas normales */}
@@ -323,33 +262,13 @@ export function EmployeeWorkDataForm() {
         />
 
         {/* Tipo de contrato */}
-        <FormField
+        <SelectFormField
           control={form.control}
           name="type_of_contract"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Tipo de contrato</FormLabel>
-              {loadingContractTypes ? (
-                <Skeleton className="h-9 w-full" />
-              ) : (
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccione tipo de contrato" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {contractTypes.map((contract) => (
-                      <SelectItem key={contract.id} value={contract.id}>
-                        {contract.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              <FormMessage />
-            </FormItem>
-          )}
+          label="Tipo de contrato"
+          placeholder="Seleccione tipo de contrato"
+          options={contractTypes}
+          loading={loadingContractTypes}
         />
 
         {/* Fecha de ingreso */}
@@ -368,150 +287,56 @@ export function EmployeeWorkDataForm() {
         />
 
         {/* Gremio */}
-        <FormField
+        <SelectFormField
           control={form.control}
           name="guild_id"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Gremio</FormLabel>
-              {loadingGuilds ? (
-                <Skeleton className="h-9 w-full" />
-              ) : (
-                <Select onValueChange={handleGuildChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccione el gremio" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {guilds.map((guild) => (
-                      <SelectItem key={guild.id} value={guild.id}>
-                        {guild.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              <FormMessage />
-            </FormItem>
-          )}
+          label="Gremio"
+          placeholder="Seleccione el gremio"
+          options={guilds}
+          loading={loadingGuilds}
+          onValueChange={handleGuildChange}
         />
 
         {/* Convenio */}
-        <FormField
+        <SelectFormField
           control={form.control}
           name="covenants_id"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Convenio</FormLabel>
-              {loadingCovenants ? (
-                <Skeleton className="h-9 w-full" />
-              ) : (
-                <Select onValueChange={handleCovenantChange} defaultValue={field.value} disabled={!selectedGuildId}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={!selectedGuildId ? 'Primero seleccione un gremio' : 'Seleccione el convenio'}
-                      />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {filteredCovenants.map((covenant) => (
-                      <SelectItem key={covenant.id} value={covenant.id}>
-                        {covenant.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              <FormMessage />
-            </FormItem>
-          )}
+          label="Convenio"
+          placeholder={!selectedGuildId ? 'Primero seleccione un gremio' : 'Seleccione el convenio'}
+          options={filteredCovenants}
+          loading={loadingCovenants}
+          disabled={!selectedGuildId}
+          onValueChange={handleCovenantChange}
         />
 
         {/* Categoría */}
-        <FormField
+        <SelectFormField
           control={form.control}
           name="category_id"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Categoría</FormLabel>
-              {loadingCategories ? (
-                <Skeleton className="h-9 w-full" />
-              ) : (
-                <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!selectedCovenantId}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={!selectedCovenantId ? 'Primero seleccione un convenio' : 'Seleccione la categoría'}
-                      />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {filteredCategories.map((category) => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              <FormMessage />
-            </FormItem>
-          )}
+          label="Categoría"
+          placeholder={!selectedCovenantId ? 'Primero seleccione un convenio' : 'Seleccione la categoría'}
+          options={filteredCategories}
+          loading={loadingCategories}
+          disabled={!selectedCovenantId}
         />
 
         {/* Centro de costo */}
-        <FormField
+        <SelectFormField
           control={form.control}
           name="cost_center_id"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Centro de costo</FormLabel>
-              {loadingCostCenters ? (
-                <Skeleton className="h-9 w-full" />
-              ) : (
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccione el centro de costo" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {costCenters.map((center) => (
-                      <SelectItem key={center.id} value={center.id}>
-                        {center.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              <FormMessage />
-            </FormItem>
-          )}
+          label="Centro de costo"
+          placeholder="Seleccione el centro de costo"
+          options={costCenters}
+          loading={loadingCostCenters}
         />
 
         {/* Tipo de costo */}
-        <FormField
+        <SelectFormField
           control={form.control}
           name="cost_type"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Tipo de costo</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccione tipo de costo" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="Directo">Directo</SelectItem>
-                  <SelectItem value="Indirecto">Indirecto</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
+          label="Tipo de costo"
+          placeholder="Seleccione tipo de costo"
+          options={COST_TYPE_OPTIONS}
         />
 
         {/* Sectores de Taller (multiselect) */}

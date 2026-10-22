@@ -1,17 +1,18 @@
 'use server';
 
 import {
-  VEHICLE_EXPORT_MAX_ROWS,
   createVehicleListQuery,
   resolveVehicleOrderBy,
-  vehicleExportTooLargeMessage,
+  VEHICLE_EXPORT_MAX_ROWS,
   withNumericPrice,
 } from '@/features/Equipos/lib/vehicle-list-shared';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { exportRowLimitMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import type { SingleFacetResult } from '@/shared/lib/table-list-query';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { VEHICLE_SELECT } from '@/shared/prisma-selects/vehicle-select';
@@ -173,7 +174,7 @@ export async function getAllVehiclesForExport(
     });
 
     if (rawData.length > VEHICLE_EXPORT_MAX_ROWS) {
-      return { ok: false, message: vehicleExportTooLargeMessage('vehículos') };
+      return { ok: false, message: exportRowLimitMessage(VEHICLE_EXPORT_MAX_ROWS, 'vehículos') };
     }
 
     return { ok: true, data: rawData.map(withNumericPrice) };
@@ -195,10 +196,7 @@ export async function getAllVehiclesForExport(
 export async function getVehicleSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
-): Promise<{
-  counts: Map<string, number>;
-  resolvedOptions?: { value: string; label: string }[];
-} | null> {
+): Promise<SingleFacetResult> {
   if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) return null;
 
   const companyId = await getActiveCompanyId();

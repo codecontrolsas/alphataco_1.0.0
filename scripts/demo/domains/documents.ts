@@ -10,7 +10,7 @@
  */
 import type { Prisma } from '../../../src/generated/prisma/client.ts';
 import { DOC_TYPES, type DocTypeDef } from '../data/catalog.ts';
-import { addPdf, type Ctx } from '../lib/ctx.ts';
+import { addPdf, insertMany, type Ctx } from '../lib/ctx.ts';
 import { toDmy } from '../lib/dates.ts';
 import { demoId } from '../lib/ids.ts';
 import { DOCUMENT_BUCKET, companyFolder, pathSegment } from '../lib/paths.ts';
@@ -218,11 +218,6 @@ async function monthlyDocs(
   return rows;
 }
 
-/** createMany en lotes para no armar una sentencia gigante. */
-async function insertInBatches<T>(rows: T[], insert: (batch: T[]) => Promise<unknown>, size = 500): Promise<void> {
-  for (let i = 0; i < rows.length; i += size) await insert(rows.slice(i, i + size));
-}
-
 export async function seedDocuments(ctx: Ctx, employees: DemoEmployee[], vehicles: DemoVehicle[]): Promise<void> {
   const { tx, cal, faker } = ctx;
   // Obligatorios que aplican a cada recurso (los tipos del demo no tienen condiciones ni `down_document`).
@@ -254,7 +249,7 @@ export async function seedDocuments(ctx: Ctx, employees: DemoEmployee[], vehicle
       });
     }
   }
-  await insertInBatches(empRows, (data) => tx.documents_employees.createMany({ data }));
+  await insertMany(empRows, (data) => tx.documents_employees.createMany({ data }), 500);
 
   const empMonthly: MonthlyDocRow[] = [];
   for (const emp of employees.filter((e) => e.active && e.admission < -60)) {
@@ -277,7 +272,7 @@ export async function seedDocuments(ctx: Ctx, employees: DemoEmployee[], vehicle
       ))
     );
   }
-  await insertInBatches(empMonthly, (data) => tx.documents_employees.createMany({ data }));
+  await insertMany(empMonthly, (data) => tx.documents_employees.createMany({ data }), 500);
 
   // ── Equipos ─────────────────────────────────────────────────────────────────
   const eqRows: Prisma.documents_equipmentCreateManyInput[] = [];
@@ -304,7 +299,7 @@ export async function seedDocuments(ctx: Ctx, employees: DemoEmployee[], vehicle
       });
     }
   }
-  await insertInBatches(eqRows, (data) => tx.documents_equipment.createMany({ data }));
+  await insertMany(eqRows, (data) => tx.documents_equipment.createMany({ data }), 500);
 
   const eqMonthly: MonthlyDocRow[] = [];
   for (const veh of vehicles.filter((v) => v.active)) {
@@ -319,7 +314,7 @@ export async function seedDocuments(ctx: Ctx, employees: DemoEmployee[], vehicle
       ))
     );
   }
-  await insertInBatches(eqMonthly, (data) => tx.documents_equipment.createMany({ data }));
+  await insertMany(eqMonthly, (data) => tx.documents_equipment.createMany({ data }), 500);
 
   // ── Empresa ─────────────────────────────────────────────────────────────────
   const companyDocs: Array<{

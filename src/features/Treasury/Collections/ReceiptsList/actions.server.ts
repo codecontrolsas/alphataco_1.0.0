@@ -1,16 +1,17 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { customer_receipt_status } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
-import { formatCuitText } from '@/shared/utils/cuit-text';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { formatCuitText } from '@/shared/utils/cuit-text';
+import { isoDay } from '../../lib/dates';
 import {
   buildTreasuryDateRangeWhere,
   facetWhere,
@@ -20,7 +21,6 @@ import {
   safePaging,
   textValue,
 } from '../../lib/filter-values';
-import { isoDay } from '../../lib/dates';
 
 const logger = new Logger('features/Treasury/Collections/ReceiptsList');
 
@@ -193,7 +193,9 @@ export async function getReceiptsPaginated(searchParams: DataTableSearchParams) 
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllReceiptsForExport(searchParams: DataTableSearchParams): Promise<ExportResult<ReceiptListItem[]>> {
+export async function getAllReceiptsForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<ReceiptListItem[]>> {
   const companyId = await resolveCompanyId();
   if (!companyId) return { ok: false, message: 'No tiene permiso para exportar los recibos.' };
 
@@ -210,18 +212,16 @@ export async function getAllReceiptsForExport(searchParams: DataTableSearchParam
       maxRows: EXPORT_LIMIT,
       listIds: (take) => prisma.customer_receipts.findMany({ where, orderBy, select: { id: true }, take }),
       fetchByIds: (ids) =>
-        prisma.customer_receipts.findMany({ where: { id: { in: ids }, company_id: companyId }, select: RECEIPT_SELECT }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} recibos con los filtros actuales. Acote la exportación con filtros.`,
+        prisma.customer_receipts.findMany({
+          where: { id: { in: ids }, company_id: companyId },
+          select: RECEIPT_SELECT,
+        }),
+      tooLargeMessage: tooManyRowsMessage('recibos'),
     });
     return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar recibos de cobranza', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
-    return {
-      ok: false,
-      message: error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar la lista de recibos. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de recibos. Intente nuevamente.');
   }
 }
 

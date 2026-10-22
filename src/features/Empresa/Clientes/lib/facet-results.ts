@@ -1,4 +1,4 @@
-import type { FacetResult } from '@/shared/components/common/DataTable';
+import type { FacetResult } from '@/shared/components/common/DataTable/types';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { LucideIcon } from 'lucide-react';
 import { Check, CircleOff, X } from 'lucide-react';

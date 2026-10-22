@@ -1,13 +1,8 @@
 'use client';
 
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import {
-  DataTable,
-  type DataTableExportConfig,
-  type DataTableFacetedFilterConfig,
-  type DataTableSearchParams,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { type DataTableExportConfig, type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
 import { useQuery } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
 import { Loader2 } from 'lucide-react';

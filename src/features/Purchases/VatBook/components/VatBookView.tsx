@@ -2,30 +2,20 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatMoney } from '@/features/Warehouses/lib/format';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
 import { exportToExcel, type ExcelColumn } from '@/shared/lib/excel-export';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { FileDown, FileSpreadsheet } from 'lucide-react';
-import moment from 'moment';
 import 'moment/locale/es';
 import Link from 'next/link';
-import { useState } from 'react';
 import { toast } from 'sonner';
 import { exportPurchasesVatBookTxt, getPurchasesVatBook, type PurchasesVatBook } from '../../actions/vat-book.server';
+import { PeriodSelect, dayLabel, periodLabel, usePeriodParam, useZipDownload } from '../../components/period-report';
 import { PURCHASES_QUERY_KEYS } from '../../lib/query-keys';
 
 const logger = new Logger('Purchases/VatBookView');
-
-const periodLabel = (period: string) => {
-  const text = moment(period, 'YYYY-MM').locale('es').format('MMMM YYYY');
-  return text.charAt(0).toUpperCase() + text.slice(1);
-};
-
-const day = (value: string) => moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY');
 
 /**
  * Libro IVA Compras (spec Compras etapa 4 §3.6): comprobantes vigentes del periodo, NC restando,
@@ -33,7 +23,7 @@ const day = (value: string) => moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY');
  * los TXT del Libro IVA Digital.
  */
 export function VatBookView({ initialBook, periods }: { initialBook: PurchasesVatBook; periods: string[] }) {
-  const [period, setPeriod] = useState(initialBook.period);
+  const { period, changePeriod } = usePeriodParam(initialBook.period);
 
   const { data: book, isFetching } = useQuery({
     queryKey: [...PURCHASES_QUERY_KEYS.vatBook, period],
@@ -42,29 +32,11 @@ export function VatBookView({ initialBook, periods }: { initialBook: PurchasesVa
     staleTime: 60 * 1000,
   });
 
-  const changePeriod = (next: string) => {
-    setPeriod(next);
-    const url = new URL(window.location.href);
-    url.searchParams.set('period', next);
-    window.history.replaceState(null, '', url.toString());
-  };
-
-  const txt = useMutation({
-    mutationFn: async () => unwrapAction(await exportPurchasesVatBookTxt(period)),
-    onSuccess: ({ fileName, base64 }) => {
-      const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
-      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/zip' }));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      link.click();
-      URL.revokeObjectURL(url);
-    },
-    onError: (error) => {
-      logger.error('Error al descargar el TXT del Libro IVA', { data: { error } });
-      toast.error(error instanceof Error ? error.message : 'No se pudieron generar los archivos');
-    },
-  });
+  const txt = useZipDownload(
+    () => exportPurchasesVatBookTxt(period),
+    logger,
+    'Error al descargar el TXT del Libro IVA'
+  );
 
   const excel = useMutation({
     mutationFn: async (current: PurchasesVatBook) => {
@@ -86,7 +58,7 @@ export function VatBookView({ initialBook, periods }: { initialBook: PurchasesVa
       const vatCells = (vat: Record<number, string>) =>
         Object.fromEntries(current.vatRates.map((rate) => [`vat${rate.id}`, vat[rate.id] ?? '0.00']));
       const rows: Record<string, unknown>[] = current.rows.map((row) => ({
-        date: day(row.issueDate),
+        date: dayLabel(row.issueDate),
         label: row.label,
         supplier: row.supplier.name,
         cuit: row.supplier.cuit,
@@ -140,18 +112,7 @@ export function VatBookView({ initialBook, periods }: { initialBook: PurchasesVa
           </CardDescription>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={period} onValueChange={changePeriod}>
-            <SelectTrigger className="w-44" aria-label="Período">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {periods.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {periodLabel(p)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <PeriodSelect value={period} periods={periods} onChange={changePeriod} />
           <Button
             type="button"
             size="sm"
@@ -206,7 +167,7 @@ export function VatBookView({ initialBook, periods }: { initialBook: PurchasesVa
               <TableBody>
                 {rows.map((row) => (
                   <TableRow key={row.id}>
-                    <TableCell className="whitespace-nowrap">{day(row.issueDate)}</TableCell>
+                    <TableCell className="whitespace-nowrap">{dayLabel(row.issueDate)}</TableCell>
                     <TableCell className="whitespace-nowrap">
                       <Link href={`/dashboard/purchases/invoices/${row.id}`} className="underline">
                         {row.label}

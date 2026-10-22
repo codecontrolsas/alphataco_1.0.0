@@ -1,6 +1,6 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { ORDER_DETAIL_VIEW_TABS, hasMaintenancePermission } from '@/features/Mantenimiento/shared/permissions.server';
 import { withMaintenanceActor } from '@/features/Mantenimiento/shared/maintenance-actor';

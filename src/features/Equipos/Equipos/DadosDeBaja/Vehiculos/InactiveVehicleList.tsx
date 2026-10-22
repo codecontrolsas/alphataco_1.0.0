@@ -11,14 +11,13 @@ import { _InactiveVehicleDataTable } from './components/_InactiveVehicleDataTabl
 
 interface InactiveVehicleListProps {
   searchParams: Record<string, string | string[] | undefined>;
-  permissions: Record<string, boolean>;
 }
 
 // ============================================================================
 // SERVER COMPONENT
 // ============================================================================
 
-export async function InactiveVehicleList({ searchParams, permissions }: InactiveVehicleListProps) {
+export async function InactiveVehicleList({ searchParams }: InactiveVehicleListProps) {
   const tableId = 'inactive-vehicles';
 
   // Extraer solo los params de esta tabla (quitar prefijo)

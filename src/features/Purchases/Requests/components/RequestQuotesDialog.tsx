@@ -3,13 +3,20 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Textarea } from '@/components/ui/textarea';
 import { SearchCombobox } from '@/features/Warehouses/components/SearchCombobox';
 import { formatQuantity } from '@/features/Warehouses/lib/format';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { TextareaFormField } from '@/shared/components/common/form-fields';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { FileQuestion, X } from 'lucide-react';
@@ -19,9 +26,9 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { requestQuotes } from '../../actions/quotes.server';
-import type { PurchaseRequestDetail } from '../../lib/request-query-types';
-import { searchSupplierOptions } from '../../actions/suppliers.server';
+import { searchSupplierOptions } from '../../actions/supplier-queries.server';
 import { invalidatePurchases } from '../../lib/invalidate';
+import type { PurchaseRequestDetail } from '../../lib/request-query-types';
 import { requestQuotesSchema, type RequestQuotesValues } from '../../schemas/quotes';
 
 const logger = new Logger('Purchases/RequestQuotesDialog');
@@ -33,8 +40,12 @@ const hasRemaining = (line: Line) => Number(line.remaining) > 0;
 function defaults(lines: readonly Line[]): { values: RequestQuotesValues; suppliers: Record<string, string> } {
   const pending = lines.filter(hasRemaining);
   const suppliers: Record<string, string> = {};
-  for (const line of pending) if (line.suggestedSupplier) suppliers[line.suggestedSupplier.id] = line.suggestedSupplier.name;
-  return { values: { requestLineIds: pending.map((line) => line.id), supplierIds: Object.keys(suppliers), notes: '' }, suppliers };
+  for (const line of pending)
+    if (line.suggestedSupplier) suppliers[line.suggestedSupplier.id] = line.suggestedSupplier.name;
+  return {
+    values: { requestLineIds: pending.map((line) => line.id), supplierIds: Object.keys(suppliers), notes: '' },
+    suppliers,
+  };
 }
 
 /**
@@ -88,7 +99,8 @@ export function RequestQuotesDialog({ request }: { request: PurchaseRequestDetai
         <DialogHeader>
           <DialogTitle>Pedir cotización de {request.number}</DialogTitle>
           <DialogDescription>
-            Se crea un pedido por proveedor, en borrador, con lo que falta de cada línea. Después se envía desde cada pedido.
+            Se crea un pedido por proveedor, en borrador, con lo que falta de cada línea. Después se envía desde cada
+            pedido.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -109,14 +121,18 @@ export function RequestQuotesDialog({ request }: { request: PurchaseRequestDetai
                             disabled={disabled}
                             checked={field.value.includes(line.id)}
                             onCheckedChange={(checked) =>
-                              field.onChange(checked ? [...field.value, line.id] : field.value.filter((id) => id !== line.id))
+                              field.onChange(
+                                checked ? [...field.value, line.id] : field.value.filter((id) => id !== line.id)
+                              )
                             }
                           />
                           <span className={disabled ? 'text-muted-foreground' : undefined}>
-                            {i + 1}. {line.material ? `[${line.material.code}] ${line.material.name}` : line.description}
+                            {i + 1}.{' '}
+                            {line.material ? `[${line.material.code}] ${line.material.name}` : line.description}
                             <span className="text-muted-foreground tabular-nums">
                               {' '}
-                              · {disabled ? 'ya pedida completa' : `falta ${formatQuantity(line.remaining)} ${line.unit}`}
+                              ·{' '}
+                              {disabled ? 'ya pedida completa' : `falta ${formatQuantity(line.remaining)} ${line.unit}`}
                             </span>
                           </span>
                         </label>
@@ -167,18 +183,12 @@ export function RequestQuotesDialog({ request }: { request: PurchaseRequestDetai
                 </FormItem>
               )}
             />
-            <FormField
+            <TextareaFormField
               control={form.control}
               name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Observaciones para el proveedor (opcional)</FormLabel>
-                  <FormControl>
-                    <Textarea rows={2} placeholder="Van en el PDF del pedido" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Observaciones para el proveedor (opcional)"
+              rows={2}
+              placeholder="Van en el PDF del pedido"
             />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={mutation.isPending}>

@@ -1,9 +1,8 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { activeStatusColumn, createdAtColumn, editActionColumn } from '@/features/Empresa/components/catalog-columns';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import { ActiveStatusBadge, BooleanBadge } from '../../components/ActiveStatusBadge';
 import type { DiagramTypeListItem } from './actions.server';
@@ -36,16 +35,14 @@ export function getColumns(
     // ── Nombre ──────────────────────────────────────────────────────────────
     {
       accessorKey: 'name',
-      meta: { title: 'Nombre' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
+      ...titled('Nombre'),
       cell: ({ row }) => <span className="font-medium">{row.original.name || '-'}</span>,
     },
 
     // ── Descripción corta ─────────────────────────────────────────────────
     {
       accessorKey: 'short_description',
-      meta: { title: 'Descripción corta' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción corta" />,
+      ...titled('Descripción corta'),
       cell: ({ row }) => (
         <span className="text-muted-foreground text-sm font-mono">{row.original.short_description || '-'}</span>
       ),
@@ -71,8 +68,7 @@ export function getColumns(
     // ── Laboralmente activo (work_active — booleano nullable) ─────────────
     {
       accessorKey: 'work_active',
-      meta: { title: 'Lab. Activa' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Lab. Activa" />,
+      ...titled('Lab. Activa'),
       cell: ({ row }) => {
         const val = row.original.work_active;
         if (val === null || val === undefined) return <ActiveStatusBadge value={null} />;
@@ -88,8 +84,7 @@ export function getColumns(
     // ── Computa ausentismo ─────────────────────────────────────────────────
     {
       accessorKey: 'computes_absenteeism',
-      meta: { title: 'Computa ausentismo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Computa ausentismo" />,
+      ...titled('Computa ausentismo'),
       cell: ({ row }) => <BooleanBadge value={row.original.computes_absenteeism} trueLabel="Sí" falseLabel="No" />,
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id);
@@ -98,50 +93,16 @@ export function getColumns(
     },
 
     // ── Estado (is_active — booleano NOT NULL) ────────────────────────────
-    {
-      accessorKey: 'is_active',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-      cell: ({ row }) => <ActiveStatusBadge value={row.original.is_active} />,
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id);
-        return value.includes(String(val));
-      },
-    },
+    activeStatusColumn<DiagramTypeListItem>(),
 
     // ── Fecha de creación (oculta por defecto) ─────────────────────────────
-    {
-      accessorKey: 'created_at',
-      meta: { title: 'Fecha de creación' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de creación" />,
-      cell: ({ row }) => {
-        const val = row.original.created_at;
-        return <span>{val ? formatArgentinaDay(val) : '-'}</span>;
-      },
-    },
+    createdAtColumn<DiagramTypeListItem>(),
 
     // ── Acciones ──────────────────────────────────────────────────────────
-    ...(canUpdate
-      ? ([
-          {
-            id: 'actions',
-            meta: { title: '', excludeFromExport: true },
-            enableSorting: false,
-            enableHiding: false,
-            cell: ({ row }) => (
-              <Button
-                size="sm"
-                variant="link"
-                type="button"
-                className="h-auto p-0"
-                aria-label={`Editar ${row.original.name ?? 'tipo de novedad'}`}
-                onClick={() => onEdit(row.original)}
-              >
-                Editar
-              </Button>
-            ),
-          },
-        ] as ColumnDef<DiagramTypeListItem>[])
-      : []),
+    ...editActionColumn<DiagramTypeListItem>({
+      canEdit: canUpdate,
+      onEdit,
+      getName: (item) => item.name ?? 'tipo de novedad',
+    }),
   ];
 }

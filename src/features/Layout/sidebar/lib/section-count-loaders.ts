@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { getDeviationsSectionCount, getGestionSectionCount } from '@/features/Mantenimiento/lib/section-counts';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import * as purchases from '@/features/Purchases/lib/section-counts';
 import * as treasury from '@/features/Treasury/lib/section-counts';
 import * as warehouses from '@/features/Warehouses/lib/section-counts';

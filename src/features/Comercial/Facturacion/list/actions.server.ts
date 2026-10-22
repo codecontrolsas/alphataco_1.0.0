@@ -1,6 +1,6 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -11,7 +11,7 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { toDateOnly } from '@/shared/lib/date-only';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { runFacet, withoutOwnFilter, type FacetConfig } from '@/shared/lib/table-facets';
@@ -295,17 +295,13 @@ export async function getInvoicesForExport(
       listIds: (take) => prisma.invoices.findMany({ where, orderBy, select: { id: true }, take }),
       fetchByIds: (ids) =>
         prisma.invoices.findMany({ where: { id: { in: ids }, company_id: companyId }, select: INVOICE_SELECT }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} comprobantes con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('comprobantes'),
     });
 
     return { ok: true, data: rows.map((r) => mapInvoice(r, canViewPrices)) };
   } catch (error) {
     logger.error('Error al exportar comprobantes', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
-    const message =
-      error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar el listado. Intente nuevamente.';
-    return { ok: false, message };
+    return exportFailure(error, 'No se pudo exportar el listado. Intente nuevamente.');
   }
 }
 

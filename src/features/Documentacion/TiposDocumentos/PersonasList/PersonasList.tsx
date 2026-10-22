@@ -6,7 +6,7 @@ import type { DataTableSearchParams } from '@/shared/components/common/DataTable
 import { getDocTypeMetrics } from '../actions/metrics.server';
 import { getPersonasDocTypesPaginated } from '../actions/queries.server';
 import { DocTypeMetricsSection } from '../components/DocTypeMetricsSection';
-import _PersonasDataTable from './_PersonasDataTable';
+import _DocTypesDataTable from '../components/_DocTypesDataTable';
 
 // ============================================================================
 // CONSTANTS
@@ -45,7 +45,8 @@ export async function PersonasList({ searchParams, permissionsMap }: PersonasLis
 
       <Card>
         <CardContent className="pt-6">
-          <_PersonasDataTable
+          <_DocTypesDataTable
+            applies={document_applies.Persona}
             data={data}
             totalRows={total}
             searchParams={tableParams}

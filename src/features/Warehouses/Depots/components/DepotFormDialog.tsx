@@ -1,10 +1,18 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Form, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Logger } from '@/lib/logger';
+import { InputFormField } from '@/shared/components/common/form-fields';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
@@ -12,10 +20,14 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { createWarehouse, searchDepotManagerOptions, updateWarehouse, type DepotForEdit } from '../../actions/catalog.server';
+import {
+  createWarehouse,
+  searchDepotManagerOptions,
+  updateWarehouse,
+  type DepotForEdit,
+} from '../../actions/depots.server';
 import { SearchCombobox } from '../../components/SearchCombobox';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
-import { unwrapAction } from '../../lib/unwrap-action';
 import { warehouseFormSchema, type WarehouseFormValues } from '../../schemas/catalog';
 
 const logger = new Logger('Warehouses/DepotFormDialog');
@@ -86,52 +98,18 @@ export function DepotFormDialog({ depot = null, open: controlledOpen, onOpenChan
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{isEdit ? `Editar ${depot.name}` : 'Nuevo depósito'}</DialogTitle>
-            <DialogDescription>Un lugar físico donde se guarda material: base, obra, pañol, camioneta.</DialogDescription>
+            <DialogDescription>
+              Un lugar físico donde se guarda material: base, obra, pañol, camioneta.
+            </DialogDescription>
           </DialogHeader>
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit((values) => mutation.mutate(values))} className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-[8rem_1fr]">
-                <FormField
-                  control={form.control}
-                  name="code"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Código</FormLabel>
-                      <FormControl>
-                        <Input placeholder="BASE" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nombre</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Depósito Base Neuquén" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <InputFormField control={form.control} name="code" label="Código" placeholder="BASE" />
+                <InputFormField control={form.control} name="name" label="Nombre" placeholder="Depósito Base Neuquén" />
               </div>
-              <FormField
-                control={form.control}
-                name="address"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Dirección</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Opcional" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <InputFormField control={form.control} name="address" label="Dirección" placeholder="Opcional" />
               <FormField
                 control={form.control}
                 name="managerEmployeeId"

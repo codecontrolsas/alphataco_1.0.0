@@ -2,12 +2,20 @@
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { Logger } from '@/lib/logger';
+import { InputFormField, TextareaFormField } from '@/shared/components/common/form-fields';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
@@ -15,15 +23,10 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import {
-  createMaterial,
-  updateMaterial,
-  type MaterialForEdit,
-  type MaterialFormLookups,
-} from '../../actions/catalog.server';
+import { type MaterialFormLookups } from '../../actions/catalog-settings.server';
+import { createMaterial, updateMaterial, type MaterialForEdit } from '../../actions/materials.server';
 import { TRACKING_TYPE_LABELS } from '../../lib/labels';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
-import { unwrapAction } from '../../lib/unwrap-action';
 import { materialFormSchema, type MaterialFormValues } from '../../schemas/catalog';
 import { MATERIAL_TRACKING_TYPES } from '../../schemas/stock-movement';
 
@@ -53,7 +56,12 @@ interface MaterialFormDialogProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-export function MaterialFormDialog({ lookups, material = null, open: controlledOpen, onOpenChange }: MaterialFormDialogProps) {
+export function MaterialFormDialog({
+  lookups,
+  material = null,
+  open: controlledOpen,
+  onOpenChange,
+}: MaterialFormDialogProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [internalOpen, setInternalOpen] = useState(false);
@@ -114,31 +122,19 @@ export function MaterialFormDialog({ lookups, material = null, open: controlledO
                 </p>
               )}
               <div className="grid gap-4 sm:grid-cols-[10rem_1fr]">
-                <FormField
+                <InputFormField
                   control={form.control}
                   name="code"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Código</FormLabel>
-                      <FormControl>
-                        <Input placeholder="ACE-15W40" readOnly={isManaged} {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Código"
+                  placeholder="ACE-15W40"
+                  readOnly={isManaged}
                 />
-                <FormField
+                <InputFormField
                   control={form.control}
                   name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nombre</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Aceite 15W40" readOnly={isManaged} {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Nombre"
+                  placeholder="Aceite 15W40"
+                  readOnly={isManaged}
                 />
               </div>
 
@@ -177,7 +173,11 @@ export function MaterialFormDialog({ lookups, material = null, open: controlledO
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Unidad de medida</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange} disabled={material?.hasMovements || isManaged}>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        disabled={material?.hasMovements || isManaged}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Elegí una unidad" />
@@ -204,7 +204,11 @@ export function MaterialFormDialog({ lookups, material = null, open: controlledO
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Control de stock</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange} disabled={material?.hasMovements || isManaged}>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        disabled={material?.hasMovements || isManaged}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue />
@@ -243,18 +247,12 @@ export function MaterialFormDialog({ lookups, material = null, open: controlledO
                 />
               </div>
 
-              <FormField
+              <TextareaFormField
                 control={form.control}
                 name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Descripción</FormLabel>
-                    <FormControl>
-                      <Textarea rows={2} placeholder="Opcional" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                label="Descripción"
+                rows={2}
+                placeholder="Opcional"
               />
 
               <FormField
@@ -268,7 +266,8 @@ export function MaterialFormDialog({ lookups, material = null, open: controlledO
                     <div className="space-y-1">
                       <FormLabel>Requiere aprobación</FormLabel>
                       <FormDescription>
-                        Las salidas de este material van a necesitar un pedido aprobado (cuando se habiliten los pedidos).
+                        Las salidas de este material van a necesitar un pedido aprobado (cuando se habiliten los
+                        pedidos).
                       </FormDescription>
                     </div>
                   </FormItem>

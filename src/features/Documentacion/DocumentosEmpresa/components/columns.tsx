@@ -10,7 +10,7 @@ import {
   documentStateIcons as sharedDocumentStateIcons,
 } from '@/features/Documentacion/shared/components/DocumentCells';
 import AddCompanyDocumentForm from '@/features/Empresa/General/Documentacion/components/AddCompanyDocumentForm';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -76,8 +76,7 @@ export function getCompanyDocsColumns(isMonthly: boolean): ColumnDef<CompanyDocL
   const periodColumn: ColumnDef<CompanyDocListItem> = {
     id: 'period',
     accessorKey: 'period',
-    meta: { title: 'Período' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Período" />,
+    ...titled('Período'),
     cell: ({ row }) => <span className="text-sm tabular-nums">{row.original.period ?? '-'}</span>,
     enableSorting: true,
   };
@@ -87,8 +86,7 @@ export function getCompanyDocsColumns(isMonthly: boolean): ColumnDef<CompanyDocL
     {
       id: 'documentType',
       accessorFn: (row) => row.document_types?.name ?? '',
-      meta: { title: 'Documento' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Documento" />,
+      ...titled('Documento'),
       cell: ({ row }) => (
         <DocumentNameCell
           name={row.original.document_types?.name}
@@ -108,8 +106,7 @@ export function getCompanyDocsColumns(isMonthly: boolean): ColumnDef<CompanyDocL
     {
       id: 'state',
       accessorKey: 'state',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => <DocumentStatePill state={row.original.state} />,
       enableSorting: true,
       filterFn: (row, id, value: string[]) => {
@@ -123,8 +120,7 @@ export function getCompanyDocsColumns(isMonthly: boolean): ColumnDef<CompanyDocL
     {
       id: 'validity',
       accessorKey: 'validity',
-      meta: { title: 'Vencimiento' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Vencimiento" />,
+      ...titled('Vencimiento'),
       cell: ({ row }) => (
         <DocumentExpiryCell
           validity={row.original.document_types?.explired ? parseCompanyValidity(row.original.validity) : null}
@@ -139,8 +135,7 @@ export function getCompanyDocsColumns(isMonthly: boolean): ColumnDef<CompanyDocL
     {
       id: 'uploadedBy',
       accessorFn: (row) => row.profile?.fullname ?? '',
-      meta: { title: 'Subido por' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Subido por" />,
+      ...titled('Subido por'),
       cell: ({ row }) => {
         const fullname = row.original.profile?.fullname;
         return <span className="text-sm">{fullname ?? <span className="text-muted-foreground">Pendiente</span>}</span>;
@@ -157,8 +152,7 @@ export function getCompanyDocsColumns(isMonthly: boolean): ColumnDef<CompanyDocL
     {
       id: 'created_at',
       accessorKey: 'created_at',
-      meta: { title: 'Fecha de carga' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de carga" />,
+      ...titled('Fecha de carga'),
       cell: ({ row }) => {
         const date = row.original.created_at;
         return <span className="font-mono tabular-nums">{date ? formatArgentinaDay(date) : '-'}</span>;
@@ -170,8 +164,7 @@ export function getCompanyDocsColumns(isMonthly: boolean): ColumnDef<CompanyDocL
     {
       id: 'mandatory',
       accessorFn: (row) => row.document_types?.mandatory,
-      meta: { title: 'Mandatorio' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Mandatorio" />,
+      ...titled('Mandatorio'),
       cell: ({ row }) => {
         const mandatory = row.original.document_types?.mandatory;
         return <Badge variant={mandatory ? 'destructive' : 'secondary'}>{mandatory ? 'Sí' : 'No'}</Badge>;

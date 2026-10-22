@@ -2,13 +2,13 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { matchesId, titled } from '@/shared/components/common/DataTable/column-helpers';
 import { StackedCell } from '@/shared/components/common/StackedCell';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Eye, HandCoins, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
-import { formatDay } from '../../lib/dates';
 import { formatInCurrency } from '../../lib/currency-format';
+import { formatDay } from '../../lib/dates';
 import type { ReceivableState } from '../../lib/receipt-rules';
 import { RECEIVABLE_STATE_UI, TONE_TO_BADGE } from '../../lib/status-presentation';
 import type { ReceivableListItem } from './actions.server';
@@ -22,7 +22,9 @@ export const receivableStateIcons = Object.fromEntries(
 
 /** Destino de "Ver": el cheque rechazado o la factura de Comercial. */
 function detailHref(item: ReceivableListItem): string {
-  return item.kind === 'CHECK' ? `/dashboard/treasury/checks/${item.id}` : `/dashboard/comercial/facturacion/${item.id}`;
+  return item.kind === 'CHECK'
+    ? `/dashboard/treasury/checks/${item.id}`
+    : `/dashboard/comercial/facturacion/${item.id}`;
 }
 
 /** Fecha valor (YYYY-MM-DD, sin hora): se formatea tal cual para no correr un dia. */
@@ -37,18 +39,19 @@ export function getColumns({ canCollect }: ColumnsOptions): ColumnDef<Receivable
     {
       id: 'customer',
       accessorFn: (row) => row.customer.name,
-      meta: { title: 'Cliente' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Cliente" />,
+      ...titled('Cliente'),
       cell: ({ row }) => <StackedCell primary={row.original.customer.name} secondary={row.original.customer.cuit} />,
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.customer.id),
+      filterFn: matchesId((r) => r.customer.id),
     },
     {
       id: 'voucher',
       accessorFn: (row) => row.voucherLabel,
-      meta: { title: 'Comprobante' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Comprobante" />,
+      ...titled('Comprobante'),
       cell: ({ row }) => (
-        <Link href={detailHref(row.original)} className="text-brand-ink whitespace-nowrap font-mono text-sm hover:underline">
+        <Link
+          href={detailHref(row.original)}
+          className="text-brand-ink whitespace-nowrap font-mono text-sm hover:underline"
+        >
           {row.original.voucherLabel}
         </Link>
       ),
@@ -56,15 +59,13 @@ export function getColumns({ canCollect }: ColumnsOptions): ColumnDef<Receivable
     {
       id: 'issue_date',
       accessorFn: (row) => row.issueDate,
-      meta: { title: 'Fecha' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
+      ...titled('Fecha'),
       cell: ({ row }) => <span className="tabular-nums">{formatValueDate(row.original.issueDate)}</span>,
     },
     {
       id: 'due_date',
       accessorFn: (row) => row.dueDate ?? '',
-      meta: { title: 'Vencimiento' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Vencimiento" />,
+      ...titled('Vencimiento'),
       cell: ({ row }) =>
         row.original.dueDate ? (
           <span className="tabular-nums">{formatValueDate(row.original.dueDate)}</span>
@@ -75,32 +76,32 @@ export function getColumns({ canCollect }: ColumnsOptions): ColumnDef<Receivable
     {
       id: 'currency',
       accessorFn: (row) => row.currency,
-      meta: { title: 'Moneda' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Moneda" />,
+      ...titled('Moneda'),
       cell: ({ row }) => <span>{row.original.currency}</span>,
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.currency),
+      filterFn: matchesId((r) => r.currency),
     },
     {
       id: 'total',
       accessorFn: (row) => row.total,
-      meta: { title: 'Total' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Total" />,
-      cell: ({ row }) => <span className="tabular-nums">{formatInCurrency(row.original.total, row.original.currency)}</span>,
+      ...titled('Total'),
+      cell: ({ row }) => (
+        <span className="tabular-nums">{formatInCurrency(row.original.total, row.original.currency)}</span>
+      ),
     },
     {
       id: 'pending',
       accessorFn: (row) => row.pending,
-      meta: { title: 'Pendiente' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Pendiente" />,
+      ...titled('Pendiente'),
       cell: ({ row }) => (
-        <span className="font-medium tabular-nums">{formatInCurrency(row.original.pending, row.original.currency)}</span>
+        <span className="font-medium tabular-nums">
+          {formatInCurrency(row.original.pending, row.original.currency)}
+        </span>
       ),
     },
     {
       id: 'overdue_days',
       accessorFn: (row) => row.overdueDays,
-      meta: { title: 'Días de atraso' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Días de atraso" />,
+      ...titled('Días de atraso'),
       cell: ({ row }) =>
         row.original.overdueDays > 0 ? (
           <span className="tabular-nums text-destructive">{row.original.overdueDays}</span>
@@ -111,8 +112,7 @@ export function getColumns({ canCollect }: ColumnsOptions): ColumnDef<Receivable
     {
       id: 'state',
       accessorFn: (row) => RECEIVABLE_STATE_UI[row.state].label,
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const ui = RECEIVABLE_STATE_UI[row.original.state];
         const Icon = ui.icon;
@@ -123,7 +123,7 @@ export function getColumns({ canCollect }: ColumnsOptions): ColumnDef<Receivable
           </Badge>
         );
       },
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.state),
+      filterFn: matchesId((r) => r.state),
     },
     {
       id: 'actions',

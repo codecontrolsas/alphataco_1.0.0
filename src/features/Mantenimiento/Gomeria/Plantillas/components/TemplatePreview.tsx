@@ -1,8 +1,8 @@
 'use client';
 
 import { Skeleton } from '@/components/ui/skeleton';
-import type { DiagramAxle } from '@/features/Mantenimiento/Gomeria/shared/TireDiagramRenderer';
 import { describeTemplateLayout, inferTemplateLayout } from '@/features/Mantenimiento/Gomeria/shared/iso/axle-layout';
+import type { DiagramAxle } from '@/features/Mantenimiento/Gomeria/shared/tire-diagram-utils';
 import dynamic from 'next/dynamic';
 import { useMemo } from 'react';
 

@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/shared/components/skeletons/TableSkeleton';
 import { Button } from '@/components/ui/button';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { Plus } from 'lucide-react';
@@ -5,7 +6,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import { SuppliersList } from './SuppliersList/SuppliersList';
-import { SuppliersTableSkeleton } from './SuppliersList/fallback/SuppliersTableSkeleton';
+
 
 /** Proveedores (spec Compras etapa 1 §4). */
 export default async function SuppliersTabContent({
@@ -29,7 +30,7 @@ export default async function SuppliersTabContent({
           </Button>
         </div>
       )}
-      <Suspense fallback={<SuppliersTableSkeleton />}>
+      <Suspense fallback={<TableSkeleton inCard columnCount={7} rowCount={7} />}>
         <SuppliersList searchParams={searchParams} />
       </Suspense>
     </div>

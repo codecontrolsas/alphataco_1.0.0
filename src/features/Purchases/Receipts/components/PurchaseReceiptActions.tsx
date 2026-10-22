@@ -2,7 +2,8 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { Ban } from 'lucide-react';
-import { cancelPurchaseReceipt, type PurchaseReceiptDetail } from '../../actions/receipts.server';
+import { type PurchaseReceiptDetail } from '../../actions/receipt-queries.server';
+import { cancelPurchaseReceipt } from '../../actions/receipts.server';
 import { ConfirmAction } from '../../components/ConfirmAction';
 import { invalidateWarehouseAfterReceipt } from '../lib/invalidate-warehouse';
 

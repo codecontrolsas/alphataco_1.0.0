@@ -43,3 +43,22 @@ export function resolveActiveEntry<T extends ActiveEntryCandidate>(
 
   return { visible, active };
 }
+
+/**
+ * Enlace relativo (`?a=1&<paramName>=<value>`) a otra entrada: conserva solo `preserveParams` de la URL actual
+ * para no arrastrar los filtros de una tabla a otra vista o sección.
+ */
+export function buildEntryHref(
+  searchParams: ResolvedSearchParams,
+  preserveParams: readonly string[],
+  paramName: string,
+  value: string
+): string {
+  const params = new URLSearchParams();
+  for (const key of preserveParams) {
+    const current = searchParams[key];
+    if (typeof current === 'string') params.set(key, current);
+  }
+  params.set(paramName, value);
+  return `?${params.toString()}`;
+}

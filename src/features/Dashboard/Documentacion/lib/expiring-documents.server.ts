@@ -1,11 +1,7 @@
 import 'server-only';
 
-import {
-  arToday,
-  daysUntil,
-  EXPIRING_SOON_DAYS,
-  parseValidity,
-} from '@/features/Documentacion/shared/compliance/dates';
+import { arToday, daysUntil, parseValidity } from '@/features/Documentacion/shared/compliance/dates';
+import { EXPIRING_SOON_DAYS } from '@/features/Documentacion/shared/lib/document-expiry';
 
 /**
  * Reportes de "próximos vencimientos" del dashboard: parten de las MISMAS filas que las listas de

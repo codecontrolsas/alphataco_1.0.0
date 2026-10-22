@@ -48,6 +48,11 @@ export function formatDateAr(isoDate: string): string {
   return `${day}/${month}/${year}`;
 }
 
+/** `24/12/2026` de una columna `@db.Date` (medianoche UTC): se lee en UTC para no correr un día. */
+export function formatDateOnlyAr(value: string | Date): string {
+  return formatDateAr(new Date(value).toISOString().slice(0, 10));
+}
+
 /** `jueves, 24 de diciembre de 2026` a partir de un `YYYY-MM-DD`. */
 export function formatLongDateAr(isoDate: string): string {
   // El mediodía evita que el desplazamiento horario corra el día al construir el Date.

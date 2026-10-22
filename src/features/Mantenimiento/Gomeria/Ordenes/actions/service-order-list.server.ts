@@ -1,11 +1,7 @@
 'use server';
 
 import { requireGomeriaPermission } from '@/features/Mantenimiento/Gomeria/shared/access.server';
-import {
-  composeAnd,
-  GOMERIA_EXPORT_MAX_ROWS,
-  gomeriaExportTooLargeMessage,
-} from '@/features/Mantenimiento/Gomeria/shared/list-query';
+import { composeAnd, GOMERIA_EXPORT_MAX_ROWS } from '@/features/Mantenimiento/Gomeria/shared/list-query';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -16,6 +12,7 @@ import {
   parseSearchParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { exportRowLimitMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
@@ -202,7 +199,7 @@ export async function getServiceOrdersForExport(
     });
 
     if (data.length > GOMERIA_EXPORT_MAX_ROWS) {
-      return { ok: false, message: gomeriaExportTooLargeMessage('órdenes de gomería') };
+      return { ok: false, message: exportRowLimitMessage(GOMERIA_EXPORT_MAX_ROWS, 'órdenes de gomería') };
     }
     return { ok: true, data };
   } catch (error) {

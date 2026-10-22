@@ -2,8 +2,7 @@
 
 import { formatVoucherLabel } from '@/features/Comercial/Facturacion/lib/invoice-type';
 import { errorMessage, fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { checkPermissionServer } from '@/features/Permissions';
-import { UUID_RE } from '@/features/Purchases/lib/action-errors';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import type { certification_status } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
@@ -13,6 +12,7 @@ import type { PdfDownload } from '@/shared/lib/pdf/types';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { isUuid } from '@/shared/lib/uuid';
 import { revalidatePath } from 'next/cache';
 import { certificationTotal, lineAmount } from '../lib/certification-amounts';
 import { serializeCertification, serializeCertificationLine } from '../lib/serializers';
@@ -497,7 +497,7 @@ export async function getCertificationPdf(id: string): Promise<ActionResult<PdfD
     checkPermissionServer('comercial', 'certificaciones', 'view_prices'),
   ]);
   if (!canView) return fail('No tenés permiso para ver certificaciones');
-  if (!UUID_RE.test(id)) return fail('La certificación no existe');
+  if (!isUuid(id)) return fail('La certificación no existe');
 
   const companyId = await getActiveCompanyId();
 

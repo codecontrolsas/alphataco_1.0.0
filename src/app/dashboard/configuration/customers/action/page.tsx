@@ -1,7 +1,7 @@
 import { Skeleton } from '@/components/ui/skeleton';
 import { getCustomerById } from '@/features/Empresa/Clientes/actions/customers.server';
 import CustomerComponent from '@/features/Empresa/Clientes/components/CustomerComponent';
-import { getUserPermissionsMapServer } from '@/features/Permissions';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { cn } from '@/lib/utils';
 import BackButton from '@/shared/components/common/BackButton';
 import { cookies } from 'next/headers';

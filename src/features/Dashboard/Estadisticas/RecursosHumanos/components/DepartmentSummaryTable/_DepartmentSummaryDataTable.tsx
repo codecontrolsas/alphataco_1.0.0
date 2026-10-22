@@ -1,7 +1,8 @@
 'use client';
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DataTable, type DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { type DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable/types';
 import { ColumnDef } from '@tanstack/react-table';
 import { useMemo, useState } from 'react';
 import { DepartmentAbsenceSummaryItem } from '../../actions.server';

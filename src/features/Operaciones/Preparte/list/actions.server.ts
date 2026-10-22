@@ -2,7 +2,6 @@
 
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
@@ -11,24 +10,18 @@ import {
   parseSearchParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { prisma } from '@/shared/lib/prisma';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { ExportTooLargeError, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
+import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('Preparte/list/actions.server');
 
 const DATE_RANGE_COLUMNS = ['requestDate', 'executionDate', 'created_at'];
-const TEXT_COLUMNS = [
-  'numero_pedido',
-  'start_time',
-  'end_time',
-  'solicitante',
-  'confirmed_by',
-  'observaciones',
-];
+const TEXT_COLUMNS = ['numero_pedido', 'start_time', 'end_time', 'solicitante', 'confirmed_by', 'observaciones'];
 
 const COLUMN_MAP: Record<string, string> = {
   status: 'status',
@@ -263,8 +256,7 @@ export async function getAllPrepartesForExport(searchParams: DataTableSearchPara
     const rows = await fetchExportRowsInBatches({
       listIds: (take) => prisma.preparte.findMany({ where, orderBy, select: { id: true }, take }),
       fetchByIds: (ids) => prisma.preparte.findMany({ where: { id: { in: ids } }, select: PREPARTE_SELECT }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} pedidos con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('pedidos'),
     });
 
     const data: PreparteListItem[] = rows.map(serializePreparte);
@@ -301,9 +293,7 @@ async function resolveActorOptions(credentialIds: string[]): Promise<PreparteFac
     orderBy: { fullname: 'asc' },
   });
   return profiles.flatMap((profile) =>
-    profile.credential_id
-      ? [{ value: profile.credential_id, label: profile.fullname || 'Usuario sin nombre' }]
-      : []
+    profile.credential_id ? [{ value: profile.credential_id, label: profile.fullname || 'Usuario sin nombre' }] : []
   );
 }
 
@@ -387,7 +377,10 @@ export async function getPreparteSingleFacet(
         });
         return {
           counts,
-          resolvedOptions: areas.map((row) => ({ value: row.id, label: row.areas_cliente?.nombre || 'Área sin nombre' })),
+          resolvedOptions: areas.map((row) => ({
+            value: row.id,
+            label: row.areas_cliente?.nombre || 'Área sin nombre',
+          })),
         };
       }
       case 'customerEquipment': {

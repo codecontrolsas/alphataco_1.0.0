@@ -11,23 +11,7 @@ import {
 } from '@/features/Mantenimiento/shared/repair-item-label';
 import { Info, Play, Stethoscope } from 'lucide-react';
 import { DiagnosticoCard } from './DiagnosticoCard';
-import { TaskCard } from './TaskCard';
-
-interface RepairData {
-  id: string;
-  status: string | null;
-  technician_notes: string | null;
-  return_reason: string | null;
-  rejection_reason: string | null;
-  is_operator_added: boolean | null;
-  is_diagnostico: boolean;
-  types_of_repairs: {
-    id: string;
-    name: string | null;
-    criticity: string | null;
-    autorizable: boolean | null;
-  } | null;
-}
+import { TaskCard, type RepairData } from './TaskCard';
 
 /**
  * Item del pedido que origina la tarea.

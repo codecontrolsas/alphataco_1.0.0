@@ -13,8 +13,9 @@
  * `CreateBucket` se manda sin `CreateBucketConfiguration`: con la región por defecto (`us-east-1`) alcanza; si
  * alguna vez se usa otra `S3_REGION`, hay que agregarle la restricción de ubicación.
  */
-import { CreateBucketCommand, HeadBucketCommand, ListBucketsCommand, S3Client } from '@aws-sdk/client-s3';
+import { CreateBucketCommand, HeadBucketCommand, ListBucketsCommand, type S3Client } from '@aws-sdk/client-s3';
 import { STORAGE_BUCKETS } from '../src/shared/lib/storage-buckets.ts';
+import { createS3 } from './lib/s3-client.ts';
 
 /**
  * Cuánto se espera a que el almacenamiento responda antes de rendirse. Se suma al arranque (migrate + seed) dentro del
@@ -22,12 +23,6 @@ import { STORAGE_BUCKETS } from '../src/shared/lib/storage-buckets.ts';
  */
 const WAIT_FOR_STORAGE_MS = 20_000;
 const RETRY_DELAY_MS = 1_000;
-
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Falta la variable de entorno ${name}`);
-  return value;
-}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -79,12 +74,7 @@ async function ensureBucket(s3: S3Client, bucket: string): Promise<'exists' | 'c
 }
 
 async function main(): Promise<void> {
-  const s3 = new S3Client({
-    endpoint: requireEnv('S3_ENDPOINT'),
-    region: process.env.S3_REGION || 'us-east-1',
-    forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== 'false',
-    credentials: { accessKeyId: requireEnv('S3_ACCESS_KEY'), secretAccessKey: requireEnv('S3_SECRET_KEY') },
-  });
+  const s3 = createS3();
 
   await waitForStorage(s3);
 

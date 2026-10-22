@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/shared/components/skeletons/TableSkeleton';
 import { Button } from '@/components/ui/button';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { Plus } from 'lucide-react';
@@ -5,7 +6,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import { OrdersList } from './OrdersList/OrdersList';
-import { OrdersTableSkeleton } from './OrdersList/fallback/OrdersTableSkeleton';
+
 
 /** Órdenes de compra (spec Compras etapa 2 §4). */
 export default async function OrdersTabContent({
@@ -29,7 +30,7 @@ export default async function OrdersTabContent({
           </Button>
         </div>
       )}
-      <Suspense fallback={<OrdersTableSkeleton />}>
+      <Suspense fallback={<TableSkeleton inCard columnCount={7} rowCount={7} />}>
         <OrdersList searchParams={searchParams} />
       </Suspense>
     </div>

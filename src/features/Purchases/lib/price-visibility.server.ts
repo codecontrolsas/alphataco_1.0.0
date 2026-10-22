@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { cache } from 'react';
 import type { PricedPurchaseTab } from './price-visibility';
 

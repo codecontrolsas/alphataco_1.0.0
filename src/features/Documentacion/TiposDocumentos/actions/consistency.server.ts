@@ -3,7 +3,7 @@
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { arCurrentPeriod, arToday } from '../../shared/compliance';
+import { arCurrentPeriod, arToday } from '@/features/Documentacion/shared/compliance/dates';
 import { loadComplianceDataset } from '../../shared/compliance/server/dataset.server';
 import { assertDocTypeIdPermission } from '../lib/document-type-permissions';
 import { findScopedDocumentType } from '../lib/document-type-scope';

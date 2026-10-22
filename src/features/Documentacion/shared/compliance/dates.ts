@@ -1,6 +1,4 @@
-import { argentinaDate } from '@/features/Jobs/lib/dates';
-
-export { EXPIRING_SOON_DAYS } from '../lib/document-expiry';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 
 const DAY_MS = 86_400_000;
 

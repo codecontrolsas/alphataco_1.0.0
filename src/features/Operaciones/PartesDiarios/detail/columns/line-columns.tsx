@@ -1,9 +1,9 @@
 'use client';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { StackedCell } from '@/features/Operaciones/shared/components/StackedCell';
 import { cn } from '@/lib/utils';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
+import { StackedCell } from '@/shared/components/common/StackedCell';
 import type { ColumnDef } from '@tanstack/react-table';
 import { AlertTriangle, Truck } from 'lucide-react';
 import { deviationText, employeeDeviations, equipmentDeviations } from '../../lib/resource-deviations';
@@ -208,10 +208,9 @@ export function getLineColumns(
     // ── Servicio: cliente + servicio · ítem. Abre la línea (edición si puede, detalle si no) ─────
     {
       id: 'line_service',
-      meta: { title: 'Servicio', excludeFromExport: true },
+      ...titled('Servicio', { excludeFromExport: true }),
       enableSorting: false,
       enableHiding: false,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Servicio" />,
       cell: ({ row }) => {
         const line = row.original;
         const secondary = [line.customer_services?.service_name, line.service_items?.item_name]
@@ -249,9 +248,8 @@ export function getLineColumns(
     // ── Dónde y cuándo: sector · área / jornada · horario ───────────────────────────────────────
     {
       id: 'line_where',
-      meta: { title: 'Dónde y cuándo', excludeFromExport: true },
+      ...titled('Dónde y cuándo', { excludeFromExport: true }),
       enableSorting: false,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Dónde y cuándo" />,
       cell: ({ row }) => {
         const line = row.original;
         const place = [line.service_sectors?.sectors?.name, line.service_areas?.areas_cliente?.descripcion_corta]
@@ -270,18 +268,16 @@ export function getLineColumns(
     // ── Recursos: chips de personal (iniciales + [legajo] Apellido) y equipos (dominio) ─────────
     {
       id: 'line_resources',
-      meta: { title: 'Recursos', excludeFromExport: true },
+      ...titled('Recursos', { excludeFromExport: true }),
       enableSorting: false,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Recursos" />,
       cell: ({ row }) => <LineResourcesCell row={row.original} deviations={deviations} />,
     },
 
     // ── Remito y turnos completados (D = día, N = noche) ────────────────────────────────────────
     {
       id: 'line_remit',
-      meta: { title: 'Remito', excludeFromExport: true },
+      ...titled('Remito', { excludeFromExport: true }),
       enableSorting: false,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Remito" />,
       cell: ({ row }) => {
         const line = row.original;
         const is24Hours = line.working_day?.toLowerCase() === 'jornada 24 horas';

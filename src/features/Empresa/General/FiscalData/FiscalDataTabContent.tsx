@@ -1,5 +1,5 @@
 import { Separator } from '@/components/ui/separator';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { getProvinces } from '@/shared/actions/countries.server';
 import { Info, MonitorPlay } from 'lucide-react';
 import { ArcaCertificateSection } from './components/ArcaCertificateSection';

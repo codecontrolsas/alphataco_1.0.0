@@ -1,4 +1,4 @@
-import { ViewManagerServer } from '@/features/TabsManager';
+import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
 import { Suspense } from 'react';
 import CatalogoTabContent from './Catalogo/CatalogoTabContent';
 import { CatalogoSkeleton } from './Catalogo/fallback/CatalogoSkeleton';

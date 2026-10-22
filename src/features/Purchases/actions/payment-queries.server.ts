@@ -1,21 +1,23 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import {
   openCheckDebtsOfSupplier,
   rejectedCheckLabel,
   rejectedOwnCheckLabel,
 } from '@/features/Treasury/lib/rejected-checks';
 import { treasuryToday } from '@/features/Treasury/lib/today';
+import { toDateOnly } from '@/shared/lib/date-only';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { UUID_RE } from '../lib/action-errors';
+import { isUuid } from '@/shared/lib/uuid';
 import { isCreditNoteCbte, supplierInvoiceLabel } from '../lib/invoices';
-import { canEditOrders, isoDay } from '../lib/payment-action-helpers';
+import { canEditOrders } from '../lib/payment-action-helpers';
 import { openAdvancesOfSupplier, openInvoicesOfSupplier } from '../lib/payment-balances';
 import { canApplyPaymentOrderAction, type PaymentOrderStatus } from '../lib/payment-order-state-machine';
 import { cents, money } from '../lib/payment-totals';
 import { supplierRecipients } from '../lib/supplier-send';
+import { userName } from '../lib/user-name';
 import { type PaymentOrderFormValues } from '../schemas/payment-orders';
 
 /**
@@ -26,13 +28,13 @@ export async function getPaymentOrderFormData(supplierId?: string, options: { ex
   if (!(await canEditOrders())) return null;
   const companyId = await getActiveCompanyId();
   const empty = { supplier: null, openItems: { invoices: [], advances: [], checkDebts: [] }, purchaseOrders: [] };
-  if (!supplierId || !UUID_RE.test(supplierId)) return empty;
+  if (!supplierId || !isUuid(supplierId)) return empty;
   const supplier = await prisma.suppliers.findFirst({
     where: { id: supplierId, company_id: companyId },
     select: { id: true, name: true, cuit: true, vat_condition_id: true, is_active: true },
   });
   if (!supplier) return empty;
-  const exclude = options.excludeOrderId && UUID_RE.test(options.excludeOrderId) ? options.excludeOrderId : undefined;
+  const exclude = options.excludeOrderId && isUuid(options.excludeOrderId) ? options.excludeOrderId : undefined;
   const included = exclude
     ? (
         await prisma.payment_order_lines.findMany({
@@ -65,15 +67,15 @@ export async function getPaymentOrderFormData(supplierId?: string, options: { ex
         id: i.id,
         label: supplierInvoiceLabel({ cbte_type: i.cbteType, sales_point: i.salesPoint, number: i.number }),
         isCredit: isCreditNoteCbte(i.cbteType),
-        issueDate: isoDay(i.issueDate)!,
-        dueDate: isoDay(i.dueDate),
+        issueDate: toDateOnly(i.issueDate)!,
+        dueDate: toDateOnly(i.dueDate),
         total: money(cents(i.total)),
         pending: money(cents(i.pending)),
       })),
       advances: advances.map((a) => ({
         lineId: a.lineId,
         orderNumber: a.orderNumber,
-        paidOn: isoDay(a.paidOn),
+        paidOn: toDateOnly(a.paidOn),
         description: a.description,
         amount: money(cents(a.amount)),
         available: money(cents(a.available)),
@@ -115,17 +117,14 @@ export async function getPortfolioChecksForPayment() {
     bank: c.bank,
     drawerName: c.drawer_name,
     amount: c.amount.toFixed(2),
-    paymentDate: isoDay(c.payment_date)!,
+    paymentDate: toDateOnly(c.payment_date)!,
     portfolioName: c.portfolio.name,
   }));
 }
 
-const userName = (p: { fullname: string | null; email: string | null } | null) =>
-  p ? p.fullname ?? p.email ?? 'Usuario' : null;
-
 /** Detalle de la orden: lineas, retenciones con certificado, medios, historial y acciones. */
 export async function getPaymentOrderDetail(id: string) {
-  if (!UUID_RE.test(id)) return null;
+  if (!isUuid(id)) return null;
   const [canView, canUpdate, canApprove, canSend] = await Promise.all([
     checkPermissionServer('compras', 'pagos', 'view'),
     checkPermissionServer('compras', 'pagos', 'update'),
@@ -204,8 +203,8 @@ export async function getPaymentOrderDetail(id: string) {
     number: order.number,
     status,
     supplier: { ...order.supplier, cuit: order.supplier.cuit.toString() },
-    plannedOn: isoDay(order.planned_on)!,
-    paidOn: isoDay(order.paid_on),
+    plannedOn: toDateOnly(order.planned_on)!,
+    paidOn: toDateOnly(order.paid_on),
     notes: order.notes,
     rejectionNotes: status === 'DRAFT' ? order.rejection_notes : null,
     cancelReason: order.cancel_reason,
@@ -228,7 +227,7 @@ export async function getPaymentOrderDetail(id: string) {
             id: l.invoice.id,
             label: supplierInvoiceLabel(l.invoice),
             total: l.invoice.total.toFixed(2),
-            dueDate: isoDay(l.invoice.due_date),
+            dueDate: toDateOnly(l.invoice.due_date),
           }
         : null,
       purchaseOrder: l.purchase_order,
@@ -269,21 +268,21 @@ export async function getPaymentOrderDetail(id: string) {
       reference: p.reference,
       checkNumber: p.check_number,
       checkBank: p.check_bank,
-      checkDueOn: isoDay(p.check_due_on),
+      checkDueOn: toDateOnly(p.check_due_on),
       thirdPartyCheck: p.third_party_check
         ? { id: p.third_party_check.id, drawerName: p.third_party_check.drawer_name }
         : null,
       // Cheque propio (Tesoreria etapa 3b): su estado dice si ya se debito.
       ownCheck: p.own_check
-        ? { id: p.own_check.id, status: p.own_check.status, debitedOn: isoDay(p.own_check.debited_on) }
+        ? { id: p.own_check.id, status: p.own_check.status, debitedOn: toDateOnly(p.own_check.debited_on) }
         : null,
       account: p.treasury_account,
       // Movimiento de Tesoreria: fecha valor y si todavia esta "a debitar".
       movement: p.movement
         ? {
-            date: isoDay(p.movement.date)!,
+            date: toDateOnly(p.movement.date)!,
             cancelled: p.movement.cancelled_at !== null,
-            toDebit: isoDay(p.movement.date)! > today,
+            toDebit: toDateOnly(p.movement.date)! > today,
           }
         : null,
     })),
@@ -302,7 +301,7 @@ export async function getPaymentOrderDetail(id: string) {
         ? [{ event: 'Aprobada', at: at(order.approved_at), by: userName(order.approver), notes: null }]
         : []),
       ...(order.paid_on
-        ? [{ event: 'Pagada', at: isoDay(order.paid_on), by: userName(order.payer), notes: null }]
+        ? [{ event: 'Pagada', at: toDateOnly(order.paid_on), by: userName(order.payer), notes: null }]
         : []),
       ...(order.sent_at
         ? [{ event: 'Enviada al proveedor', at: at(order.sent_at), by: null, notes: order.sent_to.join(', ') }]
@@ -325,7 +324,7 @@ export async function getPaymentOrderDetail(id: string) {
 
 /** Valores del formulario para editar un borrador. */
 export async function getPaymentOrderEditValues(id: string): Promise<PaymentOrderFormValues | null> {
-  if (!UUID_RE.test(id)) return null;
+  if (!isUuid(id)) return null;
   if (!(await checkPermissionServer('compras', 'pagos', 'update'))) return null;
   const companyId = await getActiveCompanyId();
   const order = await prisma.payment_orders.findFirst({
@@ -354,7 +353,7 @@ export async function getPaymentOrderEditValues(id: string): Promise<PaymentOrde
   const advance = order.lines.find((l) => l.kind === 'ADVANCE');
   return {
     supplierId: order.supplier_id,
-    plannedOn: isoDay(order.planned_on)!,
+    plannedOn: toDateOnly(order.planned_on)!,
     notes: order.notes ?? '',
     lines: order.lines
       .filter((l) => l.kind !== 'ADVANCE')

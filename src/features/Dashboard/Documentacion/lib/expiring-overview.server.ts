@@ -2,7 +2,7 @@ import 'server-only';
 
 import { canViewDashboard, type DashboardTab } from '@/features/Dashboard/lib/permissions.server';
 import { arToday, daysUntil, parseValidity } from '@/features/Documentacion/shared/compliance/dates';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { cache } from 'react';
 import type { DocumentResourceKind } from './document-list-links';

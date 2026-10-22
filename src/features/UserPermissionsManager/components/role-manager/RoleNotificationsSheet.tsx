@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import type { RoleWithCount } from '../../actions.server';
+import type { RoleWithCount } from '@/features/Permissions/actions/roles.server';
 import type { RoleNotificationsDraft } from '../../hooks/useRoleNotificationsDraft';
 import { RoleNotificationsSection } from '../RoleNotificationsSection';
 

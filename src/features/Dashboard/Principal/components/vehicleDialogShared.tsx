@@ -1,13 +1,13 @@
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import type { DataTableFacetedFilterConfig, FacetResult } from '@/shared/components/common/DataTable';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import type { DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable/types';
 import { conditionLabels } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
-import { AlertCircle, CheckCircle2, CircleOff, Clock, Wrench, XCircle, type LucideIcon } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, Wrench, XCircle, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
-import type { AvailableVehicleItem } from '../actions/fleet.server';
+import type { AvailableVehicleItem } from '../actions/fleet-lists.server';
 
 /**
  * Piezas comunes de los diálogos de equipos (disponibles y fuera de servicio): comparten el mismo
@@ -23,32 +23,6 @@ export const conditionIcons: Record<string, LucideIcon> = {
   en_reparacion: Wrench,
   en_preparacion: Clock,
 };
-
-export function buildFkFacetResult(
-  resolvedOptions: Array<{ id: string; name: string | null }> | undefined,
-  counts: Map<string, number>,
-  nullLabel = 'Sin asignar'
-): FacetResult {
-  return {
-    options: [
-      ...(resolvedOptions?.map((o) => ({ value: o.id, label: o.name ?? '' })) ?? []),
-      ...(counts.has(NULL_FILTER_VALUE) ? [{ value: NULL_FILTER_VALUE, label: nullLabel, icon: CircleOff }] : []),
-    ],
-    counts,
-  };
-}
-
-/** Opciones de condición del diálogo (sólo las que el diálogo puede mostrar). */
-export function buildConditionFacetResult(allowed: readonly string[], counts: Map<string, number>): FacetResult {
-  return {
-    options: allowed.map((value) => ({
-      value,
-      label: conditionLabels[value] ?? value,
-      icon: conditionIcons[value],
-    })),
-    counts,
-  };
-}
 
 /** Un filtro por columna: tres de texto, condición, tipo, subtipo y afectaciones. */
 export const VEHICLE_TEXT_FILTERS: DataTableFacetedFilterConfig[] = [

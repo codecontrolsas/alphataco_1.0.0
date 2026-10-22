@@ -5,14 +5,13 @@ import { PipelineLayout, type PipelineStepEntry } from '../components/PipelineLa
 import type { PipelineStep } from '../types';
 import { getTallerPipelineSummary } from './actions/pipeline-summary.server';
 
-import { ApprovalInboxSkeleton, ApprovalInboxTabContent } from '@/features/Mantenimiento/ApprovalInbox';
-import { MaintenanceOrdersSkeleton, MaintenanceOrdersTabContent } from '@/features/Mantenimiento/MaintenanceOrders';
+import { ApprovalInboxSkeleton } from '@/features/Mantenimiento/ApprovalInbox/fallback/ApprovalInboxSkeleton';
+import { ApprovalInboxTabContent } from '@/features/Mantenimiento/ApprovalInbox/ApprovalInboxTabContent';
+import { MaintenanceOrdersSkeleton } from '@/features/Mantenimiento/MaintenanceOrders/fallback/MaintenanceOrdersSkeleton';
+import { MaintenanceOrdersTabContent } from '@/features/Mantenimiento/MaintenanceOrders/MaintenanceOrdersTabContent';
 import { ConfirmadosTabContent } from '@/features/Mantenimiento/PedidosMantenimiento/Confirmados/ConfirmadosTabContent';
 import { PendientesTabContent } from '@/features/Mantenimiento/PedidosMantenimiento/Pendientes/PendientesTabContent';
-import {
-  ConfirmadosTableSkeleton,
-  PendientesTableSkeleton,
-} from '@/features/Mantenimiento/PedidosMantenimiento/fallback';
+import { ConfirmadosTableSkeleton, PendientesTableSkeleton } from '@/features/Mantenimiento/PedidosMantenimiento/fallback/PendientesTableSkeleton';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 
 const PARAM_NAME = 'taller_step';

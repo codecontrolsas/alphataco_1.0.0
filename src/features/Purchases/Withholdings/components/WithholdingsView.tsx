@@ -6,12 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatMoney } from '@/features/Warehouses/lib/format';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
 import { exportToExcel, type ExcelColumn } from '@/shared/lib/excel-export';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { FileDown, FileSpreadsheet, Info } from 'lucide-react';
-import moment from 'moment';
 import 'moment/locale/es';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -21,23 +19,18 @@ import {
   getWithholdingsReport,
   type WithholdingsReport,
 } from '../../actions/withholdings-report.server';
+import { PeriodSelect, dayLabel, periodLabel, usePeriodParam, useZipDownload } from '../../components/period-report';
 import { cents, money } from '../../lib/payment-totals';
 import { WITHHOLDING_TAXES, WITHHOLDING_TAX_LABELS, type WithholdingTax } from '../../schemas/payment-settings';
 
 const logger = new Logger('Purchases/WithholdingsView');
-
-const periodLabel = (period: string) => {
-  const text = moment(period, 'YYYY-MM').locale('es').format('MMMM YYYY');
-  return text.charAt(0).toUpperCase() + text.slice(1);
-};
-const day = (value: string) => moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY');
 
 /**
  * Retenciones practicadas en el mes (spec Compras etapa 5 §4): por periodo e impuesto, con los
  * totales por regimen, el Excel y el ZIP con los archivos de SICORE, SIRE y Rentas Neuquen.
  */
 export function WithholdingsView({ initialReport, periods }: { initialReport: WithholdingsReport; periods: string[] }) {
-  const [period, setPeriod] = useState(initialReport.period);
+  const { period, changePeriod } = usePeriodParam(initialReport.period);
   const [tax, setTax] = useState<WithholdingTax | 'ALL'>('ALL');
 
   const { data: report, isFetching } = useQuery({
@@ -47,33 +40,15 @@ export function WithholdingsView({ initialReport, periods }: { initialReport: Wi
     staleTime: 60 * 1000,
   });
 
-  const changePeriod = (next: string) => {
-    setPeriod(next);
-    const url = new URL(window.location.href);
-    url.searchParams.set('period', next);
-    window.history.replaceState(null, '', url.toString());
-  };
-
   const rows = (report?.rows ?? []).filter((r) => tax === 'ALL' || r.tax === tax);
   const totals = (report?.totals ?? []).filter((t) => tax === 'ALL' || t.tax === tax);
   const live = rows.filter((r) => !r.cancelled);
 
-  const txt = useMutation({
-    mutationFn: async () => unwrapAction(await exportWithholdingsTxt(period)),
-    onSuccess: ({ fileName, base64 }) => {
-      const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
-      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/zip' }));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      link.click();
-      URL.revokeObjectURL(url);
-    },
-    onError: (error) => {
-      logger.error('Error al descargar los archivos de retenciones', { data: { error } });
-      toast.error(error instanceof Error ? error.message : 'No se pudieron generar los archivos');
-    },
-  });
+  const txt = useZipDownload(
+    () => exportWithholdingsTxt(period),
+    logger,
+    'Error al descargar los archivos de retenciones'
+  );
 
   const excel = useMutation({
     mutationFn: async () => {
@@ -93,7 +68,7 @@ export function WithholdingsView({ initialReport, periods }: { initialReport: Wi
       ];
       await exportToExcel(
         rows.map((r) => ({
-          date: day(r.paidOn),
+          date: dayLabel(r.paidOn),
           tax: WITHHOLDING_TAX_LABELS[r.tax],
           certificate: r.certificateNumber,
           order: r.order.number,
@@ -128,18 +103,7 @@ export function WithholdingsView({ initialReport, periods }: { initialReport: Wi
           </CardDescription>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={period} onValueChange={changePeriod}>
-            <SelectTrigger className="w-44" aria-label="Período">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {periods.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {periodLabel(p)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <PeriodSelect value={period} periods={periods} onChange={changePeriod} />
           <Select value={tax} onValueChange={(v) => setTax(v as WithholdingTax | 'ALL')}>
             <SelectTrigger className="w-40" aria-label="Impuesto">
               <SelectValue />
@@ -222,7 +186,7 @@ export function WithholdingsView({ initialReport, periods }: { initialReport: Wi
               <TableBody>
                 {rows.map((r) => (
                   <TableRow key={r.id} className={r.cancelled ? 'text-muted-foreground line-through' : undefined}>
-                    <TableCell className="whitespace-nowrap">{day(r.paidOn)}</TableCell>
+                    <TableCell className="whitespace-nowrap">{dayLabel(r.paidOn)}</TableCell>
                     <TableCell>{WITHHOLDING_TAX_LABELS[r.tax]}</TableCell>
                     <TableCell className="font-mono">{r.certificateNumber}</TableCell>
                     <TableCell>

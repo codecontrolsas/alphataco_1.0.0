@@ -1,12 +1,13 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
-import { type DataTableSearchParams, stripPrefixFromSearchParams } from '@/shared/components/common/DataTable';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { type DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { Suspense } from 'react';
 import { getPendingOrderMetrics } from '../actions/metrics.server';
 import { PendingOrderMetrics, type PendingOrderMetricsData } from '../components/PendingOrderMetrics';
 import { PENDING_PARAM_NAMESPACE, PENDING_TABLE_ID } from '../constants';
-import { PendingOrderMetricsSkeleton } from '../fallback';
+import { PendingOrderMetricsSkeleton } from '@/features/Mantenimiento/PedidosMantenimiento/fallback/PendientesTableSkeleton';
 import { getPendingOrdersPaginated } from './actions.server';
 import { _PendingOrderDataTable } from './components/_PendingOrderDataTable';
 

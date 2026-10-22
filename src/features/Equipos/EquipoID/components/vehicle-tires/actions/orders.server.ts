@@ -10,6 +10,7 @@ import {
   parseSearchParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
@@ -165,7 +166,7 @@ export async function getVehicleTireOrdersForExport(
     if (rows.length > MAX_EXPORT_ROWS) {
       return {
         ok: false,
-        message: `Hay más de ${MAX_EXPORT_ROWS.toLocaleString('es-AR')} órdenes con los filtros actuales. Acote la exportación con filtros.`,
+        message: tooManyRowsMessage('órdenes')(MAX_EXPORT_ROWS),
       };
     }
     return { ok: true, data: rows };

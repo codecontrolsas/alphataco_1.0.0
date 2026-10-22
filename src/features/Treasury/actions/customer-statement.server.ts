@@ -1,13 +1,13 @@
 'use server';
 
 import { amountOf } from '@/features/Comercial/Facturacion/lib/invoice-math';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { UUID_RE } from '@/features/Treasury/schemas/shared';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import moment from 'moment';
-import { UUID_RE } from '../lib/action-errors';
 import { getCustomerStatement } from '../lib/customer-statement';
 import { COLLECTABLE_CBTE_TYPES, isCollectable } from '../lib/receipt-rules';
 import { invoiceBalanceSql, invoiceBalances } from '../lib/receivables';
@@ -26,7 +26,8 @@ const logger = new Logger('features/Treasury/customer-statement');
 const canView = () => checkPermissionServer('tesoreria', 'cobranzas', 'view');
 
 /** Buscar clientes lo hacen también quienes cargan cheques (carga inicial): ya veían el catálogo en ese formulario. */
-const canSearchCustomers = async () => (await canView()) || (await checkPermissionServer('tesoreria', 'cheques', 'create'));
+const canSearchCustomers = async () =>
+  (await canView()) || (await checkPermissionServer('tesoreria', 'cheques', 'create'));
 
 /** Cuenta corriente del cliente entre `from` y `to` (null si no existe o sin permiso). */
 export async function getCustomerStatementData(customerId: string, from: string, to: string) {
@@ -69,7 +70,12 @@ export async function searchCollectionCustomers(query: string, activeOnly = true
       : {}),
   };
   const [rows, total] = await Promise.all([
-    prisma.customers.findMany({ where, select: { id: true, name: true, cuit: true, client_email: true, is_active: true }, orderBy: { name: 'asc' }, take: 30 }),
+    prisma.customers.findMany({
+      where,
+      select: { id: true, name: true, cuit: true, client_email: true, is_active: true },
+      orderBy: { name: 'asc' },
+      take: 30,
+    }),
     prisma.customers.count({ where }),
   ]);
   return {
@@ -91,7 +97,9 @@ export async function getReceivablesSummary() {
   const today = localToday();
   const limit = moment(today, 'YYYY-MM-DD').add(30, 'days').format('YYYY-MM-DD');
   const where = Prisma.sql`i.company_id = ${companyId}::uuid AND i.status = 'autorizada' AND i.cbte_type = ANY(${[...COLLECTABLE_CBTE_TYPES]}::int[])`;
-  const rows = await prisma.$queryRaw<{ currency: string; overdue: string; due_soon: string; total: string; count: bigint }[]>`
+  const rows = await prisma.$queryRaw<
+    { currency: string; overdue: string; due_soon: string; total: string; count: bigint }[]
+  >`
     SELECT b.currency,
            COALESCE(SUM(b.pending) FILTER (WHERE b.due_date < ${today}::date), 0)::numeric(15,2)::text AS overdue,
            COALESCE(SUM(b.pending) FILTER (WHERE b.due_date >= ${today}::date AND b.due_date <= ${limit}::date), 0)::numeric(15,2)::text AS due_soon,
@@ -102,7 +110,13 @@ export async function getReceivablesSummary() {
     GROUP BY b.currency
     ORDER BY (b.currency = 'ARS') DESC, b.currency
   `;
-  return rows.map((r) => ({ currency: r.currency.trim(), overdue: r.overdue, dueSoon: r.due_soon, total: r.total, count: Number(r.count) }));
+  return rows.map((r) => ({
+    currency: r.currency.trim(),
+    overdue: r.overdue,
+    dueSoon: r.due_soon,
+    total: r.total,
+    count: Number(r.count),
+  }));
 }
 
 export type ReceivablesSummary = Awaited<ReturnType<typeof getReceivablesSummary>>;
@@ -116,12 +130,24 @@ export type InvoiceReceivableState = 'PENDING' | 'IN_DRAFT' | 'COLLECTED' | 'NO_
  */
 export async function getInvoiceReceivable(
   invoiceId: string
-): Promise<{ pending: string; reserved: string; currency: string; customerId: string; state: InvoiceReceivableState } | null> {
+): Promise<{
+  pending: string;
+  reserved: string;
+  currency: string;
+  customerId: string;
+  state: InvoiceReceivableState;
+} | null> {
   if (!(await canView())) return null;
   if (!UUID_RE.test(invoiceId)) return null;
   const companyId = await getActiveCompanyId();
   const balance = (await invoiceBalances(prisma, [invoiceId])).get(invoiceId);
-  if (!balance || balance.companyId !== companyId || balance.status !== 'autorizada' || !isCollectable(balance.cbteType)) return null;
+  if (
+    !balance ||
+    balance.companyId !== companyId ||
+    balance.status !== 'autorizada' ||
+    !isCollectable(balance.cbteType)
+  )
+    return null;
   const positive = (value: string) => amountOf(value) > BigInt(0);
   const state: InvoiceReceivableState = positive(balance.pending)
     ? 'PENDING'
@@ -130,5 +156,11 @@ export async function getInvoiceReceivable(
       : positive(balance.collected)
         ? 'COLLECTED'
         : 'NO_BALANCE';
-  return { pending: balance.pending, reserved: balance.reserved, currency: balance.currency, customerId: balance.customerId, state };
+  return {
+    pending: balance.pending,
+    reserved: balance.reserved,
+    currency: balance.currency,
+    customerId: balance.customerId,
+    state,
+  };
 }

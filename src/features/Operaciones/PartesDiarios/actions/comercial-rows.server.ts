@@ -1,6 +1,6 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { withSessionActor } from '@/features/Operaciones/lib/with-session-actor';
 import type { daily_report_status, daily_report_type_enum } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';

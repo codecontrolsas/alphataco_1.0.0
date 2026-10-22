@@ -2,7 +2,7 @@ import { MonthlyEmployeeDocumentsList } from '@/features/Documentacion/Documento
 import { MonthlyEmployeeDocumentsSkeleton } from '@/features/Documentacion/DocumentosEmpleados/Mensuales/fallback/MonthlyEmployeeDocumentsSkeleton';
 import { EmployeePermanentDocumentsList } from '@/features/Documentacion/DocumentosEmpleados/Permanentes/EmployeePermanentDocumentsList';
 import { EmployeePermanentDocumentsSkeleton } from '@/features/Documentacion/DocumentosEmpleados/Permanentes/fallback/EmployeePermanentDocumentsSkeleton';
-import { ViewManagerServer } from '@/features/TabsManager';
+import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
 import { Suspense } from 'react';
 
 interface EmployeeDocumentDetailProps {

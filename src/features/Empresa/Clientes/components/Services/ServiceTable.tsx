@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PermissionGuard } from '@/features/Permissions';
+import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { useCallback, useState } from 'react';
 import type { AreaRow } from '../../actions/areas.server';
 import type { MeasureUnitRow } from '../../actions/measure-units.server';

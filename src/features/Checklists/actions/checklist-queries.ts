@@ -1,11 +1,11 @@
 'use server';
 
+import { templateSectionSelect } from '@/features/Checklists/lib/template-section-select';
 import { Logger } from '@/lib/logger';
 import { mapEquipmentToChecklistFormat } from '@/lib/utils';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { z } from 'zod';
 
 const logger = new Logger('features/Checklists/queries');
 
@@ -28,63 +28,6 @@ async function resolveCompanyId(equipmentId?: string): Promise<string> {
   }
   return getActiveCompanyId();
 }
-
-const employeeRowSchema = z.object({
-  id: z.string(),
-  firstname: z.string().nullable(),
-  lastname: z.string().nullable(),
-  cuil: z.string().nullable(),
-  file: z.string().nullable(),
-  company_id: z.string().nullable(),
-});
-
-const templateSectionSelect = {
-  id: true,
-  template_id: true,
-  section_id: true,
-  code: true,
-  name: true,
-  order_index: true,
-  is_required: true,
-  is_specific: true,
-  created_at: true,
-  checklist_sections: {
-    select: { id: true, code: true, name: true, description: true, is_reusable: true },
-  },
-  checklist_template_items: {
-    orderBy: { order_index: 'asc' },
-    select: {
-      id: true,
-      template_id: true,
-      section_id: true,
-      item_id: true,
-      code: true,
-      label: true,
-      description: true,
-      input_type: true,
-      options: true,
-      is_critical: true,
-      requires_certification: true,
-      certification_validity_days: true,
-      requires_side_validation: true,
-      order_index: true,
-      validation_rules: true,
-      checklist_items: {
-        select: {
-          id: true,
-          code: true,
-          label: true,
-          description: true,
-          input_type: true,
-          options: true,
-          is_critical: true,
-          requires_side_validation: true,
-          default_value: true,
-        },
-      },
-    },
-  },
-} as const;
 
 /**
  * Obtiene un template de checklist completo con sus secciones e items.
@@ -286,109 +229,6 @@ export const fetchEquipmentUsageForChecklist = async (equipmentId: string) => {
 };
 
 /**
- * Obtiene una respuesta específica de checklist por su ID (empresa activa).
- */
-export const fetchChecklistAnswerById = async (answerId: string) => {
-  try {
-    const company_id = await getActiveCompanyId();
-
-    const answer = await prisma.checklist_answers.findFirst({
-      where: withCompany({ id: answerId }, company_id),
-      select: {
-        id: true,
-        template_id: true,
-        equipment_id: true,
-        employee_id: true,
-        user_id: true,
-        company_id: true,
-        answer_data: true,
-        result: true,
-        observations: true,
-        critical_items_failed: true,
-        created_at: true,
-        updated_at: true,
-        ut_checklist_answer_id: true,
-        chofer_employee_id: true,
-        customer_id: true,
-        horometro: true,
-        kilometraje: true,
-        checklist_templates: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            code: true,
-            is_active: true,
-            checklist_template_sections: { orderBy: { order_index: 'asc' }, select: templateSectionSelect },
-          },
-        },
-        vehicles: {
-          select: {
-            id: true,
-            domain: true,
-            serie: true,
-            intern_number: true,
-            kilometer: true,
-            brand_vehicles: { select: { name: true } },
-            model_vehicles: { select: { name: true } },
-          },
-        },
-        profile: { select: { id: true, fullname: true } },
-      },
-    });
-
-    if (!answer) return null;
-
-    // Si este checklist es de enganche (tiene ut_checklist_answer_id), el equipment_id es el enganche.
-    // Si es el del UT, se busca el checklist de enganche que lo referencia.
-    let hitchEquipmentId: string | null = null;
-    if (answer.ut_checklist_answer_id) {
-      hitchEquipmentId = answer.equipment_id;
-    } else {
-      const hitchAnswer = await prisma.checklist_answers.findFirst({
-        where: withCompany({ ut_checklist_answer_id: answer.id }, company_id),
-        select: { equipment_id: true },
-      });
-      hitchEquipmentId = hitchAnswer?.equipment_id ?? null;
-    }
-
-    const { checklist_templates, vehicles, profile, ...rest } = answer;
-
-    return {
-      ...rest,
-      // Alias legacy (`template` / `equipment` / `user`) que consumen las páginas y el PDF.
-      template: checklist_templates && {
-        ...checklist_templates,
-        checklist_template_sections: checklist_templates.checklist_template_sections.map(
-          ({ checklist_sections, checklist_template_items, ...section }) => ({
-            ...section,
-            section: checklist_sections,
-            checklist_template_items: checklist_template_items.map(({ checklist_items, ...item }) => ({
-              ...item,
-              reusable_item: checklist_items,
-            })),
-          })
-        ),
-      },
-      equipment: vehicles && {
-        id: vehicles.id,
-        domain: vehicles.domain,
-        serie: vehicles.serie,
-        intern_number: vehicles.intern_number,
-        kilometer: vehicles.kilometer,
-        brand: vehicles.brand_vehicles,
-        model: vehicles.model_vehicles,
-      },
-      user: profile,
-      hitch_equipment_id: hitchEquipmentId,
-    };
-  } catch (error) {
-    logger.error('Error al obtener la respuesta de checklist', { data: { error, answerId } });
-    return null;
-  }
-};
-
-/**
  * Obtiene la información del tipo de un equipo para verificar si tiene enganche.
  * La empresa se deriva del propio equipo (el formulario corre también sin sesión).
  */
@@ -398,7 +238,9 @@ export const getEquipmentTypeInfo = async (equipmentId: string) => {
   try {
     const vehicle = await prisma.vehicles.findUnique({
       where: { id: equipmentId },
-      select: { type_vehicles_typeTotype: { select: { id: true, name: true, is_tractor_unit: true, has_hitch: true } } },
+      select: {
+        type_vehicles_typeTotype: { select: { id: true, name: true, is_tractor_unit: true, has_hitch: true } },
+      },
     });
 
     const equipmentType = vehicle?.type_vehicles_typeTotype;
@@ -478,90 +320,4 @@ export const getCompatibleEquipmentForHitch = async (utEquipmentId: string) => {
     logger.error('Error al obtener equipos compatibles para enganche', { data: { error, utEquipmentId } });
     return [];
   }
-};
-
-/**
- * Plantillas de checklist activas que aplican a un equipo, para el flujo QR anónimo
- * (`/maintenance/equipment/[id]/checklists`).
- *
- * La empresa sale del equipo, nunca de la sesión. Una plantilla aplica si su
- * `checklist_template_sub_types` incluye el subtipo del vehículo, si su
- * `checklist_template_types` incluye su tipo, o si no declara ninguna restricción.
- *
- * Reemplaza al filtro por título hardcodeado (`'Transporte SP-ANAY - CHK - HYS - 03'`) y
- * deja fuera los `custom_form` legacy: el detalle del flujo QR sólo sabe abrir plantillas
- * normalizadas, así que un `custom_form` listado ahí era un enlace muerto.
- *
- * Devuelve un resultado discriminado para que la página pueda distinguir los tres casos:
- * `not_found` (el equipo no existe), `error` (falló la consulta) y `ok` con la lista, que
- * puede estar vacía si el equipo existe pero no tiene plantillas aplicables. Antes los tres
- * colapsaban en `[]` y un fallo de BD se veía como "este equipo no tiene checklists".
- */
-export type ChecklistTemplatesForEquipmentResult =
-  | { status: 'ok'; templates: ChecklistTemplateForEquipment[] }
-  | { status: 'not_found' }
-  | { status: 'error' };
-
-export const fetchChecklistTemplatesForEquipment = async (
-  equipmentId: string
-): Promise<ChecklistTemplatesForEquipmentResult> => {
-  try {
-    const vehicle = await prisma.vehicles.findUnique({
-      where: { id: equipmentId },
-      select: { company_id: true, type: true, subType: true },
-    });
-    if (!vehicle?.company_id) return { status: 'not_found' };
-
-    const templates = await prisma.checklist_templates.findMany({
-      where: withCompany({ is_active: true }, vehicle.company_id),
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        code: true,
-        created_at: true,
-        checklist_template_sub_types: { select: { sub_type_id: true } },
-        checklist_template_types: { select: { type_id: true } },
-      },
-      orderBy: { created_at: 'desc' },
-    });
-
-    const applicable = templates
-      .filter((template) => {
-        const subTypeIds = template.checklist_template_sub_types
-          .map((st) => st.sub_type_id)
-          .filter((id): id is string => Boolean(id));
-        const typeIds = template.checklist_template_types
-          .map((t) => t.type_id)
-          .filter((id): id is string => Boolean(id));
-
-        // Sin restricciones declaradas, la plantilla aplica a todos los equipos.
-        if (subTypeIds.length === 0 && typeIds.length === 0) return true;
-
-        return (
-          (vehicle.subType != null && subTypeIds.includes(vehicle.subType)) ||
-          (vehicle.type != null && typeIds.includes(vehicle.type))
-        );
-      })
-      .map((template) => ({
-        id: template.id,
-        name: template.name,
-        code: template.code,
-        description: template.description,
-        created_at: template.created_at,
-      }));
-
-    return { status: 'ok', templates: applicable };
-  } catch (error) {
-    logger.error('Error al obtener las plantillas de checklist del equipo', { data: { error, equipmentId } });
-    return { status: 'error' };
-  }
-};
-
-export type ChecklistTemplateForEquipment = {
-  id: string;
-  name: string;
-  code: string;
-  description: string | null;
-  created_at: Date | null;
 };

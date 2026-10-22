@@ -1,10 +1,11 @@
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { NULL_FILTER_VALUE, parseSearchParams } from '@/shared/components/common/DataTable/helpers';
+import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 
 /**
  * Arma el mapa de conteos de una faceta (`valor → cantidad`). Una clave `null` o `undefined` se cuenta
  * bajo `NULL_FILTER_VALUE` ("Sin asignar"). Antes estaba copiada en 5 archivos de facets de Operaciones.
  */
-export function toFacetMap(rows: ReadonlyArray<{ key: string | boolean | null | undefined; count: number }>) {
+export function toFacetMap(rows: ReadonlyArray<{ key: string | number | boolean | null | undefined; count: number }>) {
   const map = new Map<string, number>();
   for (const { key, count } of rows) {
     if (key == null) {
@@ -30,6 +31,23 @@ export function withoutOwnFilter<State extends { filters: Record<string, unknown
   delete filters[`${excludeColumn}_from`];
   delete filters[`${excludeColumn}_to`];
   return { ...state, filters };
+}
+
+/**
+ * Arma el `where` de las facetas de una tabla: sin filtros activos es el `base`; con filtros, el de la
+ * tabla sin el filtro propio de la columna (cross-filter). Devuelve una función `columna → where`.
+ */
+export function createCrossWhere<Where>(
+  searchParams: DataTableSearchParams | undefined,
+  base: Where,
+  buildWhere: (state: ReturnType<typeof parseSearchParams>) => Where
+) {
+  const parsedState = searchParams && Object.keys(searchParams).length > 0 ? parseSearchParams(searchParams) : null;
+  const hasActiveFilters = parsedState && (Object.keys(parsedState.filters).length > 0 || parsedState.search);
+  return (excludeColumn: string): Where => {
+    if (!parsedState || !hasActiveFilters) return base;
+    return buildWhere(withoutOwnFilter(parsedState, excludeColumn));
+  };
 }
 
 // ============================================================================
@@ -83,7 +101,7 @@ export async function runFacet<Where>(config: FacetConfig<Where>, where: Where):
   // La clave de los counts es el valor de la opción (sector/área real), no el id del pivote.
   const counts = toFacetMap(
     rows.map((r) => ({
-      key: typeof r.key === 'string' ? (resolved.get(r.key)?.value ?? r.key) : r.key,
+      key: typeof r.key === 'string' ? resolved.get(r.key)?.value ?? r.key : r.key,
       count: r.count,
     }))
   );

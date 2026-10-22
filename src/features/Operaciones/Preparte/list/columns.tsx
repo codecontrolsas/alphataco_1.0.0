@@ -14,16 +14,11 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { StackedCell } from '@/features/Operaciones/shared/components/StackedCell';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { matchesId, matchesNullableId, titled } from '@/shared/components/common/DataTable/column-helpers';
+import { StackedCell } from '@/shared/components/common/StackedCell';
 import { formatCalendarDate } from '@/shared/utils/calendar-date';
 import { preparteStatusBadges, preparteStatusLabels } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -76,9 +71,7 @@ interface GetColumnsOptions {
 
 export function formatPreparteType(value: string | null | undefined): string {
   if (!value) return '-';
-  return value
-    .replaceAll('_', ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 export function getPreparteReason(item: PreparteListItem): string {
@@ -130,7 +123,12 @@ function ImageCell({ url }: { url: string | null }) {
   );
 }
 
-function ActionsCell({ item, callbacks, canUpdate, canDelete }: {
+function ActionsCell({
+  item,
+  callbacks,
+  canUpdate,
+  canDelete,
+}: {
   item: PreparteListItem;
   callbacks: PreparteTableCallbacks;
   canUpdate: boolean;
@@ -269,8 +267,7 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
   columns.push(
     {
       accessorKey: 'numero_pedido',
-      meta: { title: 'N° pedido' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="N° pedido" />,
+      ...titled('N° pedido'),
       cell: ({ row }) =>
         row.original.numero_pedido ? (
           <button
@@ -348,17 +345,16 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
     },
     {
       accessorKey: 'status',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const status = row.original.status;
         return (
           <Badge
-            variant={status ? (preparteStatusBadges[status] ?? 'default') : 'outline'}
+            variant={status ? preparteStatusBadges[status] ?? 'default' : 'outline'}
             className="whitespace-nowrap"
             data-testid={`status-badge-${row.original.numero_pedido}`}
           >
-            {status ? (preparteStatusLabels[status] ?? status) : 'Sin estado'}
+            {status ? preparteStatusLabels[status] ?? status : 'Sin estado'}
           </Badge>
         );
       },
@@ -367,146 +363,135 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
     {
       id: 'customer',
       accessorFn: (row) => row.customers?.name ?? '-',
-      meta: { title: 'Cliente' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Cliente" />,
+      ...titled('Cliente'),
       cell: ({ row }) => row.original.customers?.name || 'No encontrado',
-      filterFn: (row, _id, values: string[]) => values.includes(row.original.cliente_id),
+      filterFn: matchesId((row) => row.cliente_id),
     },
     {
       id: 'service',
       accessorFn: (row) => row.customer_services?.service_name ?? '-',
-      meta: { title: 'Contrato' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Contrato" />,
+      ...titled('Contrato'),
       cell: ({ row }) => row.original.customer_services?.service_name || 'No encontrado',
-      filterFn: (row, _id, values: string[]) => values.includes(row.original.contrato_id),
+      filterFn: matchesId((row) => row.contrato_id),
     },
     {
       id: 'sector',
       accessorFn: (row) => row.service_sectors?.sectors?.name ?? '-',
-      meta: { title: 'Sector (cliente)' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Sector (cliente)" />,
+      ...titled('Sector (cliente)'),
       cell: ({ row }) => row.original.service_sectors?.sectors?.name || '-',
-      filterFn: (row, _id, values: string[]) => values.includes(row.original.sector_service_id ?? '__null__'),
+      filterFn: matchesNullableId((row) => row.sector_service_id),
     },
     {
       id: 'area',
       accessorFn: (row) => row.service_areas?.areas_cliente?.nombre ?? '-',
-      meta: { title: 'Área (cliente)' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Área (cliente)" />,
+      ...titled('Área (cliente)'),
       cell: ({ row }) => row.original.service_areas?.areas_cliente?.nombre || '-',
-      filterFn: (row, _id, values: string[]) => values.includes(row.original.areas_service_id ?? '__null__'),
+      filterFn: matchesNullableId((row) => row.areas_service_id),
     },
     {
       id: 'customerEquipment',
       accessorFn: (row) => row.equipos_clientes?.name ?? '-',
-      meta: { title: 'Equipo cliente' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo cliente" />,
+      ...titled('Equipo cliente'),
       cell: ({ row }) => row.original.equipos_clientes?.name || '-',
-      filterFn: (row, _id, values: string[]) => values.includes(row.original.equipos_cliente ?? '__null__'),
+      filterFn: matchesNullableId((row) => row.equipos_cliente),
     },
     {
       id: 'serviceItem',
       accessorFn: (row) => row.service_items?.item_name ?? '-',
-      meta: { title: 'Ítem' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Ítem" />,
+      ...titled('Ítem'),
       cell: ({ row }) => row.original.service_items?.item_name || 'No encontrado',
-      filterFn: (row, _id, values: string[]) => values.includes(row.original.item ?? '__null__'),
+      filterFn: matchesNullableId((row) => row.item),
     },
     {
       accessorKey: 'quantity',
-      meta: { title: 'Cantidad' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Cantidad" />,
+      ...titled('Cantidad'),
       cell: ({ row }) => row.original.quantity ?? '-',
     },
     {
       accessorKey: 'tipo',
-      meta: { title: 'Tipo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
+      ...titled('Tipo'),
       cell: ({ row }) => formatPreparteType(row.original.tipo),
       filterFn: (row, id, values: string[]) => values.includes(String(row.getValue(id))),
     },
     {
       accessorKey: 'jornada',
-      meta: { title: 'Jornada' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Jornada" />,
+      ...titled('Jornada'),
       cell: ({ row }) => row.original.jornada || '-',
       filterFn: (row, id, values: string[]) => values.includes(String(row.getValue(id))),
     },
     {
       accessorKey: 'start_time',
-      meta: { title: 'Hora de inicio' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Hora de inicio" />,
+      ...titled('Hora de inicio'),
       cell: ({ row }) => row.original.start_time || '-',
     },
     {
       accessorKey: 'end_time',
-      meta: { title: 'Hora de fin' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Hora de fin" />,
+      ...titled('Hora de fin'),
       cell: ({ row }) => row.original.end_time || '-',
     },
     {
       accessorKey: 'solicitante',
-      meta: { title: 'Solicitante' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Solicitante" />,
+      ...titled('Solicitante'),
       cell: ({ row }) => row.original.solicitante || '-',
     },
     {
       id: 'reason',
       accessorFn: getPreparteReason,
-      meta: { title: 'Motivo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Motivo" />,
+      ...titled('Motivo'),
       cell: ({ row }) => {
         const reason = getPreparteReason(row.original);
-        return <div className="max-w-[320px] truncate" title={reason}>{reason}</div>;
+        return (
+          <div className="max-w-[320px] truncate" title={reason}>
+            {reason}
+          </div>
+        );
       },
       enableSorting: false,
     },
     {
       accessorKey: 'confirmed_by',
-      meta: { title: 'Confirmado por' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Confirmado por" />,
+      ...titled('Confirmado por'),
       cell: ({ row }) => row.original.confirmed_by || '-',
     },
     {
       id: 'rejectedBy',
       accessorFn: (row) => row.rejected_by_profile?.fullname ?? '-',
-      meta: { title: 'Rechazado por' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Rechazado por" />,
+      ...titled('Rechazado por'),
       cell: ({ row }) => row.original.rejected_by_profile?.fullname || '-',
-      filterFn: (row, _id, values: string[]) => values.includes(row.original.rejected_by ?? '__null__'),
+      filterFn: matchesNullableId((row) => row.rejected_by),
       enableSorting: false,
     },
     {
       id: 'cancelledBy',
       accessorFn: (row) => row.cancelled_by_profile?.fullname ?? '-',
-      meta: { title: 'Cancelado por' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Cancelado por" />,
+      ...titled('Cancelado por'),
       cell: ({ row }) => row.original.cancelled_by_profile?.fullname || '-',
-      filterFn: (row, _id, values: string[]) => values.includes(row.original.cancelled_by ?? '__null__'),
+      filterFn: matchesNullableId((row) => row.cancelled_by),
       enableSorting: false,
     },
     {
       id: 'reprogrammedBy',
       accessorFn: (row) => row.reprogrammed_by_profile?.fullname ?? '-',
-      meta: { title: 'Reprogramado por' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Reprogramado por" />,
+      ...titled('Reprogramado por'),
       cell: ({ row }) => row.original.reprogrammed_by_profile?.fullname || '-',
-      filterFn: (row, _id, values: string[]) => values.includes(row.original.reprogrammed_by ?? '__null__'),
+      filterFn: matchesNullableId((row) => row.reprogrammed_by),
       enableSorting: false,
     },
     {
       accessorKey: 'observaciones',
-      meta: { title: 'Observaciones' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Observaciones" />,
+      ...titled('Observaciones'),
       cell: ({ row }) => {
         const observations = row.original.observaciones || '-';
-        return <div className="max-w-[360px] truncate" title={observations}>{observations}</div>;
+        return (
+          <div className="max-w-[360px] truncate" title={observations}>
+            {observations}
+          </div>
+        );
       },
     },
     {
       accessorKey: 'preparteImage',
-      meta: { title: 'Imagen' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Imagen" />,
+      ...titled('Imagen'),
       cell: ({ row }) => <ImageCell url={row.original.preparteImage} />,
       enableSorting: false,
     },

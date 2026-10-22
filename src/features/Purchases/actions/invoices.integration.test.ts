@@ -20,7 +20,7 @@ const state = vi.hoisted(() => ({ denied: new Set<string>() }));
 const mails = vi.hoisted(() => ({ any: vi.fn(async () => true) }));
 
 vi.mock('@/shared/lib/tenant', () => ({ getActiveCompanyId: async () => 'd6000000-0000-4000-8000-000000000001' }));
-vi.mock('@/features/Permissions', () => ({
+vi.mock('@/features/Permissions/actions/permissions.server', () => ({
   checkPermissionServer: async (module: string, tab: string, action: string) =>
     !state.denied.has(`${module}:${tab}:${action}`),
 }));
@@ -88,7 +88,11 @@ async function receivedOrder(
   supplierId = SUPPLIER
 ) {
   const prisma = await db();
-  const orders = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
+  const orders = {
+    ...(await import('./orders.server')),
+    ...(await import('./order-send.server')),
+    ...(await import('./order-queries.server')),
+  };
   const receipts = await import('./receipts.server');
   counter += 1;
   const request = await prisma.purchase_requests.create({
@@ -335,7 +339,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
 
   describe('carga y control contra la OC', () => {
     it('conforme: factura A de lo recibido al precio de la OC; totales calculados', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-detail.server')),
+      };
       const order = await receivedOrder([{ quantity: 10, received: 10 }]);
       const created = expectOk(
         await actions.createSupplierInvoice(
@@ -358,7 +366,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('observaciones: letra, IVA, precio, alicuota y cantidad', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-detail.server')),
+      };
       const order = await receivedOrder([
         { quantity: 10, received: 10 },
         { quantity: 5, received: 5 },
@@ -375,7 +387,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('errores: OC de otro proveedor, OC no aprobada, duplicado', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-detail.server')),
+      };
       const order = await receivedOrder([{ quantity: 2, received: 2 }]);
       expect(
         expectFail(
@@ -404,7 +420,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('aprobar y rechazar solo observados y con permiso', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-detail.server')),
+      };
       const order = await receivedOrder([{ quantity: 3, received: 3 }]);
       const conform = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')])));
       expect(expectFail(await actions.approveSupplierInvoice(conform.id, 'ok'))).toContain('no está observada');
@@ -431,7 +451,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('una NC libera cantidad; un rechazado no cuenta; anular libera', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-detail.server')),
+      };
       const order = await receivedOrder([{ quantity: 10, received: 10 }]);
       const line = order.lineIds[0]!;
       const invoice = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(line, '10')])));
@@ -468,7 +492,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('un duplicado de un anulado se puede cargar', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-detail.server')),
+      };
       const order = await receivedOrder([{ quantity: 2, received: 2 }]);
       const values = invoiceForm([orderLine(order.lineIds[0]!, '1')]);
       const first = expectOk(await actions.createSupplierInvoice(values));
@@ -477,7 +505,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('NC vinculada a una factura de otro proveedor o de otra letra → error', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-detail.server')),
+      };
       const order = await receivedOrder([{ quantity: 2, received: 2 }]);
       const invoice = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')])));
       expect(
@@ -490,7 +522,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('concurrencia: dos facturas de 6 sobre 10 recibidas → una conforme y otra observada', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-detail.server')),
+      };
       const order = await receivedOrder([{ quantity: 10, received: 10 }]);
       const [a, b] = await Promise.all([
         actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '6')])),
@@ -501,7 +537,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('editar: pasar la linea a otra OC libera la vieja y controla la nueva', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-detail.server')),
+      };
       const first = await receivedOrder([{ quantity: 5, received: 5 }]);
       const second = await receivedOrder([{ quantity: 5, received: 2 }]);
       const invoice = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(first.lineIds[0]!, '5')])));
@@ -522,7 +562,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('editar un aprobado vuelve a controlar y borra la resolucion', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-detail.server')),
+      };
       const order = await receivedOrder([{ quantity: 4, received: 4 }]);
       const values = invoiceForm([orderLine(order.lineIds[0]!, '4', '1300')]);
       const observed = expectOk(await actions.createSupplierInvoice(values));
@@ -539,7 +583,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('solo gastos (C de un monotributista) y comprobante mixto', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-detail.server')),
+      };
       const categories = await import('./expense-categories.server');
       const freight = expectOk(await categories.createExpenseCategory({ name: 'Fletes' }));
       const expense = (net: string, vatRateId: string): FormLine => ({
@@ -569,8 +617,16 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('el detalle de la OC muestra lo facturado y los comprobantes', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
-      const orders = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-detail.server')),
+      };
+      const orders = {
+        ...(await import('./orders.server')),
+        ...(await import('./order-send.server')),
+        ...(await import('./order-queries.server')),
+      };
       const order = await receivedOrder([{ quantity: 8, received: 8 }]);
       const invoice = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '5')])));
       const detail = await orders.getPurchaseOrderDetail(order.id);
@@ -581,7 +637,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('perimetro: proveedor, linea de OC, vinculado y concepto de otra empresa', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-detail.server')),
+      };
       const prisma = await db();
       expect(
         expectFail(
@@ -663,7 +723,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     };
 
     it('aprobada: guarda el resultado y no cambia el estado', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const order = await receivedOrder([{ quantity: 1, received: 1 }]);
       const invoice = expectOk(
         await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')], { cae: '76543210987654' }))
@@ -681,7 +745,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('rechazada: pasa a observada (aunque estuviera aprobada) con la observacion de ARCA', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const order = await receivedOrder([{ quantity: 1, received: 1 }]);
       const invoice = expectOk(
         await actions.createSupplierInvoice(
@@ -698,7 +766,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('sin respuesta: queda "no respondio" y el estado no cambia', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const order = await receivedOrder([{ quantity: 1, received: 1 }]);
       const invoice = expectOk(
         await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')], { cae: '76543210987654' }))
@@ -714,7 +786,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('I-3: editar sin cambios un comprobante rechazado por ARCA conserva la observacion; cambiar el total limpia la constatacion', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const order = await receivedOrder([{ quantity: 2, received: 2 }]);
       const values = invoiceForm([orderLine(order.lineIds[0]!, '1')], { cae: '76543210987654' });
       const invoice = expectOk(await actions.createSupplierInvoice(values));
@@ -736,7 +812,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('I-4: un rechazado que ARCA rechaza sigue rechazado', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const order = await receivedOrder([{ quantity: 1, received: 1 }]);
       const invoice = expectOk(
         await actions.createSupplierInvoice(
@@ -751,7 +831,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('etapa 5: en una orden de pago pagada, ARCA no lo saca de la deuda; observado en una orden no se rechaza', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const prisma = await db();
       const order = await receivedOrder([{ quantity: 2, received: 2 }]);
       const invoice = expectOk(
@@ -795,7 +879,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('sin CAE no se constata', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const order = await receivedOrder([{ quantity: 1, received: 1 }]);
       const invoice = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')])));
       expect(expectFail(await withScenario(undefined, () => actions.checkSupplierInvoiceInArca(invoice.id)))).toBe(
@@ -806,7 +894,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
 
   describe('Libro IVA Compras', () => {
     it('periodo: filas ordenadas, NC restando, alicuotas usadas y totales', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const book = await import('./vat-book.server');
       const order = await receivedOrder([
         { quantity: 10, received: 10 },
@@ -886,7 +978,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
 
   describe('revision final: invariantes', () => {
     it('C-1: anular la factura base con una NC vigente sin vincular → error (facturado quedaria negativo)', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const order = await receivedOrder([{ quantity: 10, received: 10 }]);
       const line = order.lineIds[0]!;
       const f1 = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(line, '10')])));
@@ -898,7 +994,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('C-1: rechazar una factura observada con NC vigente → error', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const order = await receivedOrder([{ quantity: 10, received: 10 }]);
       const line = order.lineIds[0]!;
       const f1 = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(line, '10', '1300')])));
@@ -913,7 +1013,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('C-1: editar la factura base por debajo de lo acreditado → error', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const order = await receivedOrder([{ quantity: 10, received: 10 }]);
       const line = order.lineIds[0]!;
       const values = invoiceForm([orderLine(line, '10')]);
@@ -926,7 +1030,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('I-6: fecha de emision futura → error', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const order = await receivedOrder([{ quantity: 1, received: 1 }]);
       expect(
         expectFail(

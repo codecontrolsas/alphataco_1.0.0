@@ -16,21 +16,6 @@ export const RESOURCE_KIND_ORDER: MaintenanceResourceKind[] = ['vehicle', 'other
  */
 export const MAX_RESOURCE_RESULTS = 50;
 
-/**
- * Minúsculas y sin tildes, para que el buscador del selector de recursos
- * encuentre "Grúa Hidráulica" tecleando "grua hidraulica" (ticket 651).
- */
-export function normalizeSearchText(value: string): string {
-  const decomposed = value.normalize('NFD');
-  let result = '';
-  for (const char of decomposed) {
-    const code = char.charCodeAt(0);
-    // Se descartan las marcas combinantes (U+0300..U+036F) que quedaron sueltas
-    if (code < 0x0300 || code > 0x036f) result += char;
-  }
-  return result.toLowerCase();
-}
-
 export interface SelectableCardProps<T extends string> {
   value: T;
   /** Orden visual del grupo, para mover el foco con las flechas */

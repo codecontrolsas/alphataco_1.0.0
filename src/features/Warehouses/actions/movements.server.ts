@@ -1,17 +1,17 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
-import { checkPermissionServer } from '@/features/Permissions';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { toActionError } from '../lib/action-errors';
-import { formatMoney } from '../lib/format';
+import { revalidatePath } from 'next/cache';
+import { WAREHOUSE_PATH, toActionError } from '../lib/action-errors';
 import { dateColumnToYmd } from '../lib/batch-expiry';
+import { formatMoney } from '../lib/format';
 import { DESTINATION_SELECT, destinationLabel } from '../lib/labels';
 import { registerStockMovement, reverseStockMovement } from '../lib/stock-engine';
 import { StockError } from '../lib/stock-errors';
@@ -24,8 +24,6 @@ import {
 } from '../schemas/stock-movement';
 
 const logger = new Logger('features/Warehouses/movements');
-
-const WAREHOUSE_PATH = '/dashboard/warehouse';
 
 /** Un id que no es uuid haria fallar la query de Prisma: se responde como "no existe". */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -52,7 +50,9 @@ const REQUEST_HINT = 'hacé un pedido de materiales.';
  * controla despues de registrar, dentro de la transaccion: si se pasa, se lanza y se revierte
  * todo (el total sale del costo promedio que el motor leyo con lock, no de una estimacion).
  */
-export async function registerStockMovementAction(values: StockMovementFormValues): Promise<ActionResult<MovementResult>> {
+export async function registerStockMovementAction(
+  values: StockMovementFormValues
+): Promise<ActionResult<MovementResult>> {
   const parsed = stockMovementSchema.safeParse(values);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
 
@@ -64,7 +64,9 @@ export async function registerStockMovementAction(values: StockMovementFormValue
     isExit ? checkPermissionServer('almacenes', 'movimientos', 'direct_exit') : Promise.resolve(true),
   ]);
   if (!allowed) {
-    return fail(action === 'adjust' ? 'No tenés permiso para ajustar stock' : 'No tenés permiso para registrar movimientos');
+    return fail(
+      action === 'adjust' ? 'No tenés permiso para ajustar stock' : 'No tenés permiso para registrar movimientos'
+    );
   }
   if (!canDirectExit) return fail(`No tenés permiso de salida directa: ${REQUEST_HINT}`);
 
@@ -78,7 +80,11 @@ export async function registerStockMovementAction(values: StockMovementFormValue
       async (tx) => {
         if (isExit) {
           const needsApproval = await tx.materials.findFirst({
-            where: { id: { in: parsed.data.lines.map((l) => l.materialId) }, company_id: companyId, requires_approval: true },
+            where: {
+              id: { in: parsed.data.lines.map((l) => l.materialId) },
+              company_id: companyId,
+              requires_approval: true,
+            },
             select: { name: true },
             orderBy: { name: 'asc' },
           });
@@ -133,7 +139,10 @@ export async function registerStockMovementAction(values: StockMovementFormValue
 }
 
 /** Anula un movimiento con otro de efecto inverso. */
-export async function reverseStockMovementAction(movementId: string, reason: string): Promise<ActionResult<MovementResult>> {
+export async function reverseStockMovementAction(
+  movementId: string,
+  reason: string
+): Promise<ActionResult<MovementResult>> {
   const [allowed, canViewPrices] = await Promise.all([
     checkPermissionServer('almacenes', 'movimientos', 'reverse'),
     checkPermissionServer('almacenes', 'movimientos', 'view_prices'),
@@ -152,7 +161,12 @@ export async function reverseStockMovementAction(movementId: string, reason: str
           where: { movement_id: movementId, movement: { company_id: companyId } },
           select: { material_id: true },
         });
-        if (await hasTireMaterials(tx, lines.map((l) => l.material_id))) {
+        if (
+          await hasTireMaterials(
+            tx,
+            lines.map((l) => l.material_id)
+          )
+        ) {
           throw new StockError(
             'MANAGED_ELSEWHERE',
             'Los movimientos de cubiertas no se anulan desde Almacenes: se corrigen desde Gomería'

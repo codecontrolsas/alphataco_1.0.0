@@ -1,4 +1,4 @@
-import { ViewManagerServer } from '@/features/TabsManager';
+import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
 import { Suspense } from 'react';
 import { InactiveOtherEquipmentList } from './OtrosEquipos/InactiveOtherEquipmentList';
 import { InactiveOtherEquipmentTableSkeleton } from './OtrosEquipos/fallback/InactiveOtherEquipmentTableSkeleton';
@@ -32,7 +32,7 @@ export default function DadosDeBajaTabContent({ searchParams, permissions }: Pro
           tabSlug: 'inactive',
           content: (
             <Suspense fallback={<InactiveVehicleTableSkeleton />}>
-              <InactiveVehicleList searchParams={searchParams} permissions={permissions} />
+              <InactiveVehicleList searchParams={searchParams} />
             </Suspense>
           ),
         },

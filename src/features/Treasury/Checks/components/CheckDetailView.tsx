@@ -6,29 +6,35 @@ import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
 import { SectionCard } from '@/shared/components/common/SectionCard';
 import { Timeline, type TimelineItem } from '@/shared/components/common/Timeline';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import Link from 'next/link';
 import { useState } from 'react';
 import { cancelCheckOperation, cancelOpeningCheck } from '../../actions/checks.server';
-import type { CheckDetail } from '../../lib/check-types';
 import { CancelReasonDialog } from '../../components/CancelReasonDialog';
 import { TreasuryStatusBadge } from '../../components/TreasuryStatusBadge';
 import { CHECK_KIND_LABELS } from '../../lib/check-transitions';
+import type { CheckDetail } from '../../lib/check-types';
 import { formatInCurrency } from '../../lib/currency-format';
 import { formatDay } from '../../lib/dates';
 import { CHECK_STATUS_UI, DEPOSIT_WARNING_UI } from '../../lib/status-presentation';
-import { formatArgentinaDateTime } from '../../lib/today';
 import { RETURNED_BY_LABELS } from '../../schemas/checks';
 import { RejectCheckDialog } from './RejectCheckDialog';
 
 const dmy = (value: string | null) => formatDay(value) || '—';
-const cuit = (value: string) => (value.length === 11 ? `${value.slice(0, 2)}-${value.slice(2, 10)}-${value.slice(10)}` : value);
 
 const TIMELINE_TONE: Record<string, TimelineItem['tone']> = { danger: 'danger', warn: 'warn', ok: 'ok' };
 
 const OPERATION_LABELS: Record<string, string> = { DEPOSIT: 'depósito', DISCOUNT: 'descuento', REJECTION: 'rechazo' };
 
 /** Detalle del cheque: datos, aviso de plazo, historial, deudas y acciones según su estado. */
-export function CheckDetailView({ detail, can }: { detail: CheckDetail; can: { reject: boolean; cancel: boolean; collect: boolean } }) {
+export function CheckDetailView({
+  detail,
+  can,
+}: {
+  detail: CheckDetail;
+  can: { reject: boolean; cancel: boolean; collect: boolean };
+}) {
   const [rejecting, setRejecting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const canReject = can.reject && ['DEPOSITED', 'ENDORSED', 'DISCOUNTED'].includes(detail.status);
@@ -47,7 +53,8 @@ export function CheckDetailView({ detail, can }: { detail: CheckDetail; can: { r
       meta: (
         <>
           <span className="tabular-nums">{dmy(e.date)}</span>
-          {e.user ? ` · ${e.user}` : ''} · registrado <span className="tabular-nums">{formatArgentinaDateTime(e.createdAt)}</span>
+          {e.user ? ` · ${e.user}` : ''} · registrado{' '}
+          <span className="tabular-nums">{formatArgentinaDateTime(e.createdAt)}</span>
         </>
       ),
       children: e.document ? (
@@ -94,7 +101,9 @@ export function CheckDetailView({ detail, can }: { detail: CheckDetail; can: { r
             )}
             {detail.endorsement && detail.status === 'ENDORSED' && (
               <Button asChild size="sm" variant="outline">
-                <Link href={`/dashboard/purchases/payments/${detail.endorsement.id}`}>Endosado en la {detail.endorsement.number}</Link>
+                <Link href={`/dashboard/purchases/payments/${detail.endorsement.id}`}>
+                  Endosado en la {detail.endorsement.number}
+                </Link>
               </Button>
             )}
           </>
@@ -109,7 +118,7 @@ export function CheckDetailView({ detail, can }: { detail: CheckDetail; can: { r
           <Field label="Importe">
             <span className="tabular-nums">{formatInCurrency(detail.amount, 'ARS')}</span>
           </Field>
-          <Field label="Librador" value={`${detail.drawerName} · CUIT ${cuit(detail.drawerCuit)}`} />
+          <Field label="Librador" value={`${detail.drawerName} · CUIT ${formatCuitText(detail.drawerCuit)}`} />
           <Field label="Cliente" value={detail.customer.name} />
           <Field label="Emisión" value={dmy(detail.issueDate)} mono />
           <Field label="Fecha de pago" value={dmy(detail.paymentDate)} mono />
@@ -129,12 +138,14 @@ export function CheckDetailView({ detail, can }: { detail: CheckDetail; can: { r
         </FieldGrid>
         {last?.kind === 'REJECTION' && (
           <p className="mt-4 text-sm text-muted-foreground">
-            Rechazo {last.number} del {dmy(last.date)}: {last.reason} (lo devolvió {last.returnedBy ? RETURNED_BY_LABELS[last.returnedBy].toLowerCase() : '—'}).
+            Rechazo {last.number} del {dmy(last.date)}: {last.reason} (lo devolvió{' '}
+            {last.returnedBy ? RETURNED_BY_LABELS[last.returnedBy].toLowerCase() : '—'}).
           </p>
         )}
         {last?.kind === 'DISCOUNT' && (
           <p className="mt-4 text-sm text-muted-foreground tabular-nums">
-            Descuento {last.number} del {dmy(last.date)}: intereses {formatInCurrency(last.interest, 'ARS')}, comisión {formatInCurrency(last.fee, 'ARS')}.
+            Descuento {last.number} del {dmy(last.date)}: intereses {formatInCurrency(last.interest, 'ARS')}, comisión{' '}
+            {formatInCurrency(last.fee, 'ARS')}.
           </p>
         )}
       </SectionCard>
@@ -145,14 +156,24 @@ export function CheckDetailView({ detail, can }: { detail: CheckDetail; can: { r
             {detail.customerDebt && (
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span>
-                  {detail.customer.name} debe <span className="font-semibold tabular-nums">{formatInCurrency(detail.customerDebt.pending, 'ARS')}</span>
+                  {detail.customer.name} debe{' '}
+                  <span className="font-semibold tabular-nums">
+                    {formatInCurrency(detail.customerDebt.pending, 'ARS')}
+                  </span>
                   {detail.customerDebt.reserved !== '0.00' && (
-                    <span className="text-muted-foreground"> · {formatInCurrency(detail.customerDebt.reserved, 'ARS')} en un recibo en borrador</span>
+                    <span className="text-muted-foreground">
+                      {' '}
+                      · {formatInCurrency(detail.customerDebt.reserved, 'ARS')} en un recibo en borrador
+                    </span>
                   )}
                 </span>
                 {can.collect && detail.customerDebt.pending !== '0.00' && (
                   <Button asChild size="sm">
-                    <Link href={`/dashboard/treasury/receipts/new?customerId=${detail.customer.id}&checkId=${detail.id}`}>Cobrar</Link>
+                    <Link
+                      href={`/dashboard/treasury/receipts/new?customerId=${detail.customer.id}&checkId=${detail.id}`}
+                    >
+                      Cobrar
+                    </Link>
                   </Button>
                 )}
               </div>
@@ -160,7 +181,9 @@ export function CheckDetailView({ detail, can }: { detail: CheckDetail; can: { r
             {detail.supplierDebt && detail.supplier && (
               <p>
                 Se le debe a {detail.supplier.name}{' '}
-                <span className="font-semibold tabular-nums">{formatInCurrency(detail.supplierDebt.pending, 'ARS')}</span>
+                <span className="font-semibold tabular-nums">
+                  {formatInCurrency(detail.supplierDebt.pending, 'ARS')}
+                </span>
                 <span className="text-muted-foreground"> · se paga con una orden de pago en Compras</span>
               </p>
             )}
@@ -169,15 +192,29 @@ export function CheckDetailView({ detail, can }: { detail: CheckDetail; can: { r
       )}
 
       <SectionCard title="Historial">
-        {timeline.length > 0 ? <Timeline items={timeline} /> : <p className="text-sm text-muted-foreground">Sin movimientos registrados.</p>}
+        {timeline.length > 0 ? (
+          <Timeline items={timeline} />
+        ) : (
+          <p className="text-sm text-muted-foreground">Sin movimientos registrados.</p>
+        )}
       </SectionCard>
 
-      {canReject && <RejectCheckDialog open={rejecting} onOpenChange={setRejecting} check={{ id: detail.id, number: detail.number, bank: detail.bank, status: detail.status }} />}
+      {canReject && (
+        <RejectCheckDialog
+          open={rejecting}
+          onOpenChange={setRejecting}
+          check={{ id: detail.id, number: detail.number, bank: detail.bank, status: detail.status }}
+        />
+      )}
       {(canCancelLast || canCancelOpening) && (
         <CancelReasonDialog
           open={cancelling}
           onOpenChange={setCancelling}
-          title={last ? `Anular ${OPERATION_LABELS[last.kind] ?? 'operación'} ${last.number}` : 'Anular la carga inicial del cheque'}
+          title={
+            last
+              ? `Anular ${OPERATION_LABELS[last.kind] ?? 'operación'} ${last.number}`
+              : 'Anular la carga inicial del cheque'
+          }
           description={
             last?.kind === 'REJECTION'
               ? 'El cheque vuelve al estado anterior al rechazo y se anulan sus movimientos.'

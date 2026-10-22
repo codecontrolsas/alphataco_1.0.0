@@ -1,5 +1,6 @@
-import moment from 'moment';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { isUuid } from '@/shared/lib/uuid';
+import moment from 'moment';
 
 /**
  * Parsers de los valores de filtro de las tablas de Tesorería. Todo lo que llega por la URL es
@@ -17,15 +18,14 @@ const ARGENTINA_OFFSET = '-03:00';
 const MIN_YEAR = 1900;
 const MAX_YEAR = 2100;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-export const isUuid = (value: string): boolean => UUID_RE.test(value);
-
 /** Texto tipeado: recortado, sin NUL (Postgres lo rechaza) y acotado. `null` si queda vacío. */
 export function textValue(value: string | undefined | null): string | null {
   if (value == null) return null;
   // eslint-disable-next-line no-control-regex
-  const clean = value.replace(/\u0000/g, '').trim().slice(0, TEXT_MAX_LENGTH);
+  const clean = value
+    .replace(/\u0000/g, '')
+    .trim()
+    .slice(0, TEXT_MAX_LENGTH);
   return clean === '' ? null : clean;
 }
 
@@ -59,7 +59,10 @@ export function parseBoundedInt(text: string | undefined | null): number | null 
 
 /** skip/take seguros: `page`/`pageSize` vienen de la URL y pueden ser NaN, negativos o enormes. */
 export function safePaging(state: { page: number; pageSize: number }): { skip: number; take: number } {
-  const take = Number.isInteger(state.pageSize) && state.pageSize >= 1 ? Math.min(state.pageSize, PAGE_SIZE_MAX) : PAGE_SIZE_DEFAULT;
+  const take =
+    Number.isInteger(state.pageSize) && state.pageSize >= 1
+      ? Math.min(state.pageSize, PAGE_SIZE_MAX)
+      : PAGE_SIZE_DEFAULT;
   const page = Number.isInteger(state.page) && state.page >= 0 ? state.page : 0;
   return { skip: Math.min(page * take, INT4_MAX), take };
 }
@@ -83,7 +86,7 @@ export function facetWhere(
 ): Record<string, unknown> | null {
   const raw = values ?? [];
   const valid = raw.filter((v) =>
-    options.kind === 'uuid' ? UUID_RE.test(v) : (options.allowed as readonly string[]).includes(v)
+    options.kind === 'uuid' ? isUuid(v) : (options.allowed as readonly string[]).includes(v)
   );
   const wantsNull = options.nullable === true && raw.includes(NULL_FILTER_VALUE);
   if (valid.length === 0 && !wantsNull) return null;
@@ -122,8 +125,10 @@ export function buildTreasuryDateRangeWhere(
 
   for (const id of columns.dateColumns ?? []) apply(id, (day) => new Date(`${day}T00:00:00.000Z`));
   for (const id of columns.timestampColumns ?? []) {
-    apply(id, (day, edge) =>
-      new Date(edge === 'from' ? `${day}T00:00:00.000${ARGENTINA_OFFSET}` : `${day}T23:59:59.999${ARGENTINA_OFFSET}`)
+    apply(
+      id,
+      (day, edge) =>
+        new Date(edge === 'from' ? `${day}T00:00:00.000${ARGENTINA_OFFSET}` : `${day}T23:59:59.999${ARGENTINA_OFFSET}`)
     );
   }
   return where;

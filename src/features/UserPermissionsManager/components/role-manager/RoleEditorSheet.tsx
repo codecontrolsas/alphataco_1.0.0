@@ -5,14 +5,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
+import { type ModulesWithTabsData, type RoleWithCount } from '@/features/Permissions/actions/roles.server';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
-import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, Download, Plus } from 'lucide-react';
 import { useMemo } from 'react';
-import { getModulesWithTabsServer, type ModulesWithTabsData, type RoleWithCount } from '../../actions.server';
 import type { useRoleEquipmentTypesDraft } from '../../hooks/useEquipmentTypeVisibility';
+import { usePermissionIndex } from '../../hooks/usePermissionIndex';
 import type { RoleNotificationsDraft } from '../../hooks/useRoleNotificationsDraft';
-import { buildPermissionIndex, diffPermissionSets, permissionKey } from '../../lib/permission-rules';
+import { diffPermissionSets, permissionKey } from '../../lib/permission-rules';
 import type { PermissionPair } from '../../lib/permission-types';
 import { RoleEquipmentTypesSection } from '../RoleEquipmentTypesSection';
 import { RoleNotificationsSection } from '../RoleNotificationsSection';
@@ -84,13 +84,7 @@ export function RoleEditorSheet({
   isWaitingPermissionsBaseline,
   onSave,
 }: RoleEditorSheetProps) {
-  const { data: modules } = useQuery({
-    queryKey: ['modules-with-tabs'],
-    queryFn: () => getModulesWithTabsServer(),
-    initialData: initialModules,
-    staleTime: 5 * 60 * 1000,
-  });
-  const index = useMemo(() => buildPermissionIndex(modules), [modules]);
+  const { modules, index } = usePermissionIndex(initialModules);
 
   const delta = useMemo(() => {
     if (!editingRole || !permissionsBaseline) return null;

@@ -1,12 +1,9 @@
 'use server';
 
+import { signInLinkedEmployee } from '@/features/Auth/lib/employee-login';
 import { getAssignedSectorsForEmployee, getOperatorIdentity } from '@/features/OperatorPanel/actions/perimeter';
 import { Logger } from '@/lib/logger';
 import { auth } from '@/shared/lib/auth';
-import { normalizeEmail, rejectLogin } from '@/shared/lib/auth-credentials';
-import { prisma } from '@/shared/lib/prisma';
-import { prismaSystem } from '@/shared/lib/prisma-system';
-import { APIError } from 'better-auth/api';
 import { revalidatePath } from 'next/cache';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -30,50 +27,14 @@ const SECTOR_COOKIE_OPTIONS = {
  * ser operario, se le cierra la sesión recién abierta: entrar al panel es todo o nada.
  */
 export async function operatorLogin(email: string, password: string) {
-  const requestHeaders = await headers();
-  let userId: string;
-  let sessionToken: string;
-
-  try {
-    const result = await auth.api.signInEmail({
-      body: { email: normalizeEmail(email), password },
-      headers: requestHeaders,
-    });
-    userId = result.user.id;
-    sessionToken = result.token;
-  } catch (error) {
-    if (error instanceof APIError) {
-      return { error: error.body?.message ?? 'Correo o contraseña inválidos' };
-    }
-    return { error: 'No se pudo autenticar' };
-  }
-
-  // `profile.credential_id` es el id de sesión: mismo criterio que `getServerAuthProfile()`.
-  // Login: todavia no hay empresa activa, asi que el perfil y el legajo se leen con el cliente de sistema.
-  const profile = await prismaSystem.profile.findUnique({
-    where: { credential_id: userId },
-    select: { employee_id: true },
-  });
-
-  if (!profile?.employee_id) {
-    await rejectLogin(sessionToken, requestHeaders);
-    return { error: 'Tu usuario no tiene un empleado vinculado. Contacta al administrador.' };
-  }
-
-  const employee = await prismaSystem.employees.findUnique({
-    where: { id: profile.employee_id },
-    select: { id: true, company_id: true },
-  });
-
-  if (!employee?.company_id) {
-    await rejectLogin(sessionToken, requestHeaders);
-    return { error: 'No se encontro el empleado vinculado. Contacta al administrador.' };
-  }
+  const login = await signInLinkedEmployee(email, password, { requireCompany: true });
+  if ('error' in login) return { error: login.error };
+  const { employee } = login;
 
   const sectors = await getAssignedSectorsForEmployee(employee.id, employee.company_id);
 
   if (sectors.length === 0) {
-    await rejectLogin(sessionToken, requestHeaders);
+    await login.rejectSession();
     return { error: 'Tu empleado no tiene sectores de taller asignados. Contacta al administrador.' };
   }
 
@@ -153,4 +114,3 @@ export async function getOperatorContext() {
 }
 
 export type OperatorContext = NonNullable<Awaited<ReturnType<typeof getOperatorContext>>>;
-export type OperatorAssignedSector = OperatorContext['sectors'][number];

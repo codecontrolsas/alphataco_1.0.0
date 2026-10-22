@@ -75,7 +75,7 @@ function EquipmentTypesForm({
   const queryClient = useQueryClient();
 
   // Hook para obtener checklists activos
-  const { data: checklists = [], isLoading: isLoadingChecklists, error: checklistsError } = useActiveChecklists();
+  const { data: checklists = [], isLoading: isLoadingChecklists } = useActiveChecklists();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -434,7 +434,7 @@ function EquipmentTypesForm({
           <FormField
             control={form.control}
             name="is_active"
-            render={({ field }) => (
+            render={() => (
               <FormItem className="space-y-3">
                 <FormLabel>Activo</FormLabel>
                 <FormControl>

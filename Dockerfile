@@ -136,6 +136,7 @@ COPY --from=build --chown=nextjs:nodejs /app/src/generated ./src/generated
 # Seed de empresa (RUN_SEED=true) y los modulos locales que importa.
 COPY --from=build --chown=nextjs:nodejs /app/scripts/seed-company.ts ./scripts/seed-company.ts
 COPY --from=build --chown=nextjs:nodejs /app/scripts/seed/permission-rows.ts ./scripts/seed/permission-rows.ts
+COPY --from=build --chown=nextjs:nodejs /app/scripts/lib/uuid-v5.ts ./scripts/lib/uuid-v5.ts
 COPY --from=build --chown=nextjs:nodejs /app/src/features/Permissions/permissions-map.ts ./src/features/Permissions/permissions-map.ts
 COPY --from=build --chown=nextjs:nodejs /app/src/features/Warehouses/lib/default-units.ts ./src/features/Warehouses/lib/default-units.ts
 COPY --from=build --chown=nextjs:nodejs /app/src/features/Notifications/notification-catalog.ts ./src/features/Notifications/notification-catalog.ts
@@ -145,6 +146,7 @@ COPY --from=build --chown=nextjs:nodejs /app/src/shared/lib/prisma-pg-config.ts 
 COPY --from=build --chown=nextjs:nodejs /app/scripts/bootstrap-admin.ts ./scripts/bootstrap-admin.ts
 # Creacion idempotente de los buckets de RustFS en cada arranque (ver docker/entrypoint.sh).
 COPY --from=build --chown=nextjs:nodejs /app/scripts/ensure-buckets.ts ./scripts/ensure-buckets.ts
+COPY --from=build --chown=nextjs:nodejs /app/scripts/lib/s3-client.ts ./scripts/lib/s3-client.ts
 COPY --from=build --chown=nextjs:nodejs /app/src/shared/lib/storage-buckets.ts ./src/shared/lib/storage-buckets.ts
 # CLI de Prisma + deps del seed, encima del node_modules trazado del standalone.
 COPY --from=tools --chown=nextjs:nodejs /tools/node_modules ./node_modules

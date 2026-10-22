@@ -5,17 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import {
-  assignRoleToUserServer,
-  getUsersForRoleAssignment,
-  removeRoleFromUserServer,
-} from '@/features/UserPermissionsManager/actions.server';
+import { assignRoleToUserServer, getUsersForRoleAssignment, removeRoleFromUserServer } from '@/features/Permissions/actions/roles.server';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, Search, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import type { RoleWithCount, UsersForRoleData } from '../actions.server';
+import type { RoleWithCount, UsersForRoleData } from '@/features/Permissions/actions/roles.server';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

@@ -1,14 +1,15 @@
 'use client';
 
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
+import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type {
   DataTableFacetedFilterConfig,
   DataTableFilterOption,
   DataTableSearchParams,
   FacetResult,
-} from '@/shared/components/common/DataTable';
-import { DataTable } from '@/shared/components/common/DataTable';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+} from '@/shared/components/common/DataTable/types';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Ban, CheckCircle2, CircleOff, Shield } from 'lucide-react';
@@ -57,13 +58,7 @@ export function _UsersDataTable({
   );
 
   // ── Permisos (construidos desde el map del servidor) ──────────────────────
-  const permissions = useMemo(
-    () => ({
-      hasPermission: (module: string, tab: string, action: string) =>
-        permissionsMap[`${module}:${tab}:${action}`] === true,
-    }),
-    [permissionsMap]
-  );
+  const permissions = usePermissionChecker(permissionsMap);
 
   const canCreate = permissionsMap['configuracion:usuarios-empleados:create'] === true;
 

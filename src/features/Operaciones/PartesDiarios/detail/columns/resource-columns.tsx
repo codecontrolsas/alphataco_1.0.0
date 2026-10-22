@@ -2,7 +2,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { dailyReportTypeServiceLabels } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -52,8 +52,7 @@ export function getResourceColumns(): ColumnDef<DailyReportDetailRow>[] {
     {
       id: 'customer',
       accessorFn: (row) => row.customers?.name ?? '',
-      meta: { title: 'Cliente' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Cliente" />,
+      ...titled('Cliente'),
       cell: ({ row }) => <span className="font-medium">{row.original.customers?.name ?? '—'}</span>,
       filterFn: (row, _id, value: string[]) => {
         const id = row.original.customer_id;
@@ -66,8 +65,7 @@ export function getResourceColumns(): ColumnDef<DailyReportDetailRow>[] {
     {
       id: 'service',
       accessorFn: (row) => row.customer_services?.service_name ?? '',
-      meta: { title: 'Servicio' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Servicio" />,
+      ...titled('Servicio'),
       cell: ({ row }) => <span>{row.original.customer_services?.service_name ?? '—'}</span>,
       filterFn: (row, _id, value: string[]) => {
         const id = row.original.service_id;
@@ -80,8 +78,7 @@ export function getResourceColumns(): ColumnDef<DailyReportDetailRow>[] {
     {
       id: 'item',
       accessorFn: (row) => row.service_items?.item_name ?? '',
-      meta: { title: 'Ítem' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Ítem" />,
+      ...titled('Ítem'),
       cell: ({ row }) => <span>{row.original.service_items?.item_name ?? '—'}</span>,
       filterFn: (row, _id, value: string[]) => {
         const id = row.original.item_id;
@@ -94,8 +91,7 @@ export function getResourceColumns(): ColumnDef<DailyReportDetailRow>[] {
     {
       id: 'sector',
       accessorFn: (row) => row.service_sectors?.sectors?.name ?? '',
-      meta: { title: 'Sector' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Sector" />,
+      ...titled('Sector'),
       cell: ({ row }) => {
         const name = row.original.service_sectors?.sectors?.name;
         if (!name) return <span className="text-muted-foreground text-xs">—</span>;
@@ -116,8 +112,7 @@ export function getResourceColumns(): ColumnDef<DailyReportDetailRow>[] {
     {
       id: 'area',
       accessorFn: (row) => row.service_areas?.areas_cliente?.descripcion_corta ?? '',
-      meta: { title: 'Área' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Área" />,
+      ...titled('Área'),
       cell: ({ row }) => {
         const name = row.original.service_areas?.areas_cliente?.descripcion_corta;
         if (!name) return <span className="text-muted-foreground text-xs">—</span>;
@@ -137,8 +132,7 @@ export function getResourceColumns(): ColumnDef<DailyReportDetailRow>[] {
     // ── Tipo Servicio (enum nullable) ─────────────────────────────────────────
     {
       accessorKey: 'type_service',
-      meta: { title: 'Tipo Servicio' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo Servicio" />,
+      ...titled('Tipo Servicio'),
       cell: ({ row }) => {
         const val = row.original.type_service;
         if (!val) return <span className="text-muted-foreground text-xs">—</span>;
@@ -159,9 +153,8 @@ export function getResourceColumns(): ColumnDef<DailyReportDetailRow>[] {
           .map((r) => r.equipos_clientes?.name ?? '')
           .filter(Boolean)
           .join(', '),
-      meta: { title: 'Equipo cliente' },
+      ...titled('Equipo cliente'),
       enableSorting: false,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo cliente" />,
       cell: ({ row }) => <CustomerEquipmentBadgeCell row={row.original} />,
       filterFn: (row, _id, value: string[]) => {
         const relations = row.original.dailyreport_customer_equipment_relations;

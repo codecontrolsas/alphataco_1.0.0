@@ -1,24 +1,34 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { StackedCell } from '@/shared/components/common/StackedCell';
 import { formatMoney } from '@/features/Warehouses/lib/format';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { matchesId, titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { StackedCell } from '@/shared/components/common/StackedCell';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ArrowLeftRight, HandCoins, Pencil, PiggyBank, ScrollText, Truck, WalletCards, type LucideIcon } from 'lucide-react';
-import { formatArgentinaDateTime } from '../../lib/today';
+import {
+  ArrowLeftRight,
+  HandCoins,
+  Pencil,
+  PiggyBank,
+  ScrollText,
+  Truck,
+  WalletCards,
+  type LucideIcon,
+} from 'lucide-react';
 import Link from 'next/link';
 import type { TreasuryAccountRow } from '../../actions/accounts.server';
 import type { TreasuryConceptRow } from '../../actions/concepts.server';
-import { TREASURY_MOVEMENT_KIND_LABELS } from '../../schemas/movements';
-import { MovementRowActions } from '../components/MovementRowActions';
-import type { TreasuryMovementListItem } from './actions.server';
-import { MOVEMENT_STATE_LABELS } from './constants';
 import { AccountCell } from '../../components/AccountCell';
 import { TreasuryStatusBadge } from '../../components/TreasuryStatusBadge';
 import { formatDay } from '../../lib/dates';
 import { MOVEMENT_STATE_UI } from '../../lib/status-presentation';
+import { TREASURY_MOVEMENT_KIND_LABELS } from '../../schemas/movements';
+import { MovementRowActions } from '../components/MovementRowActions';
+import type { TreasuryMovementListItem } from './actions.server';
+import { MOVEMENT_STATE_LABELS } from './constants';
 
 export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['created_at', 'cancel_reason'];
 
@@ -53,23 +63,20 @@ export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): C
     {
       id: 'date',
       accessorKey: 'date',
-      meta: { title: 'Fecha' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
+      ...titled('Fecha'),
       cell: ({ row }) => <span className="tabular-nums">{formatValueDate(row.original.date)}</span>,
     },
     {
       id: 'account',
       accessorFn: (row) => row.account.name,
-      meta: { title: 'Cuenta' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Cuenta" />,
+      ...titled('Cuenta'),
       cell: ({ row }) => <AccountCell account={row.original.account} />,
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.account.id),
+      filterFn: matchesId((r) => r.account.id),
     },
     {
       id: 'kind',
       accessorFn: (row) => TREASURY_MOVEMENT_KIND_LABELS[row.kind],
-      meta: { title: 'Tipo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
+      ...titled('Tipo'),
       cell: ({ row }) => {
         const Icon = movementKindIcons[row.original.kind];
         return (
@@ -79,13 +86,12 @@ export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): C
           </Badge>
         );
       },
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.kind),
+      filterFn: matchesId((r) => r.kind),
     },
     {
       id: 'concept',
       accessorFn: (row) => row.concept?.name ?? '',
-      meta: { title: 'Concepto' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Concepto" />,
+      ...titled('Concepto'),
       cell: ({ row }) => <span>{row.original.concept?.name ?? '-'}</span>,
       filterFn: (row, _id, value: string[]) => {
         const id = row.original.concept?.id;
@@ -96,15 +102,18 @@ export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): C
     {
       id: 'description',
       accessorKey: 'description',
-      meta: { title: 'Descripción' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
+      ...titled('Descripción'),
       cell: ({ row }) => <span className="line-clamp-2 max-w-xs">{row.original.description ?? '-'}</span>,
     },
     {
       id: 'origin',
       accessorFn: (row) =>
         (row.ownCheck ? `Ch. Nº ${row.ownCheck.number}` : null) ??
-        row.paymentOrder?.number ?? row.customerReceipt?.number ?? row.transfer?.number ?? row.checkOperation?.number ?? '',
+        row.paymentOrder?.number ??
+        row.customerReceipt?.number ??
+        row.transfer?.number ??
+        row.checkOperation?.number ??
+        '',
       meta: { title: 'Origen' },
       // Sin orden directo: el numero vive en dos relaciones distintas.
       enableSorting: false,
@@ -187,15 +196,12 @@ export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): C
     {
       id: 'income',
       accessorFn: (row) => (isIncome(row.amount) ? row.amount : ''),
-      meta: { title: 'Ingreso' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Ingreso" />,
+      ...titled('Ingreso'),
       cell: ({ row }) =>
         isIncome(row.original.amount) ? (
           <span
             className={
-              row.original.cancelled
-                ? 'tabular-nums text-muted-foreground line-through'
-                : 'tabular-nums text-ok'
+              row.original.cancelled ? 'tabular-nums text-muted-foreground line-through' : 'tabular-nums text-ok'
             }
           >
             {formatMoney(row.original.amount)}
@@ -205,8 +211,7 @@ export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): C
     {
       id: 'expense',
       accessorFn: (row) => (isIncome(row.amount) ? '' : absAmount(row.amount)),
-      meta: { title: 'Egreso' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Egreso" />,
+      ...titled('Egreso'),
       cell: ({ row }) =>
         isIncome(row.original.amount) ? null : (
           <span
@@ -229,8 +234,7 @@ export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): C
           : row.reconciled
             ? `${MOVEMENT_STATE_LABELS.ACTIVE} - Conciliado`
             : MOVEMENT_STATE_LABELS.ACTIVE,
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const key = row.original.cancelled ? 'CANCELLED' : 'ACTIVE';
         return (
@@ -265,8 +269,7 @@ export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): C
     {
       id: 'created_at',
       accessorKey: 'created_at',
-      meta: { title: 'Fecha de alta' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de alta" />,
+      ...titled('Fecha de alta'),
       cell: ({ row }) => <span className="tabular-nums">{formatArgentinaDateTime(row.original.created_at)}</span>,
     },
   ];

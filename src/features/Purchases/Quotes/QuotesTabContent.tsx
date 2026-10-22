@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/shared/components/skeletons/TableSkeleton';
 import { Button } from '@/components/ui/button';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { Plus } from 'lucide-react';
@@ -5,7 +6,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import { QuotesList } from './QuotesList/QuotesList';
-import { QuotesTableSkeleton } from './QuotesList/fallback/QuotesTableSkeleton';
+
 
 /** Pedidos de cotización (spec Compras etapa 2 §4). */
 export default async function QuotesTabContent({
@@ -29,7 +30,7 @@ export default async function QuotesTabContent({
           </Button>
         </div>
       )}
-      <Suspense fallback={<QuotesTableSkeleton />}>
+      <Suspense fallback={<TableSkeleton inCard columnCount={7} rowCount={7} />}>
         <QuotesList searchParams={searchParams} />
       </Suspense>
     </div>

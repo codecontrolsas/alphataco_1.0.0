@@ -8,7 +8,7 @@ import { EmployeeInfoCard } from '@/features/Documentacion/DetalleDocumento/comp
 import { EquipmentInfoCard } from '@/features/Documentacion/DetalleDocumento/components/EquipmentInfoCard';
 import { resourceLabel } from '@/features/Documentacion/DetalleDocumento/lib/document-detail';
 import { MISSING_ROW_PREFIX } from '@/features/Documentacion/shared/compliance/server/document-entries.server';
-import { checkPermissionServer, getUserPermissionsMapServer } from '@/features/Permissions';
+import { checkPermissionServer, getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { RecordSectionsServer, type RecordSectionDefinition } from '@/features/TabsManager/RecordSectionsServer';
 import BackButton from '@/shared/components/common/BackButton';
 import { Archive, Building2, FileSearch, FileText, Truck, User } from 'lucide-react';

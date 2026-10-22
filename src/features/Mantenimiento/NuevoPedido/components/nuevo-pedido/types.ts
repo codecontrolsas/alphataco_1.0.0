@@ -1,9 +1,5 @@
 import type { fetchSupervisorsForResource } from '@/features/Checklists/actions/actionsServer';
-import type { fetchAllEquipmentBasicData } from '@/features/Mantenimiento/actions/equipment-basic';
 import type { CreateDeviationFromNuevoPedido } from '../../actions/orders.server';
-
-/** Equipo tal como lo devuelve el listado básico de vehículos. */
-export type Equipment = Awaited<ReturnType<typeof fetchAllEquipmentBasicData>>[number];
 
 export type SelectedDeviation = CreateDeviationFromNuevoPedido;
 

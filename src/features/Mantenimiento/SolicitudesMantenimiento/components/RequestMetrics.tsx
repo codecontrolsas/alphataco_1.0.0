@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { ATTENTION_THRESHOLDS } from '@/features/Mantenimiento/lib/attention-thresholds';
 import { AttentionBanner } from '@/features/Mantenimiento/shared/components/AttentionBanner';
-import { useDataTableFilter } from '@/shared/components/common/DataTable';
+import { useDataTableFilter } from '@/shared/components/common/DataTable/useDataTableFilter';
 import { MetricCard } from '@/shared/components/common/MetricCard';
 import { useQuery } from '@tanstack/react-query';
 import { REQUESTS_PARAM_NAMESPACE, REQUEST_METRICS_QUERY_KEY } from '../constants';

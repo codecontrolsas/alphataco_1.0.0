@@ -1,4 +1,4 @@
-import { IsoFigure } from '@/shared/components/iso';
+import { IsoFigure } from '@/shared/components/iso/IsoFigure';
 import { figureSvgOf } from '../../figures/registry';
 
 /**

@@ -3,8 +3,9 @@
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { useDataTableFilter } from '@/shared/components/common/DataTable';
-import { IsoFigure, useIsoSelect } from '@/shared/components/iso';
+import { useDataTableFilter } from '@/shared/components/common/DataTable/useDataTableFilter';
+import { IsoFigure } from '@/shared/components/iso/IsoFigure';
+import { useIsoSelect } from '@/shared/components/iso/use-iso-select';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { getTireRackData } from '../../actions/tire-list.server';

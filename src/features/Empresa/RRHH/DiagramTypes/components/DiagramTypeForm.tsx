@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
-import { Logger } from '@/lib/logger';
 import { useCatalogSheetBusy, useCatalogSheetClose } from '@/shared/components/common/CatalogFormSheet';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
@@ -16,12 +15,6 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 import { createDiagramTypePrisma, updateDiagramTypePrisma } from '../actions.server';
 import { useDiagramTypeStore } from '../store/diagramType.store';
-
-// ============================================================================
-// LOGGER
-// ============================================================================
-
-const logger = new Logger('DiagramTypeForm');
 
 // ============================================================================
 // SCHEMA

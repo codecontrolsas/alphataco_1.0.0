@@ -2,20 +2,21 @@
 
 import { amountOf } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { cbteLabel, formatVoucherLabel } from '@/features/Comercial/Facturacion/lib/invoice-type';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError } from '@/shared/lib/export-batches';
+import { ExportTooLargeError, exportFailure, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
-import { formatCuitText } from '@/shared/utils/cuit-text';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { receivableStateSql, receivablesBaseSql } from '../../lib/receivables';
-import { COLLECTABLE_CBTE_TYPES, overdueDays, receivableState, type ReceivableState } from '../../lib/receipt-rules';
+import { isUuid } from '@/shared/lib/uuid';
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import { localToday } from '../../actions/shared';
-import { isUuid, ownEntry, parseAmountText, parseBoundedInt, parseDay, safePaging, textValue } from '../../lib/filter-values';
+import { ownEntry, parseAmountText, parseBoundedInt, parseDay, safePaging, textValue } from '../../lib/filter-values';
+import { COLLECTABLE_CBTE_TYPES, overdueDays, receivableState, type ReceivableState } from '../../lib/receipt-rules';
+import { receivableStateSql, receivablesBaseSql } from '../../lib/receivables';
 import { RECEIVABLE_CURRENCIES } from './constants';
 
 const logger = new Logger('features/Treasury/Collections/ReceivablesList');
@@ -24,9 +25,6 @@ type FilterState = ReturnType<typeof parseSearchParams>;
 
 /** Tope de filas por export: más que esto se pide acotar con filtros. */
 const EXPORT_LIMIT = 10_000;
-
-const tooLargeMessage = (maxRows: number) =>
-  `Hay más de ${maxRows.toLocaleString('es-AR')} comprobantes a cobrar con los filtros actuales. Acote la exportación con filtros.`;
 
 const STATES: readonly ReceivableState[] = ['OVERDUE', 'DUE', 'IN_DRAFT'];
 
@@ -166,7 +164,9 @@ function shape(rows: ReceivableRow[], today: string) {
     state:
       r.row_kind === 'CHECK'
         ? // La deuda de un cheque rechazado nace vencida (aunque el rechazo sea de hoy)
-          (amountOf(r.pending) > BigInt(0) ? 'OVERDUE' : 'IN_DRAFT')
+          amountOf(r.pending) > BigInt(0)
+          ? 'OVERDUE'
+          : 'IN_DRAFT'
         : receivableState({ free: amountOf(r.pending), reserved: amountOf(r.reserved), dueDate: r.due_date, today }),
   }));
 }
@@ -206,7 +206,9 @@ export async function getReceivablesPaginated(searchParams: DataTableSearchParam
       prisma.$queryRaw<ReceivableRow[]>`
         SELECT ${SELECT_COLUMNS} FROM (${receivablesBaseSql(companyId)}) r ${where} ${orderSql(state, today)}
         LIMIT ${take} OFFSET ${skip}`,
-      prisma.$queryRaw<{ total: bigint }[]>`SELECT count(*) AS total FROM (${receivablesBaseSql(companyId)}) r ${where}`,
+      prisma.$queryRaw<
+        { total: bigint }[]
+      >`SELECT count(*) AS total FROM (${receivablesBaseSql(companyId)}) r ${where}`,
     ]);
     return { data: shape(rows, today), total: Number(counted[0]?.total ?? 0) };
   } catch (error) {
@@ -232,18 +234,12 @@ export async function getAllReceivablesForExport(
     const rows = await prisma.$queryRaw<ReceivableRow[]>`
       SELECT ${SELECT_COLUMNS} FROM (${receivablesBaseSql(companyId)}) r ${whereSql(buildConditions(state, today))} ${orderSql(state, today)}
       LIMIT ${EXPORT_LIMIT + 1}`;
-    if (rows.length > EXPORT_LIMIT) throw new ExportTooLargeError(tooLargeMessage(EXPORT_LIMIT));
+    if (rows.length > EXPORT_LIMIT)
+      throw new ExportTooLargeError(tooManyRowsMessage('comprobantes a cobrar')(EXPORT_LIMIT));
     return { ok: true, data: shape(rows, today) };
   } catch (error) {
     logger.error('Error al exportar comprobantes a cobrar', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError
-          ? error.message
-          : 'No se pudo exportar la lista de comprobantes a cobrar. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de comprobantes a cobrar. Intente nuevamente.');
   }
 }
 

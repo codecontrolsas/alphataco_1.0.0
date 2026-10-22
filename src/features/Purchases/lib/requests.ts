@@ -1,7 +1,7 @@
 import 'server-only';
 
+import { validateExitDestination } from '@/features/Warehouses/lib/stock-destination';
 import { Prisma } from '@/generated/prisma/client';
-import { validateExitDestination } from '@/features/Warehouses/lib/stock-engine';
 import type { PurchaseRequestInput } from '../schemas/requests';
 import { PurchaseError } from './purchase-errors';
 import {
@@ -31,7 +31,9 @@ export async function lockPurchaseRequest(
   requestId: string,
   action: PurchaseRequestAction
 ): Promise<LockedPurchaseRequest> {
-  const rows = await tx.$queryRaw<{ id: string; number: string; status: PurchaseRequestStatus; requested_by: string }[]>`
+  const rows = await tx.$queryRaw<
+    { id: string; number: string; status: PurchaseRequestStatus; requested_by: string }[]
+  >`
     SELECT id, number, status::text AS status, requested_by
     FROM purchase_requests
     WHERE id = ${requestId}::uuid AND company_id = ${companyId}::uuid
@@ -94,13 +96,15 @@ export async function validatePurchaseRequestInput(
       throw new PurchaseError(`${position}: elegí un material o describí qué se compra`);
     }
     const quantity = new Prisma.Decimal(line.quantity);
-    if (!quantity.isFinite() || quantity.lte(0)) throw new PurchaseError(`${position}: la cantidad tiene que ser mayor a 0`);
+    if (!quantity.isFinite() || quantity.lte(0))
+      throw new PurchaseError(`${position}: la cantidad tiene que ser mayor a 0`);
 
     let unitId: string;
     if (line.materialId) {
       const material = materialById.get(line.materialId);
       if (!material) throw new PurchaseError(`${position}: el material no existe`);
-      if (!material.is_active) throw new PurchaseError(`${position}: ${material.name} (${material.code}) está inactivo`);
+      if (!material.is_active)
+        throw new PurchaseError(`${position}: ${material.name} (${material.code}) está inactivo`);
       unitId = material.unit_id;
     } else {
       const unit = line.unitId ? unitById.get(line.unitId) : undefined;

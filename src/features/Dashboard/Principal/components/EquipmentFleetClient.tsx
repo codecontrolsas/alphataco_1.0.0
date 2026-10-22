@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { statusColorVar } from '@/features/Dashboard/shared/charts/ChartColorVars';
 import { ChartSummary } from '@/features/Dashboard/shared/charts/ChartSummary';
+import { donutCenterContent } from '@/features/Dashboard/shared/charts/DonutCenter';
 import dynamic from 'next/dynamic';
 import * as React from 'react';
 import { Cell, Label, Pie, PieChart } from 'recharts';
@@ -84,22 +85,7 @@ function DonutBlock({
               {slices.map((entry) => (
                 <Cell key={entry.name} fill={entry.fill} />
               ))}
-              <Label
-                content={({ viewBox }) => {
-                  if (viewBox && 'cx' in viewBox && 'cy' in viewBox) {
-                    return (
-                      <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
-                        <tspan x={viewBox.cx} y={viewBox.cy} className="fill-foreground text-xl font-bold">
-                          {centerValue}
-                        </tspan>
-                        <tspan x={viewBox.cx} y={(viewBox.cy ?? 0) + 16} className="fill-muted-foreground text-[10px]">
-                          {centerLabel}
-                        </tspan>
-                      </text>
-                    );
-                  }
-                }}
-              />
+              <Label content={donutCenterContent({ value: centerValue, caption: centerLabel, compact: true })} />
             </Pie>
           </PieChart>
         </ChartContainer>

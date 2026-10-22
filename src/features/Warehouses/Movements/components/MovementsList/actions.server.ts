@@ -1,6 +1,7 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { destinationSearchConditions } from '@/features/Warehouses/lib/destination-search';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -8,14 +9,14 @@ import {
   buildFiltersWhere,
   buildSearchWhere,
   buildTextFiltersWhere,
-  NULL_FILTER_VALUE,
   parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { toFacetMap } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { DESTINATION_SELECT, destinationLabel } from '../../../lib/labels';
@@ -83,8 +84,6 @@ const COLUMN_MAP: Record<string, string> = {
   target_warehouse: 'target_warehouse_id',
 };
 
-const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
-
 async function canViewPrices(): Promise<boolean> {
   return checkPermissionServer('almacenes', 'movimientos', 'view_prices');
 }
@@ -94,11 +93,7 @@ async function canViewPrices(): Promise<boolean> {
 // ============================================================================
 
 /** WHERE compartido entre paginated, export y facets. */
-function buildWhereClause(
-  companyId: string,
-  state: FilterState,
-  options: { canViewPrices: boolean }
-): MovementWhere {
+function buildWhereClause(companyId: string, state: FilterState, options: { canViewPrices: boolean }): MovementWhere {
   const f = state.filters;
   const and: MovementWhere[] = [{ company_id: companyId }];
 
@@ -115,13 +110,7 @@ function buildWhereClause(
   const dest = f.destination?.[0]?.trim();
   if (dest) {
     and.push({
-      OR: [
-        { employee: { OR: [{ file: contains(dest) }, { lastname: contains(dest) }, { firstname: contains(dest) }] } },
-        { vehicle: { OR: [{ domain: contains(dest) }, { intern_number: contains(dest) }] } },
-        { other_equipment: { intern_number: contains(dest) } },
-        { maintenance_order: { order_number: contains(dest) } },
-        { customer: { name: contains(dest) } },
-      ],
+      OR: destinationSearchConditions(dest),
     });
   }
 
@@ -169,11 +158,7 @@ function shape(
   withPrices: boolean
 ) {
   return rows.map((r) => {
-    const status: MovementReversalStatus = r.reversed_by
-      ? 'REVERSED'
-      : r.reverses_movement_id
-        ? 'REVERSAL'
-        : 'VALID';
+    const status: MovementReversalStatus = r.reversed_by ? 'REVERSED' : r.reverses_movement_id ? 'REVERSAL' : 'VALID';
     return {
       id: r.id,
       number: r.number,
@@ -211,7 +196,8 @@ export async function getMovementsPaginated(searchParams: DataTableSearchParams)
       const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
       const fkMapper = FK_SORT_MAP[s.id];
       if (fkMapper) resolvedSorts.push(fkMapper(dir));
-      else if (VALID_SORT_FIELDS.has(s.id) || (withPrices && s.id === 'total_cost')) resolvedSorts.push({ [s.id]: dir });
+      else if (VALID_SORT_FIELDS.has(s.id) || (withPrices && s.id === 'total_cost'))
+        resolvedSorts.push({ [s.id]: dir });
     }
     const orderBy: MovementOrderBy[] = [...resolvedSorts, { created_at: 'desc' }, { id: 'desc' }];
 
@@ -255,20 +241,12 @@ export async function getAllMovementsForExport(
           select: MOVEMENT_SELECT(withPrices),
         }),
       maxRows: EXPORT_MAX_MOVEMENTS,
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} movimientos con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('movimientos'),
     });
     return { ok: true, data: shape(rows, withPrices) };
   } catch (error) {
     logger.error('Error al exportar movimientos', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError
-          ? error.message
-          : 'No se pudo exportar la lista de movimientos. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de movimientos. Intente nuevamente.');
   }
 }
 
@@ -291,15 +269,6 @@ export async function getMovementSingleFacet(
     const filters = { ...base.filters };
     delete filters[excludeColumn];
     return buildWhereClause(companyId, { ...base, filters }, { canViewPrices: false });
-  }
-
-  function toFacetMap(rows: { key: string | null; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      const k = key == null ? NULL_FILTER_VALUE : key;
-      map.set(k, (map.get(k) ?? 0) + count);
-    }
-    return map;
   }
 
   async function resolveWarehouses(ids: string[]) {

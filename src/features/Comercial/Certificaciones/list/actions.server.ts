@@ -1,7 +1,6 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
-import { UUID_RE } from '@/features/Purchases/lib/action-errors';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import type { Prisma } from '@/generated/prisma/client';
 import { certification_status } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
@@ -13,13 +12,14 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { toDateOnly } from '@/shared/lib/date-only';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { isUuid } from '@/shared/lib/uuid';
 import { PENDING_INVOICING_STATUS } from '../lib/attention';
 
 const logger = new Logger('Comercial/Certificaciones/list/actions.server');
@@ -159,7 +159,7 @@ function sanitizeUuidFilters(filters: Record<string, string[]>): Record<string, 
   const result = { ...filters };
   for (const key of ['customer', 'contract']) {
     const values = result[key];
-    if (values?.length) result[key] = values.filter((v) => UUID_RE.test(v));
+    if (values?.length) result[key] = values.filter(isUuid);
     // Todos inválidos: que no se quite el filtro, que no encuentre nada
     if (values?.length && result[key].length === 0) result[key] = ['00000000-0000-0000-0000-000000000000'];
   }
@@ -296,19 +296,13 @@ export async function getCertificationsForExport(
           where: { id: { in: ids }, company_id: companyId },
           select: CERTIFICATION_SELECT,
         }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} certificaciones con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('certificaciones'),
     });
 
     return { ok: true, data: rows.map((r) => mapCertification(r, canViewPrices)) };
   } catch (error) {
     logger.error('Error al exportar certificaciones', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
-    const message =
-      error instanceof ExportTooLargeError
-        ? error.message
-        : 'No se pudo exportar el listado de certificaciones. Intente nuevamente.';
-    return { ok: false, message };
+    return exportFailure(error, 'No se pudo exportar el listado de certificaciones. Intente nuevamente.');
   }
 }
 

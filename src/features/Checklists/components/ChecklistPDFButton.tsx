@@ -1,39 +1,29 @@
 'use client';
 
-import { ChecklistPDFPreviewDialog } from '@/features/Checklists/components/checklist-pdf-preview-dialog';
+import {
+  ChecklistPdfDialog,
+  checklistPdfFileName,
+  type ChecklistPdfLayoutProps,
+} from '@/features/Checklists/components/ChecklistPdfDialog';
+import { PdfFileIcon } from '@/shared/components/common/PdfFileIcon';
 
-interface ChecklistPDFButtonProps {
-  templateName: string;
-  templateCode: string;
-  sections: Array<{
-    id: string;
-    code: string;
-    name: string;
-    order_index: number;
-    checklist_template_items: Array<{
-      id: string;
-      code: string;
-      label: string;
-      order_index: number;
-      is_critical?: boolean;
-      requires_side_validation?: boolean;
-      input_type?: string;
-    }>;
-  }>;
-  date?: string;
-  revision?: string;
-}
+type ChecklistPDFButtonProps = Pick<
+  ChecklistPdfLayoutProps,
+  'templateName' | 'templateCode' | 'sections' | 'date' | 'revision'
+>;
 
-export function ChecklistPDFButton({ templateName, templateCode, sections, date, revision }: ChecklistPDFButtonProps) {
-
+export function ChecklistPDFButton(props: ChecklistPDFButtonProps) {
   return (
-    <ChecklistPDFPreviewDialog
-      buttonText="Imprimir PDF vacío"
-      templateName={templateName}
-      templateCode={templateCode}
-      sections={sections}
-      date={date}
-      revision={revision}
+    <ChecklistPdfDialog
+      trigger={
+        <>
+          <PdfFileIcon />
+          Imprimir PDF vacío
+        </>
+      }
+      description="Vista previa del PDF vacío"
+      layoutProps={{ ...props, isEmpty: true }}
+      fileName={() => checklistPdfFileName(props.templateName, new Date().toISOString().split('T')[0])}
     />
   );
 }

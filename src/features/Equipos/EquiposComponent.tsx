@@ -1,4 +1,4 @@
-import { SectionManagerServer } from '@/features/TabsManager';
+import { SectionManagerServer } from '@/features/TabsManager/SectionManagerServer';
 import { Suspense } from 'react';
 import DadosDeBajaTabContent from './Equipos/DadosDeBaja/DadosDeBajaTabContent';
 import { VehicleTabContent } from './Equipos/VehicleList/VehicleTabContent';
@@ -35,7 +35,7 @@ export default async function EquiposComponent({
           tabSlug: 'vehicles',
           content: (
             <Suspense fallback={<VehicleTableSkeleton />}>
-              <VehicleTabContent searchParams={searchParams} permissions={permissions} />
+              <VehicleTabContent searchParams={searchParams} />
             </Suspense>
           ),
         },

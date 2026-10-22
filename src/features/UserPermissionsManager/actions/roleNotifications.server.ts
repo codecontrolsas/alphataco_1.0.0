@@ -1,7 +1,7 @@
 'use server';
 
 import { NOTIFICATION_EVENT_KEYS, type NotificationChannel } from '@/features/Notifications/notification-catalog';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { z } from 'zod';

@@ -1,16 +1,4 @@
-/**
- * Tipos para el flujo de mantenimiento
- *
- * NOTA: Los tipos de datos con relaciones se infieren automáticamente
- * de las queries usando `Awaited<ReturnType<typeof fnName>>` en cada action file.
- * Este archivo solo contiene tipos utilitarios (status, filtros, inputs).
- */
 
-// Estados de solicitud de mantenimiento
-export type MaintenanceRequestStatus = 'pending_approval' | 'approved' | 'rejected';
-
-// Estados de pedidos de mantenimiento
-export type MaintenanceOrderStatus = 'pending_scheduling' | 'scheduled' | 'in_workshop' | 'completed' | 'rejected';
 
 // Tipos para acciones
 export interface ApproveRequestItemsInput {
@@ -55,9 +43,4 @@ export interface ApproveWorkshopEntryInput {
   /** Un equipamiento no lleva kilometraje (ticket 596): solo llega para vehiculos */
   kilometer?: string;
   engine_hours?: string;
-}
-
-export interface RejectOperationInput {
-  orderId: string;
-  reason: string;
 }

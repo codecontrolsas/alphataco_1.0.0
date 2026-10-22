@@ -1,19 +1,22 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Form } from '@/components/ui/form';
 import { Logger } from '@/lib/logger';
+import { InputFormField, TextareaFormField } from '@/shared/components/common/form-fields';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { voidOwnCheckNumber, type CheckbookRow } from '../../actions/own-checks.server';
-import { invalidateTreasury } from '../../lib/invalidate';
+import { useTreasuryMutation } from '../../lib/use-treasury-mutation';
 import { voidCheckNumberSchema, type VoidCheckNumberValues } from '../../schemas/own-checks';
 
 const logger = new Logger('Treasury/VoidCheckNumberDialog');
@@ -26,25 +29,20 @@ interface VoidCheckNumberDialogProps {
 
 /** Inutilizar un número libre de la chequera (roto, perdido, mal llenado): no se vuelve a ofrecer. */
 export function VoidCheckNumberDialog({ open, onOpenChange, checkbook }: VoidCheckNumberDialogProps) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const form = useForm<VoidCheckNumberValues>({
     resolver: zodResolver(voidCheckNumberSchema),
     values: { checkbookId: checkbook.id, number: checkbook.nextNumber ?? '', reason: '' },
   });
 
-  const save = useMutation({
-    mutationFn: async (values: VoidCheckNumberValues) => unwrapAction(await voidOwnCheckNumber(values)),
+  const save = useTreasuryMutation({
+    action: (values: VoidCheckNumberValues) => voidOwnCheckNumber(values),
     onSuccess: (result) => {
       toast.success(`Nº ${result.number} inutilizado`);
-      invalidateTreasury(queryClient);
-      router.refresh();
       onOpenChange(false);
     },
-    onError: (error) => {
-      logger.error('Error al inutilizar el número', { data: { error } });
-      toast.error(error instanceof Error ? error.message : 'No se pudo inutilizar el número');
-    },
+    logger,
+    logError: 'Error al inutilizar el número',
+    errorFallback: 'No se pudo inutilizar el número',
   });
 
   return (
@@ -53,37 +51,26 @@ export function VoidCheckNumberDialog({ open, onOpenChange, checkbook }: VoidChe
         <DialogHeader>
           <DialogTitle>Inutilizar un número</DialogTitle>
           <DialogDescription>
-            Chequera {checkbook.account.name}, del {checkbook.firstNumber} al {checkbook.lastNumber}. El número queda anulado y no se
-            vuelve a ofrecer.
+            Chequera {checkbook.account.name}, del {checkbook.firstNumber} al {checkbook.lastNumber}. El número queda
+            anulado y no se vuelve a ofrecer.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((values) => save.mutate(values))} className="space-y-4">
-            <FormField
+            <InputFormField
               control={form.control}
               name="number"
-              render={({ field }) => (
-                <FormItem className="max-w-[12rem]">
-                  <FormLabel>Número</FormLabel>
-                  <FormControl>
-                    <Input inputMode="numeric" className="tabular-nums" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Número"
+              itemClassName="max-w-[12rem]"
+              inputMode="numeric"
+              className="tabular-nums"
             />
-            <FormField
+            <TextareaFormField
               control={form.control}
               name="reason"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Motivo</FormLabel>
-                  <FormControl>
-                    <Textarea rows={3} placeholder="Se rompió, se perdió, se llenó mal…" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Motivo"
+              rows={3}
+              placeholder="Se rompió, se perdió, se llenó mal…"
             />
             <DialogFooter className="gap-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

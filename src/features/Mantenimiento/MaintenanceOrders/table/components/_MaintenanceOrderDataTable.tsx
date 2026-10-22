@@ -1,15 +1,21 @@
 'use client';
 
 import { Card, CardContent } from '@/components/ui/card';
-import { getOrderForManagement, type ExternalWorkshop, type OrderManagementItem, type WorkshopSector } from '@/features/Mantenimiento/OrderManagement/actions/queries.server';
 import {
-  DataTable,
+  getOrderForManagement,
+  type ExternalWorkshop,
+  type OrderManagementItem,
+  type WorkshopSector,
+} from '@/features/Mantenimiento/OrderManagement/actions/queries.server';
+import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { buildEnumFacetResult, buildFkFacetResult } from '@/shared/components/common/DataTable/facet-results';
+import {
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
   type FacetResult,
-} from '@/shared/components/common/DataTable';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { CircleOff, Truck, type LucideIcon } from 'lucide-react';
+} from '@/shared/components/common/DataTable/types';
+import { Truck, type LucideIcon } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -22,7 +28,6 @@ import {
   type MaintenanceOrderListItem,
 } from '../actions.server';
 import { HIDDEN_COLUMNS_BY_DEFAULT, getMaintenanceOrdersColumns, statusLabels } from '../columns';
-import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
 import { _ExportTasksButton } from './_ExportTasksButton';
 
 // El detalle y el wizard pesan (990 líneas y el flujo de gestión) y se abren a demanda: su chunk se pide
@@ -31,7 +36,8 @@ const OrderDetailDialog = dynamic(() => import('../../components/OrderDetailDial
   ssr: false,
 });
 const ManageOrderWizard = dynamic(
-  () => import('@/features/Mantenimiento/OrderManagement/components/ManageOrderWizard').then((m) => m.ManageOrderWizard),
+  () =>
+    import('@/features/Mantenimiento/OrderManagement/components/ManageOrderWizard').then((m) => m.ManageOrderWizard),
   { ssr: false }
 );
 
@@ -74,39 +80,6 @@ const statusIcons: Record<string, LucideIcon> = Object.fromEntries(
 // ============================================================================
 // HELPERS — builders para FacetResult (lazy-load, ver DOCS.md "Lazy-Load Facets")
 // ============================================================================
-
-/** Construye FacetResult para enums: opciones estáticas + counts del servidor */
-function buildEnumFacetResult(
-  enumValues: string[],
-  labels: Record<string, string>,
-  icons: Record<string, LucideIcon | undefined>,
-  counts: Map<string, number>,
-  nullLabel = 'Sin asignar'
-): FacetResult {
-  return {
-    options: [
-      ...enumValues.map((value) => ({ value, label: labels[value] ?? value, icon: icons[value] })),
-      ...(counts.has(NULL_FILTER_VALUE) ? [{ value: NULL_FILTER_VALUE, label: nullLabel, icon: CircleOff }] : []),
-    ],
-    counts,
-  };
-}
-
-/** Construye FacetResult para FK: opciones resueltas del servidor + counts */
-function buildFkFacetResult(
-  resolvedOptions: Array<{ id: string; name: string | null }> | undefined,
-  counts: Map<string, number>,
-  nullLabel = 'Sin asignar',
-  icon?: LucideIcon
-): FacetResult {
-  return {
-    options: [
-      ...(resolvedOptions?.map((o) => ({ value: o.id, label: o.name ?? '', icon })) ?? []),
-      ...(counts.has(NULL_FILTER_VALUE) ? [{ value: NULL_FILTER_VALUE, label: nullLabel, icon: CircleOff }] : []),
-    ],
-    counts,
-  };
-}
 
 // ============================================================================
 // CLIENT COMPONENT
@@ -255,7 +228,13 @@ export function _MaintenanceOrderDataTable({
       {
         columnId: 'status',
         title: 'Estado',
-        fetchFacet: makeEnumFetchFacet('status', [...ORDER_STATUS_FILTER_ORDER], statusLabels, statusIcons, 'Sin estado'),
+        fetchFacet: makeEnumFetchFacet(
+          'status',
+          [...ORDER_STATUS_FILTER_ORDER],
+          statusLabels,
+          statusIcons,
+          'Sin estado'
+        ),
       },
 
       // Equipo (FK UUID → vehicles)
@@ -378,9 +357,16 @@ export function _MaintenanceOrderDataTable({
 
       {/* Overlay de carga del detalle */}
       {loadingDetail && (
-        <div className="bg-background/50 fixed inset-0 z-50 flex items-center justify-center" role="status" aria-live="polite">
+        <div
+          className="bg-background/50 fixed inset-0 z-50 flex items-center justify-center"
+          role="status"
+          aria-live="polite"
+        >
           <div className="bg-card flex items-center gap-3 rounded-lg p-4 shadow-lg">
-            <div className="border-primary h-5 w-5 animate-spin rounded-full border-2 border-t-transparent" aria-hidden="true" />
+            <div
+              className="border-primary h-5 w-5 animate-spin rounded-full border-2 border-t-transparent"
+              aria-hidden="true"
+            />
             <span className="text-sm">Cargando detalle de orden...</span>
           </div>
         </div>
@@ -403,9 +389,16 @@ export function _MaintenanceOrderDataTable({
 
       {/* Overlay de carga de los datos de gestión */}
       {loadingManageOrder && (
-        <div className="bg-background/50 fixed inset-0 z-50 flex items-center justify-center" role="status" aria-live="polite">
+        <div
+          className="bg-background/50 fixed inset-0 z-50 flex items-center justify-center"
+          role="status"
+          aria-live="polite"
+        >
           <div className="bg-card flex items-center gap-3 rounded-lg p-4 shadow-lg">
-            <div className="border-primary h-5 w-5 animate-spin rounded-full border-2 border-t-transparent" aria-hidden="true" />
+            <div
+              className="border-primary h-5 w-5 animate-spin rounded-full border-2 border-t-transparent"
+              aria-hidden="true"
+            />
             <span className="text-sm">Cargando datos de gestión...</span>
           </div>
         </div>

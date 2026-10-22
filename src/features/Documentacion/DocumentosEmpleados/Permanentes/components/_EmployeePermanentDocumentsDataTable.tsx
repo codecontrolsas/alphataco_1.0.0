@@ -5,15 +5,13 @@ import {
   commonDocumentExportFormatters,
   formatExportDay,
 } from '@/features/Documentacion/lists-shared/document-list-export';
+import { useDocumentListFacets } from '@/features/Documentacion/lists-shared/use-document-list-table';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
 import {
-  useDocumentListFacets,
-  useDocumentListTable,
-} from '@/features/Documentacion/lists-shared/use-document-list-table';
-import {
-  DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
-} from '@/shared/components/common/DataTable';
+} from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useCallback, useMemo } from 'react';
 import {
@@ -37,18 +35,6 @@ interface Props {
 
 const DEFAULT_VISIBLE_FILTER_IDS = ['state', 'employee', 'fileNumber', 'document_type'];
 
-const ALL_FILTER_IDS = [
-  'state',
-  'employee',
-  'fileNumber',
-  'document_type',
-  'mandatory',
-  'multiresource',
-  'validity',
-  'created_at',
-  'deny_reason',
-];
-
 export function _EmployeePermanentDocumentsDataTable({
   data,
   totalRows,
@@ -58,15 +44,6 @@ export function _EmployeePermanentDocumentsDataTable({
   initialFilterVisibility,
   employeeId,
 }: Props) {
-  // Parámetros vigentes (para exportar con los filtros activos) y visibilidad de columnas/filtros.
-  const { currentParams, handleStateChange, columnVisibility, filterVisibility } = useDocumentListTable({
-    searchParams,
-    initialColumnVisibility,
-    initialFilterVisibility,
-    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
-    allFilterIds: ALL_FILTER_IDS,
-    defaultVisibleFilterIds: DEFAULT_VISIBLE_FILTER_IDS,
-  });
   const { makeStateFetchFacet, makeFkFetchFacet, makeBooleanFetchFacet } = useDocumentListFacets(
     getEmployeePermanentDocumentsSingleFacet,
     employeeId
@@ -76,12 +53,6 @@ export function _EmployeePermanentDocumentsDataTable({
   const tableQueryFn = useCallback(
     (params: DataTableSearchParams) => getEmployeePermanentDocumentsPaginated(params, employeeId),
     [employeeId]
-  );
-
-  // Export sin paginar: la action devuelve el mensaje si se pasa del tope de filas.
-  const fetchAllRows = useCallback(
-    async () => unwrapExportResult(await getAllEmployeePermanentDocumentsForExport(currentParams, employeeId)),
-    [currentParams, employeeId]
   );
 
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
@@ -127,25 +98,35 @@ export function _EmployeePermanentDocumentsDataTable({
     [makeStateFetchFacet, makeFkFetchFacet, makeBooleanFetchFacet]
   );
 
+  // Parámetros vigentes (para exportar con los filtros activos) y props comunes de la tabla.
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTER_IDS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
+
+  // Export sin paginar: la action devuelve el mensaje si se pasa del tope de filas.
+  const fetchAllRows = useCallback(
+    async () => unwrapExportResult(await getAllEmployeePermanentDocumentsForExport(currentParams, employeeId)),
+    [currentParams, employeeId]
+  );
+
   return (
     <DataTable
+      {...tableProps}
       columns={columns}
       data={data}
       totalRows={totalRows}
-      searchParams={searchParams}
       queryFn={tableQueryFn}
       queryKey={['employee-permanent-docs', employeeId ?? '']}
       queryStaleTimeMs={5_000}
-      onStateChange={handleStateChange}
       searchPlaceholder="Legajo, empleado o documento"
       showSearch
       mobileCards
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={columnVisibility}
-      initialFilterVisibility={filterVisibility}
-      tableId={tableId}
-      paramNamespace={tableId}
-      showFilterToggle={true}
       emptyMessage="No hay documentos permanentes de empleados registrados"
       data-testid="employee-permanent-documents-table"
       toolbarActions={

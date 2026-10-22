@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import type { InMemoryTableSpec } from '@/shared/lib/in-memory-table';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';

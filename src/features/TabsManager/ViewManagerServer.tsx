@@ -2,7 +2,7 @@ import type { ModuleSlug } from '@/features/Permissions/permissions-map';
 import { SectionCard } from '@/shared/components/common/SectionCard';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import { ViewNav, type ViewNavItem } from './components/ViewNav';
-import { resolveActiveEntry } from './lib/resolve-active';
+import { buildEntryHref, resolveActiveEntry } from './lib/resolve-active';
 import type { ViewManagerServerProps } from './types';
 
 /**
@@ -31,15 +31,7 @@ export async function ViewManagerServer<M extends ModuleSlug = ModuleSlug>({
     );
   }
 
-  const buildHref = (value: string) => {
-    const params = new URLSearchParams();
-    for (const key of preserveParams) {
-      const current = resolvedSearchParams[key];
-      if (typeof current === 'string') params.set(key, current);
-    }
-    params.set(paramName, value);
-    return `?${params.toString()}`;
-  };
+  const buildHref = (value: string) => buildEntryHref(resolvedSearchParams, preserveParams, paramName, value);
 
   const items: ViewNavItem[] = visible.map((view) => ({
     value: view.value,

@@ -1,8 +1,8 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { argentinaDate } from '@/features/Jobs/lib/dates';
-import { useDataTableFilter } from '@/shared/components/common/DataTable';
+import { argentinaDate } from '@/shared/lib/argentina-time';
+import { useDataTableFilter } from '@/shared/components/common/DataTable/useDataTableFilter';
 import moment from 'moment';
 
 type PeriodId = 'last15' | 'month' | 'all';

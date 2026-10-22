@@ -1,4 +1,4 @@
-import type { ModulesWithTabsData } from '../actions.server';
+import type { ModulesWithTabsData } from '@/features/Permissions/actions/roles.server';
 
 /** Módulo con sus pestañas, tal como lo arma `getModulesWithTabsServer`. */
 export type PermissionModule = ModulesWithTabsData[number];

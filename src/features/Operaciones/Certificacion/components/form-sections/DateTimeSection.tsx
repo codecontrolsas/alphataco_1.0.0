@@ -1,7 +1,7 @@
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { InputFormField } from '@/shared/components/common/form-fields';
 import { CalendarIcon } from 'lucide-react';
 import moment from 'moment';
 import 'moment/locale/es';
@@ -84,31 +84,19 @@ export function DateTimeSection({ form, isCreating, disabled }: DateTimeSectionP
         {/* Horas - Solo si es "por horario" */}
         {workingDayWatch === 'por horario' && (
           <div className="flex flex-col gap-4">
-            <FormField
+            <InputFormField
               control={form.control}
               name="start_time"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Hora de inicio</FormLabel>
-                  <FormControl>
-                    <Input type="time" disabled={disabled} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Hora de inicio"
+              type="time"
+              disabled={disabled}
             />
-            <FormField
+            <InputFormField
               control={form.control}
               name="end_time"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Hora de fin</FormLabel>
-                  <FormControl>
-                    <Input type="time" disabled={disabled} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Hora de fin"
+              type="time"
+              disabled={disabled}
             />
           </div>
         )}

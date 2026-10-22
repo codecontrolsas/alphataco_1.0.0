@@ -1,5 +1,6 @@
+import { normalizeCuit } from '@/shared/utils/cuit-text';
 import { describe, expect, it } from 'vitest';
-import { buildLogoPath, logoExtension, normalizeCuit, normalizePhone, parseCompanyForm } from './company-form';
+import { buildLogoPath, logoExtension, normalizePhone, parseCompanyForm } from './company-form';
 
 function formData(entries: Record<string, string | undefined>): FormData {
   const fd = new FormData();

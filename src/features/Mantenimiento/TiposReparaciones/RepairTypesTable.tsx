@@ -1,6 +1,7 @@
 'use client';
 
-import { DataTable, type DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { type DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable/types';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { ArrowDown, ArrowRight, ArrowUp, Check, CircleOff, X } from 'lucide-react';
 import { useMemo, type ReactNode } from 'react';

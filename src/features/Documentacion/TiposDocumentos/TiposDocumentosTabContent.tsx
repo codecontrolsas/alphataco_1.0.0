@@ -1,7 +1,8 @@
 import { Suspense } from 'react';
 
-import { PermissionGuardServer } from '@/features/Permissions';
-import { ViewManagerServer, type ViewDefinition } from '@/features/TabsManager';
+import { PermissionGuardServer } from '@/features/Permissions/components/PermissionGuardServer';
+import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
+import { type ViewDefinition } from '@/features/TabsManager/types';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 
 import { EmpresaList } from './EmpresaList/EmpresaList';

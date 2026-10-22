@@ -1,12 +1,14 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import {
+  RowLinkButton,
+  activeStatusColumn,
+  createdAtColumn,
+  nameColumn,
+} from '@/features/Empresa/components/catalog-columns';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ActiveStatusBadge } from '../../components/ActiveStatusBadge';
 import type { EquipmentOwnerListItem } from './lib/owners-types';
 
 // ============================================================================
@@ -36,18 +38,12 @@ export function getEquipmentOwnerColumns(
 
   return [
     // ── Nombre ──────────────────────────────────────────────────────────────
-    {
-      accessorKey: 'name',
-      meta: { title: 'Nombre' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
-      cell: ({ row }) => <span className="font-medium">{row.original.name ?? '-'}</span>,
-    },
+    nameColumn<EquipmentOwnerListItem>('-'),
 
     // ── CUIT ────────────────────────────────────────────────────────────────
     {
       accessorKey: 'cuit',
-      meta: { title: 'CUIT' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="CUIT" />,
+      ...titled('CUIT'),
       cell: ({ row }) => <span className="font-mono">{row.original.cuit ?? '-'}</span>,
     },
 
@@ -55,8 +51,7 @@ export function getEquipmentOwnerColumns(
     {
       id: 'contractTypes',
       accessorFn: (row) => row.equipment_owner_contract_types?.map((ct) => ct.contract_type).join(', ') ?? '',
-      meta: { title: 'Tipos de Contrato' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipos de Contrato" />,
+      ...titled('Tipos de Contrato'),
       cell: ({ row }) => {
         const types = row.original.equipment_owner_contract_types ?? [];
         if (types.length === 0) return <span className="text-muted-foreground">-</span>;
@@ -74,28 +69,10 @@ export function getEquipmentOwnerColumns(
     },
 
     // ── Estado (is_active — booleano nullable) ────────────────────────────────
-    {
-      accessorKey: 'is_active',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-      cell: ({ row }) => <ActiveStatusBadge value={row.original.is_active} />,
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id);
-        if (val === null || val === undefined) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(String(val));
-      },
-    },
+    activeStatusColumn<EquipmentOwnerListItem>(),
 
     // ── Fecha de creación (oculta por defecto) ────────────────────────────────
-    {
-      accessorKey: 'created_at',
-      meta: { title: 'Fecha de creación' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de creación" />,
-      cell: ({ row }) => {
-        const val = row.original.created_at;
-        return <span>{val ? formatArgentinaDay(val) : '-'}</span>;
-      },
-    },
+    createdAtColumn<EquipmentOwnerListItem>(),
 
     // ── Acciones ─────────────────────────────────────────────────────────────
     {
@@ -106,27 +83,17 @@ export function getEquipmentOwnerColumns(
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           {canUpdate && (
-            <Button
-              size="sm"
-              variant="link"
-              type="button"
-              className="h-auto p-0"
-              aria-label={`Editar ${row.original.name ?? 'titular'}`}
+            <RowLinkButton
+              label="Editar"
+              ariaLabel={`Editar ${row.original.name ?? 'titular'}`}
               onClick={() => onEdit(row.original)}
-            >
-              Editar
-            </Button>
+            />
           )}
-          <Button
-            size="sm"
-            variant="link"
-            type="button"
-            className="h-auto p-0"
-            aria-label={`Ver equipos de ${row.original.name ?? 'titular'}`}
+          <RowLinkButton
+            label="Ver Equipos"
+            ariaLabel={`Ver equipos de ${row.original.name ?? 'titular'}`}
             onClick={() => onViewEquipment(row.original)}
-          >
-            Ver Equipos
-          </Button>
+          />
         </div>
       ),
     },

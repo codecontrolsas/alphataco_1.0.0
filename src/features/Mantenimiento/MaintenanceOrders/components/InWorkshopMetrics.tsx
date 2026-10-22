@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
-import { useDataTableFilter } from '@/shared/components/common/DataTable';
+import { useDataTableFilter } from '@/shared/components/common/DataTable/useDataTableFilter';
 import { MetricCard, type MetricTone } from '@/shared/components/common/MetricCard';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, Settings2 } from 'lucide-react';

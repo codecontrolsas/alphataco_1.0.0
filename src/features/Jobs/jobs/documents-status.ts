@@ -1,9 +1,9 @@
 import 'server-only';
 
 import { refreshDocumentStatus } from '@/features/Documentacion/shared/compliance/server/document-status.server';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
-import { argentinaDate } from '../lib/dates';
-import { runForEachCompany, runJobWithBitacora } from '../lib/per-company';
+import { runJobForEachCompany } from '../lib/per-company';
 import type { JobSummary } from '../lib/types';
 
 /**
@@ -34,24 +34,16 @@ const JOB = 'documents-status' as const;
 export async function runDocumentsStatusJob(deps: DocumentsStatusJobDeps = {}): Promise<JobSummary> {
   const date = deps.date ?? argentinaDate();
 
-  return runJobWithBitacora(JOB, date, async () => {
-    const companies = await prisma.company.findMany({
-      select: { id: true, company_name: true },
-      orderBy: { company_name: 'asc' },
-    });
-
-    return runForEachCompany({
-      job: JOB,
-      date,
-      companies,
-      work: async (company) => {
-        const employees = await refreshDocumentStatus(prisma, 'Persona', { companyId: company.id }, deps.now);
-        const equipment = await refreshDocumentStatus(prisma, 'Equipos', { companyId: company.id }, deps.now);
-        return {
-          reason: `empleados: ${employees.changed}/${employees.evaluated} cambiaron; equipos: ${equipment.changed}/${equipment.evaluated} cambiaron`,
-          metadata: { employees, equipment, changed: employees.changed + equipment.changed },
-        };
-      },
-    });
+  return runJobForEachCompany({
+    job: JOB,
+    date,
+    work: async (company) => {
+      const employees = await refreshDocumentStatus(prisma, 'Persona', { companyId: company.id }, deps.now);
+      const equipment = await refreshDocumentStatus(prisma, 'Equipos', { companyId: company.id }, deps.now);
+      return {
+        reason: `empleados: ${employees.changed}/${employees.evaluated} cambiaron; equipos: ${equipment.changed}/${equipment.evaluated} cambiaron`,
+        metadata: { employees, equipment, changed: employees.changed + equipment.changed },
+      };
+    },
   });
 }

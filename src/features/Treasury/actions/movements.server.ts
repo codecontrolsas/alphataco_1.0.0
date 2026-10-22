@@ -1,18 +1,30 @@
 'use server';
 
-import moment from 'moment';
-import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { AMOUNT_SCALE, formatScaled, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
-import { checkPermissionServer } from '@/features/Permissions';
+import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { NO_PERMISSION, firstIssue } from '@/features/Purchases/lib/action-errors';
+import { UUID_RE } from '@/features/Treasury/schemas/shared';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError } from '../lib/action-errors';
+import moment from 'moment';
+import { toTreasuryActionError } from '../lib/action-errors';
 import { conceptAllows, signedCents, type MovementDirection } from '../lib/movement-rules';
-import { assertActiveAccount, assertEditableMovement, assertMoneyAccount, assertNotReconciled, PORTFOLIO_WITHOUT_OPENING, cancelMovements, createMovement, dateOnly, lockMovement } from '../lib/movements';
+import {
+  PORTFOLIO_WITHOUT_OPENING,
+  assertActiveAccount,
+  assertEditableMovement,
+  assertMoneyAccount,
+  assertNotReconciled,
+  cancelMovements,
+  createMovement,
+  dateOnly,
+  lockMovement,
+} from '../lib/movements';
 import { TreasuryError } from '../lib/treasury-errors';
 import {
   cancelReasonSchema,
@@ -52,7 +64,9 @@ async function assertConcept(
   if (!concept) throw new TreasuryError('El concepto no existe');
   if (!concept.is_active && !allowInactive) throw new TreasuryError(`El concepto «${concept.name}» está inactivo`);
   if (!conceptAllows(concept.direction, direction)) {
-    throw new TreasuryError(`El concepto «${concept.name}» es solo de ${concept.direction === 'IN' ? 'ingresos' : 'egresos'}`);
+    throw new TreasuryError(
+      `El concepto «${concept.name}» es solo de ${concept.direction === 'IN' ? 'ingresos' : 'egresos'}`
+    );
   }
 }
 
@@ -168,7 +182,10 @@ export async function cancelManualMovement(id: string, reason: string): Promise<
 }
 
 async function canSetOpening() {
-  const allowed = await Promise.all([canEditMovements(), checkPermissionServer('tesoreria', 'config-tesoreria', 'update')]);
+  const allowed = await Promise.all([
+    canEditMovements(),
+    checkPermissionServer('tesoreria', 'config-tesoreria', 'update'),
+  ]);
   return allowed.some(Boolean);
 }
 
@@ -190,7 +207,9 @@ export async function createOpeningBalance(values: OpeningBalanceFormValues): Pr
           select: { date: true },
         });
         if (current) {
-          throw new TreasuryError(`La cuenta ya tiene saldo inicial al ${moment.utc(current.date).format('DD/MM/YYYY')}: editalo`);
+          throw new TreasuryError(
+            `La cuenta ya tiene saldo inicial al ${moment.utc(current.date).format('DD/MM/YYYY')}: editalo`
+          );
         }
         const account = await assertActiveAccount(tx, companyId, v.accountId);
         if (account.kind === 'CHECK_PORTFOLIO') throw new TreasuryError(PORTFOLIO_WITHOUT_OPENING);
@@ -234,7 +253,10 @@ export async function updateOpeningBalance(id: string, values: OpeningBalanceFor
         await assertActiveAccount(tx, companyId, movement.accountId);
         await tx.treasury_movements.update({
           where: { id },
-          data: { date: dateOnly(v.date), amount: new Prisma.Decimal(formatScaled(parseScaled(v.amount, AMOUNT_SCALE)!, AMOUNT_SCALE)) },
+          data: {
+            date: dateOnly(v.date),
+            amount: new Prisma.Decimal(formatScaled(parseScaled(v.amount, AMOUNT_SCALE)!, AMOUNT_SCALE)),
+          },
         });
       },
       prisma,
@@ -255,7 +277,9 @@ export async function getOpeningBalances(): Promise<Record<string, { id: string;
     where: { company_id: companyId, kind: 'OPENING', cancelled_at: null },
     select: { id: true, account_id: true, date: true, amount: true },
   });
-  return Object.fromEntries(rows.map((r) => [r.account_id, { id: r.id, date: r.date.toISOString().slice(0, 10), amount: r.amount.toFixed(2) }]));
+  return Object.fromEntries(
+    rows.map((r) => [r.account_id, { id: r.id, date: r.date.toISOString().slice(0, 10), amount: r.amount.toFixed(2) }])
+  );
 }
 
 /** Detalle de un movimiento para el formulario de edición y el link a su origen. */
@@ -281,7 +305,13 @@ export async function getMovementDetail(id: string) {
       customer_receipt_payment: { select: { receipt: { select: { id: true, number: true } } } },
       check_operation: { select: { id: true, number: true } },
       third_party_check: { select: { id: true, number: true } },
-      own_check: { select: { id: true, number: true, payment_order_payment: { select: { payment_order: { select: { id: true, number: true } } } } } },
+      own_check: {
+        select: {
+          id: true,
+          number: true,
+          payment_order_payment: { select: { payment_order: { select: { id: true, number: true } } } },
+        },
+      },
     },
   });
   if (!m) return null;
@@ -302,7 +332,9 @@ export async function getMovementDetail(id: string) {
     transfer: m.transfer,
     paymentOrder: m.payment_order_payment?.payment_order ?? m.own_check?.payment_order_payment?.payment_order ?? null,
     customerReceipt: m.customer_receipt_payment?.receipt ?? null,
-    checkOperation: m.check_operation ? { id: m.check_operation.id, number: m.check_operation.number ?? 'Carga inicial' } : null,
+    checkOperation: m.check_operation
+      ? { id: m.check_operation.id, number: m.check_operation.number ?? 'Carga inicial' }
+      : null,
     thirdPartyCheck: m.third_party_check,
     ownCheck: m.own_check ? { id: m.own_check.id, number: m.own_check.number } : null,
   };

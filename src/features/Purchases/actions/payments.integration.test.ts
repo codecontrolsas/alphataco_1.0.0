@@ -23,7 +23,7 @@ const state = vi.hoisted(() => ({ denied: new Set<string>() }));
 const mails = vi.hoisted(() => ({ any: vi.fn(async () => true) }));
 
 vi.mock('@/shared/lib/tenant', () => ({ getActiveCompanyId: async () => 'd7000000-0000-4000-8000-000000000001' }));
-vi.mock('@/features/Permissions', () => ({
+vi.mock('@/features/Permissions/actions/permissions.server', () => ({
   checkPermissionServer: async (module: string, tab: string, action: string) =>
     !state.denied.has(`${module}:${tab}:${action}`),
 }));

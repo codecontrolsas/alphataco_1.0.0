@@ -1,7 +1,7 @@
 'use server';
 
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import {
   assertNotBeforeEntry,
   assertTransition,
@@ -30,25 +30,22 @@ import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
+import { toDateOnly } from '@/shared/lib/date-only';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { isUuid } from '@/shared/lib/uuid';
 import { revalidatePath } from 'next/cache';
-import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import {
-  NOT_FOUND,
+  NO_PERMISSION,
   SESSION_EXPIRED,
   TRANSACTION_OPTIONS,
-  day,
-  isoDay,
-  revalidate,
-} from '../lib/payment-action-helpers';
+  firstIssue,
+  toPurchaseActionError,
+} from '../lib/action-errors';
+import { NOT_FOUND, day, revalidate } from '../lib/payment-action-helpers';
+import { lockPaymentOrder, nextCertificateNumber } from '../lib/payment-locks';
+import { assertPaymentOrderStillValid, assertWithholdingsStillValid } from '../lib/payment-revalidation';
 import { cents, money } from '../lib/payment-totals';
-import {
-  assertPaymentOrderStillValid,
-  assertWithholdingsStillValid,
-  lockPaymentOrder,
-  nextCertificateNumber,
-} from '../lib/payments';
 import { PurchaseError } from '../lib/purchase-errors';
 import { registerPaymentFormSchema, type RegisterPaymentFormValues } from '../schemas/payment-orders';
 import { requiredReasonSchema } from '../schemas/requests';
@@ -132,7 +129,7 @@ export async function registerPayment(
   values: RegisterPaymentFormValues
 ): Promise<ActionResult<{ number: string; certificates: string[] }>> {
   if (!(await checkPermissionServer('compras', 'pagos', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  if (!isUuid(id)) return fail(NOT_FOUND);
   const parsed = registerPaymentFormSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
   const profile = await getServerAuthProfile();
@@ -144,7 +141,7 @@ export async function registerPayment(
       profile.credentialId,
       async (tx) => {
         const order = await lockPaymentOrder(tx, companyId, id, 'pay');
-        const planned = isoDay(order.plannedOn)!;
+        const planned = toDateOnly(order.plannedOn)!;
         if (planned.slice(0, 7) !== v.paidOn.slice(0, 7)) {
           const month = MONTHS[Number(planned.slice(5, 7)) - 1];
           throw new PurchaseError(
@@ -312,7 +309,7 @@ export async function registerPayment(
  */
 export async function cancelPaymentOrder(id: string, reason: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'pagos', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  if (!isUuid(id)) return fail(NOT_FOUND);
   const motive = requiredReasonSchema.safeParse(reason);
   if (!motive.success) return fail(firstIssue(motive.error));
   const profile = await getServerAuthProfile();

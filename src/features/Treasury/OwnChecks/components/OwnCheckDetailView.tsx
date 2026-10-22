@@ -6,6 +6,7 @@ import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
 import { SectionCard } from '@/shared/components/common/SectionCard';
 import { Timeline, type TimelineItem } from '@/shared/components/common/Timeline';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import Link from 'next/link';
 import { useState } from 'react';
 import { undoOwnCheckDebit, undoOwnCheckRejection, type OwnCheckDetail } from '../../actions/own-checks.server';
@@ -15,7 +16,6 @@ import { formatInCurrency } from '../../lib/currency-format';
 import { formatDay } from '../../lib/dates';
 import { OWN_CHECK_KIND_LABELS } from '../../lib/own-check-transitions';
 import { OWN_CHECK_ALERT_UI, OWN_CHECK_STATUS_UI } from '../../lib/status-presentation';
-import { formatArgentinaDateTime } from '../../lib/today';
 import { DebitOwnChecksDialog } from './DebitOwnChecksDialog';
 import { RejectOwnCheckDialog } from './RejectOwnCheckDialog';
 
@@ -26,7 +26,13 @@ const TIMELINE_TONE: Record<string, TimelineItem['tone']> = { danger: 'danger', 
 type Dialogs = 'debit' | 'undo-debit' | 'reject' | 'undo-rejection' | null;
 
 /** Detalle del cheque propio: datos, aviso, historial, deuda y acciones según su estado (spec Tesorería etapa 3b §4.3). */
-export function OwnCheckDetailView({ detail, can }: { detail: OwnCheckDetail; can: { update: boolean; delete: boolean } }) {
+export function OwnCheckDetailView({
+  detail,
+  can,
+}: {
+  detail: OwnCheckDetail;
+  can: { update: boolean; delete: boolean };
+}) {
   const [dialog, setDialog] = useState<Dialogs>(null);
   const close = (open: boolean) => !open && setDialog(null);
   const voided = detail.voidReason !== null;
@@ -42,14 +48,18 @@ export function OwnCheckDetailView({ detail, can }: { detail: OwnCheckDetail; ca
       meta: (
         <>
           <span className="tabular-nums">{dmy(e.date)}</span>
-          {e.user ? ` · ${e.user}` : ''} · registrado <span className="tabular-nums">{formatArgentinaDateTime(e.createdAt)}</span>
+          {e.user ? ` · ${e.user}` : ''} · registrado{' '}
+          <span className="tabular-nums">{formatArgentinaDateTime(e.createdAt)}</span>
         </>
       ),
       children:
         e.paymentOrder || e.reason ? (
           <p className="text-sm">
             {e.paymentOrder && (
-              <Link href={`/dashboard/purchases/payments/${e.paymentOrder.id}`} className="underline underline-offset-2">
+              <Link
+                href={`/dashboard/purchases/payments/${e.paymentOrder.id}`}
+                className="underline underline-offset-2"
+              >
                 {e.paymentOrder.number}
               </Link>
             )}
@@ -75,7 +85,13 @@ export function OwnCheckDetailView({ detail, can }: { detail: OwnCheckDetail; ca
           <>
             {can.update && detail.status === 'ISSUED' && (
               <>
-                <Button type="button" size="sm" onClick={() => setDialog('debit')} disabled={pending} title={pending ? 'Todavía no llegó su fecha de pago' : undefined}>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setDialog('debit')}
+                  disabled={pending}
+                  title={pending ? 'Todavía no llegó su fecha de pago' : undefined}
+                >
                   Confirmar débito
                 </Button>
                 <Button type="button" size="sm" variant="destructive" onClick={() => setDialog('reject')}>
@@ -115,7 +131,10 @@ export function OwnCheckDetailView({ detail, can }: { detail: OwnCheckDetail; ca
           {detail.debitedOn && <Field label="Débito" value={dmy(detail.debitedOn)} mono />}
           {detail.paymentOrder && (
             <Field label="Orden de pago">
-              <Link href={`/dashboard/purchases/payments/${detail.paymentOrder.id}`} className="underline underline-offset-2">
+              <Link
+                href={`/dashboard/purchases/payments/${detail.paymentOrder.id}`}
+                className="underline underline-offset-2"
+              >
                 {detail.paymentOrder.number}
               </Link>
             </Field>
@@ -135,7 +154,10 @@ export function OwnCheckDetailView({ detail, can }: { detail: OwnCheckDetail; ca
             Se le debe a {detail.supplier?.name ?? 'el proveedor'}{' '}
             <span className="font-semibold tabular-nums">{formatInCurrency(detail.debt.pending, 'ARS')}</span>
             {detail.debt.reserved !== '0.00' && (
-              <span className="text-muted-foreground"> · {formatInCurrency(detail.debt.reserved, 'ARS')} en una orden sin pagar</span>
+              <span className="text-muted-foreground">
+                {' '}
+                · {formatInCurrency(detail.debt.reserved, 'ARS')} en una orden sin pagar
+              </span>
             )}
             <span className="text-muted-foreground"> · se paga con una orden de pago en Compras</span>
           </p>
@@ -143,18 +165,34 @@ export function OwnCheckDetailView({ detail, can }: { detail: OwnCheckDetail; ca
       )}
 
       <SectionCard title="Historial">
-        {timeline.length > 0 ? <Timeline items={timeline} /> : <p className="text-sm text-muted-foreground">Sin movimientos registrados.</p>}
+        {timeline.length > 0 ? (
+          <Timeline items={timeline} />
+        ) : (
+          <p className="text-sm text-muted-foreground">Sin movimientos registrados.</p>
+        )}
       </SectionCard>
 
       {dialog === 'debit' && detail.amount && (
         <DebitOwnChecksDialog
           open
           onOpenChange={close}
-          checks={[{ id: detail.id, number: detail.number, amount: detail.amount, paymentDate: detail.paymentDate, accountName: detail.account.name }]}
+          checks={[
+            {
+              id: detail.id,
+              number: detail.number,
+              amount: detail.amount,
+              paymentDate: detail.paymentDate,
+              accountName: detail.account.name,
+            },
+          ]}
         />
       )}
       {dialog === 'reject' && (
-        <RejectOwnCheckDialog open onOpenChange={close} check={{ id: detail.id, number: detail.number, supplierName: detail.supplier?.name ?? null }} />
+        <RejectOwnCheckDialog
+          open
+          onOpenChange={close}
+          check={{ id: detail.id, number: detail.number, supplierName: detail.supplier?.name ?? null }}
+        />
       )}
       {dialog === 'undo-debit' && (
         <CancelReasonDialog

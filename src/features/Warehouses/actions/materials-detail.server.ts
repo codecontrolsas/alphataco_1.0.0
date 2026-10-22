@@ -1,8 +1,8 @@
 'use server';
 
 import { Prisma } from '@/generated/prisma/client';
-import { argentinaDate } from '@/features/Jobs/lib/dates';
-import { checkPermissionServer } from '@/features/Permissions';
+import { argentinaDate } from '@/shared/lib/argentina-time';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';

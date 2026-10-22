@@ -3,7 +3,7 @@
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
 import { CatalogCreateButton, CatalogFormSheet, useCatalogSheet } from '@/shared/components/common/CatalogFormSheet';
-import type { TablePreferences } from '@/shared/components/common/DataTable';
+import type { TablePreferences } from '@/shared/components/common/DataTable/helpers';
 import { Suspense, useCallback } from 'react';
 import type { WorkshopSector } from '../../../actions/workshops.server';
 import SectoresForm from './SectoresForm';

@@ -1,4 +1,4 @@
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import { getActiveWorkshopSectors } from '../OrderManagement/actions/queries.server';

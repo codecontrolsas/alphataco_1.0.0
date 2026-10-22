@@ -1,14 +1,15 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import { parseSearchParams, NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { NULL_FILTER_VALUE, parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { runFacet, toFacetMap, withoutOwnFilter, type FacetConfig } from '@/shared/lib/table-facets';
 import { employeeLabel } from '@/shared/lib/resource-labels';
+import { runFacet, toFacetMap, withoutOwnFilter, type FacetConfig } from '@/shared/lib/table-facets';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
-import { buildRowSelect, buildWhereClause, FK_SORT_MAP, VALID_SORT_FIELDS } from './lib/row-query';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { SHARED_ROW_FACETS } from '../../lib/row-facets';
+import { FK_SORT_MAP, VALID_SORT_FIELDS, buildRowSelect, buildWhereClause } from './lib/row-query';
 
 const logger = new Logger('features/Operaciones/PartesDiarios/detail/queries');
 
@@ -122,33 +123,9 @@ export async function getDailyReportDetailPaginated(
 
 type FacetWhere = ReturnType<typeof buildWhereClause>;
 
-/** Facetas de una sola columna, resueltas por el motor genérico `runFacet` (`Operaciones/lib/facets`). */
+/** Facetas de una sola columna, resueltas por el motor genérico `runFacet` (`shared/lib/table-facets`). */
 const FACET_CONFIG: Record<string, FacetConfig<FacetWhere>> = {
-  // ── Enums, texto y booleanos directos ─────────────────────────────────────
-  status: {
-    kind: 'direct',
-    group: async (where) =>
-      (await prisma.dailyreportrows.groupBy({ by: ['status'], where, _count: true })).map((r) => ({
-        key: r.status,
-        count: r._count,
-      })),
-  },
-  type_service: {
-    kind: 'direct',
-    group: async (where) =>
-      (await prisma.dailyreportrows.groupBy({ by: ['type_service'], where, _count: true })).map((r) => ({
-        key: r.type_service,
-        count: r._count,
-      })),
-  },
-  working_day: {
-    kind: 'direct',
-    group: async (where) =>
-      (await prisma.dailyreportrows.groupBy({ by: ['working_day'], where, _count: true })).map((r) => ({
-        key: r.working_day,
-        count: r._count,
-      })),
-  },
+  ...SHARED_ROW_FACETS,
   completed_day: {
     kind: 'direct',
     group: async (where) =>
@@ -166,67 +143,6 @@ const FACET_CONFIG: Record<string, FacetConfig<FacetWhere>> = {
       })),
   },
 
-  // ── FK con lookup de nombre ───────────────────────────────────────────────
-  customer: {
-    kind: 'lookup',
-    group: async (where) =>
-      (await prisma.dailyreportrows.groupBy({ by: ['customer_id'], where, _count: true })).map((r) => ({
-        key: r.customer_id,
-        count: r._count,
-      })),
-    lookup: async (ids) => {
-      const rows = await prisma.customers.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
-      return new Map(rows.map((c) => [c.id, { value: c.id, label: c.name }]));
-    },
-  },
-  service: {
-    kind: 'lookup',
-    group: async (where) =>
-      (await prisma.dailyreportrows.groupBy({ by: ['service_id'], where, _count: true })).map((r) => ({
-        key: r.service_id,
-        count: r._count,
-      })),
-    lookup: async (ids) => {
-      const rows = await prisma.customer_services.findMany({
-        where: { id: { in: ids } },
-        select: { id: true, service_name: true },
-      });
-      return new Map(rows.map((s) => [s.id, { value: s.id, label: s.service_name ?? s.id }]));
-    },
-  },
-  item: {
-    kind: 'lookup',
-    group: async (where) =>
-      (await prisma.dailyreportrows.groupBy({ by: ['item_id'], where, _count: true })).map((r) => ({
-        key: r.item_id,
-        count: r._count,
-      })),
-    lookup: async (ids) => {
-      const rows = await prisma.service_items.findMany({
-        where: { id: { in: ids } },
-        select: { id: true, item_name: true },
-      });
-      return new Map(rows.map((i) => [i.id, { value: i.id, label: i.item_name ?? i.id }]));
-    },
-  },
-  // sector_service_id → service_sectors → sectors
-  sector: {
-    kind: 'lookup',
-    group: async (where) =>
-      (await prisma.dailyreportrows.groupBy({ by: ['sector_service_id'], where, _count: true })).map((r) => ({
-        key: r.sector_service_id,
-        count: r._count,
-      })),
-    lookup: async (ids) => {
-      const rows = await prisma.service_sectors.findMany({
-        where: { id: { in: ids } },
-        select: { id: true, sectors: { select: { id: true, name: true } } },
-      });
-      return new Map(
-        rows.flatMap((ss) => (ss.sectors ? [[ss.id, { value: ss.sectors.id, label: ss.sectors.name ?? ss.sectors.id }] as const] : []))
-      );
-    },
-  },
   // areas_service_id → service_areas → areas_cliente
   area: {
     kind: 'lookup',
@@ -243,7 +159,12 @@ const FACET_CONFIG: Record<string, FacetConfig<FacetWhere>> = {
       return new Map(
         rows.flatMap((sa) =>
           sa.areas_cliente
-            ? [[sa.id, { value: sa.areas_cliente.id, label: sa.areas_cliente.descripcion_corta ?? sa.areas_cliente.id }] as const]
+            ? [
+                [
+                  sa.id,
+                  { value: sa.areas_cliente.id, label: sa.areas_cliente.descripcion_corta ?? sa.areas_cliente.id },
+                ] as const,
+              ]
             : []
         )
       );

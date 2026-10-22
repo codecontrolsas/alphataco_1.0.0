@@ -2,16 +2,6 @@
 
 export type MassiveMode = 'diagram' | 'novelty';
 
-// ─── Form Data ──────────────────────────────────────────────────────────────
-
-interface MassiveFormDataBase {
-  employeeIds: string[];
-  dateRange: {
-    from: Date;
-    to: Date;
-  };
-}
-
 // ─── Conflict Types ─────────────────────────────────────────────────────────
 
 export interface ConflictRecord {

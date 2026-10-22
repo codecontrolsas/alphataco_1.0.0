@@ -1,5 +1,5 @@
-import type { DiagramAxle } from '@/features/Mantenimiento/Gomeria/shared/TireDiagramRenderer';
 import { inferTemplateLayout } from '@/features/Mantenimiento/Gomeria/shared/iso/axle-layout';
+import type { DiagramAxle } from '@/features/Mantenimiento/Gomeria/shared/tire-diagram-utils';
 
 interface MiniAxle {
   id: string;

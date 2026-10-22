@@ -118,7 +118,6 @@ export function DocumentRecordHeader({
                     montly={documentType?.is_it_montlhy ?? false}
                   />
                   <ReplaceDocument
-                    id={documentId}
                     resource={detail.resource}
                     documentName={documentPath}
                     expires={document.validity ? String(document.validity) : null}
@@ -127,12 +126,7 @@ export function DocumentRecordHeader({
                   />
                 </>
               )}
-              <DeleteDocument
-                id={documentId}
-                resource={detail.resource}
-                documentName={documentPath}
-                expires={documentType?.explired ?? false}
-              />
+              <DeleteDocument id={documentId} resource={detail.resource} documentName={documentPath} />
             </>
           )}
         </>

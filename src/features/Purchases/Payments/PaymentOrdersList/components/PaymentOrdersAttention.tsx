@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { AttentionBanner } from '@/features/Mantenimiento/shared/components/AttentionBanner';
-import { useDataTableFilter } from '@/shared/components/common/DataTable';
+import { useDataTableFilter } from '@/shared/components/common/DataTable/useDataTableFilter';
 import { useQuery } from '@tanstack/react-query';
 import { getPaymentOrdersAttention } from '../actions.server';
 import { PAYMENT_ORDERS_ATTENTION_QUERY_KEY, PAYMENT_ORDERS_TABLE_ID } from '../constants';

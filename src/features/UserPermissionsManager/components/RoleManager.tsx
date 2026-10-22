@@ -3,19 +3,19 @@
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import type { ModulesWithTabsData, RoleWithCount } from '@/features/Permissions/actions/roles.server';
 import {
   createRoleWithPermissions,
   deleteRoleServer,
   getAllRolesWithCounts,
   getRolePermissionsServer,
   updateRoleWithPermissions,
-} from '@/features/UserPermissionsManager/actions.server';
+} from '@/features/Permissions/actions/roles.server';
 import { Logger } from '@/lib/logger';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import type { ModulesWithTabsData, RoleWithCount } from '../actions.server';
 import type { RoleNotificationChanges } from '../actions/roleNotifications.server';
 import {
   equipmentTypeVisibilityKeys,
@@ -474,8 +474,6 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
       customRoles: filtered.filter((r) => !r.is_system),
     };
   }, [roles, searchQuery]);
-
-  const filteredCount = systemRoles.length + customRoles.length;
 
   // ─── Render ────────────────────────────────────────────────────────────────
 

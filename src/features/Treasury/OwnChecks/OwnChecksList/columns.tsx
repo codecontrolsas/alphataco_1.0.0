@@ -4,12 +4,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatMoney } from '@/features/Warehouses/lib/format';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
-import { StackedCell } from '@/shared/components/common/StackedCell';
+import { matchesId, titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { StackedCell } from '@/shared/components/common/StackedCell';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Eye, FileText, Smartphone, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
+import { formatDay } from '../../lib/dates';
 import {
   OWN_CHECK_KIND_LABELS,
   OWN_CHECK_STATUS_LABELS,
@@ -19,7 +20,6 @@ import {
 import { OWN_CHECK_ALERT_UI, OWN_CHECK_STATUS_UI, TONE_TO_BADGE } from '../../lib/status-presentation';
 import { treasuryToday } from '../../lib/today';
 import type { OwnCheckListItem } from './actions.server';
-import { formatDay } from '../../lib/dates';
 
 export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['kind', 'issue_date', 'debited_on'];
 
@@ -67,10 +67,12 @@ export function getColumns(): ColumnDef<OwnCheckListItem>[] {
     {
       id: 'number',
       accessorFn: (row) => row.number,
-      meta: { title: 'Número' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Número" />,
+      ...titled('Número'),
       cell: ({ row }) => (
-        <Link href={`/dashboard/treasury/own-checks/${row.original.id}`} className="text-brand-ink block hover:underline">
+        <Link
+          href={`/dashboard/treasury/own-checks/${row.original.id}`}
+          className="text-brand-ink block hover:underline"
+        >
           <StackedCell primary={row.original.number} mono maxWidthClass="max-w-[200px]" />
         </Link>
       ),
@@ -78,8 +80,7 @@ export function getColumns(): ColumnDef<OwnCheckListItem>[] {
     {
       id: 'kind',
       accessorFn: (row) => OWN_CHECK_KIND_LABELS[row.kind],
-      meta: { title: 'Tipo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
+      ...titled('Tipo'),
       cell: ({ row }) => {
         const Icon = ownCheckKindIcons[row.original.kind];
         return (
@@ -89,27 +90,26 @@ export function getColumns(): ColumnDef<OwnCheckListItem>[] {
           </Badge>
         );
       },
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.kind),
+      filterFn: matchesId((r) => r.kind),
     },
     {
       id: 'account',
       accessorFn: (row) => row.account.name,
-      meta: { title: 'Cuenta' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Cuenta" />,
+      ...titled('Cuenta'),
       cell: ({ row }) => (
         <StackedCell
           primary={row.original.account.name}
           secondary={row.original.checkbook ? `Chequera ${row.original.checkbook}` : undefined}
         />
       ),
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.account.id),
+      filterFn: matchesId((r) => r.account.id),
     },
     {
       id: 'supplier',
       accessorFn: (row) => row.supplier?.name ?? '',
-      meta: { title: 'Proveedor' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Proveedor" />,
-      cell: ({ row }) => (row.original.supplier ? <span className="font-medium">{row.original.supplier.name}</span> : dash),
+      ...titled('Proveedor'),
+      cell: ({ row }) =>
+        row.original.supplier ? <span className="font-medium">{row.original.supplier.name}</span> : dash,
       filterFn: (row, _id, value: string[]) => {
         const id = row.original.supplier?.id;
         if (id == null) return value.includes(NULL_FILTER_VALUE);
@@ -119,8 +119,7 @@ export function getColumns(): ColumnDef<OwnCheckListItem>[] {
     {
       id: 'payment_order',
       accessorFn: (row) => row.paymentOrder?.number ?? '',
-      meta: { title: 'Orden de pago' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Orden de pago" />,
+      ...titled('Orden de pago'),
       cell: ({ row }) =>
         row.original.paymentOrder ? (
           <Link
@@ -136,23 +135,24 @@ export function getColumns(): ColumnDef<OwnCheckListItem>[] {
     {
       id: 'amount',
       accessorFn: (row) => row.amount ?? '',
-      meta: { title: 'Importe' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Importe" />,
+      ...titled('Importe'),
       cell: ({ row }) =>
-        row.original.amount != null ? <span className="font-medium tabular-nums">{formatMoney(row.original.amount)}</span> : dash,
+        row.original.amount != null ? (
+          <span className="font-medium tabular-nums">{formatMoney(row.original.amount)}</span>
+        ) : (
+          dash
+        ),
     },
     {
       id: 'issue_date',
       accessorFn: (row) => row.issueDate,
-      meta: { title: 'Emisión' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Emisión" />,
+      ...titled('Emisión'),
       cell: ({ row }) => <span className="tabular-nums">{formatValueDate(row.original.issueDate)}</span>,
     },
     {
       id: 'payment_date',
       accessorFn: (row) => row.paymentDate ?? '',
-      meta: { title: 'Fecha de pago' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de pago" />,
+      ...titled('Fecha de pago'),
       cell: ({ row }) => {
         const { paymentDate, status } = row.original;
         if (!paymentDate) return dash;
@@ -161,7 +161,10 @@ export function getColumns(): ColumnDef<OwnCheckListItem>[] {
           <div className="flex flex-wrap items-center gap-2">
             <span className="tabular-nums">{formatValueDate(paymentDate)}</span>
             {alert === 'PENDING_CONFIRMATION' && (
-              <Badge variant={TONE_TO_BADGE[OWN_CHECK_ALERT_UI.PENDING_CONFIRMATION.tone]} className="gap-1 whitespace-nowrap">
+              <Badge
+                variant={TONE_TO_BADGE[OWN_CHECK_ALERT_UI.PENDING_CONFIRMATION.tone]}
+                className="gap-1 whitespace-nowrap"
+              >
                 <OwnAlertIcon className="h-3 w-3" aria-hidden="true" />
                 {OWN_CHECK_ALERT_UI.PENDING_CONFIRMATION.label}
               </Badge>
@@ -173,8 +176,7 @@ export function getColumns(): ColumnDef<OwnCheckListItem>[] {
     {
       id: 'status',
       accessorFn: (row) => OWN_CHECK_STATUS_LABELS[row.status],
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const ui = OWN_CHECK_STATUS_UI[row.original.status];
         return (
@@ -184,13 +186,12 @@ export function getColumns(): ColumnDef<OwnCheckListItem>[] {
           </Badge>
         );
       },
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.status),
+      filterFn: matchesId((r) => r.status),
     },
     {
       id: 'debited_on',
       accessorFn: (row) => row.debitedOn ?? '',
-      meta: { title: 'Débito' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Débito" />,
+      ...titled('Débito'),
       cell: ({ row }) =>
         row.original.debitedOn ? <span className="tabular-nums">{formatValueDate(row.original.debitedOn)}</span> : dash,
     },

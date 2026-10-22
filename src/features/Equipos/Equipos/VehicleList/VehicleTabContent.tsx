@@ -6,7 +6,6 @@ import { VehicleList } from './VehicleList';
 
 interface Props {
   searchParams: Record<string, string | string[] | undefined>;
-  permissions: Record<string, boolean>;
 }
 
 // ============================================================================
@@ -17,6 +16,6 @@ interface Props {
  * TabContent de "Vehículos".
  * Punto de entrada del subtab — delega al Server Component VehicleList.
  */
-export async function VehicleTabContent({ searchParams, permissions }: Props) {
-  return <VehicleList searchParams={searchParams} permissions={permissions} />;
+export async function VehicleTabContent({ searchParams }: Props) {
+  return <VehicleList searchParams={searchParams} />;
 }

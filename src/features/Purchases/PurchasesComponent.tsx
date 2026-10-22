@@ -1,7 +1,8 @@
-import { getUserPermissionsMapServer } from '@/features/Permissions';
-import { SectionManagerServer } from '@/features/TabsManager';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
+import { SectionManagerServer } from '@/features/TabsManager/SectionManagerServer';
+import { sectionTab } from '@/features/TabsManager/section-tab';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
+import { SectionTableSkeleton } from '@/shared/components/skeletons/SectionTableSkeleton';
 import {
   Banknote,
   BookOpenText,
@@ -14,7 +15,6 @@ import {
   Settings,
   Truck,
 } from 'lucide-react';
-import { Suspense } from 'react';
 import InvoicesTabContent from './Invoices/InvoicesTabContent';
 import OrdersTabContent from './Orders/OrdersTabContent';
 import PaymentsTabContent from './Payments/PaymentsTabContent';
@@ -25,10 +25,8 @@ import SettingsTabContent from './Settings/SettingsTabContent';
 import { PurchasesSettingsSkeleton } from './Settings/fallback/PurchasesSettingsSkeleton';
 import SuppliersTabContent from './Suppliers/SuppliersTabContent';
 import VatBookTabContent from './VatBook/VatBookTabContent';
-import { VatBookSkeleton } from './VatBook/fallback/VatBookSkeleton';
 import WithholdingsTabContent from './Withholdings/WithholdingsTabContent';
-import { WithholdingsSkeleton } from './Withholdings/fallback/WithholdingsSkeleton';
-import { PurchasesSectionSkeleton } from './fallback/PurchasesSectionSkeleton';
+import { PeriodReportSkeleton } from './fallback/PeriodReportSkeleton';
 
 /**
  * Modulo Compras (specs docs/superpowers/specs/2026-10-08-compras-etapa-1-design.md y
@@ -40,13 +38,6 @@ import { PurchasesSectionSkeleton } from './fallback/PurchasesSectionSkeleton';
 export default async function PurchasesComponent({ searchParams }: { searchParams: DataTableSearchParams }) {
   const permissions = await getUserPermissionsMapServer();
 
-  const label = (Icon: typeof Truck, text: string) => (
-    <span className="flex items-center gap-2">
-      <Icon className="h-4 w-4" />
-      {text}
-    </span>
-  );
-
   return (
     <SectionManagerServer
       paramName="tab"
@@ -54,136 +45,86 @@ export default async function PurchasesComponent({ searchParams }: { searchParam
       defaultTab="solicitudes"
       permissions={permissions}
       tabs={[
-        {
-          value: 'solicitudes',
-          label: label(ClipboardList, 'Solicitudes'),
+        sectionTab({
           moduleSlug: 'compras',
           tabSlug: 'solicitudes',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Solicitudes">
-              <Suspense fallback={<PurchasesSectionSkeleton />}>
-                <RequestsTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'cotizaciones',
-          label: label(FileQuestion, 'Cotizaciones'),
+          icon: ClipboardList,
+          text: 'Solicitudes',
+          fallback: <SectionTableSkeleton />,
+          children: <RequestsTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'compras',
           tabSlug: 'cotizaciones',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Cotizaciones">
-              <Suspense fallback={<PurchasesSectionSkeleton />}>
-                <QuotesTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'ordenes',
-          label: label(FileCheck, 'Órdenes de compra'),
+          icon: FileQuestion,
+          text: 'Cotizaciones',
+          fallback: <SectionTableSkeleton />,
+          children: <QuotesTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'compras',
           tabSlug: 'ordenes',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Órdenes de compra">
-              <Suspense fallback={<PurchasesSectionSkeleton />}>
-                <OrdersTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'recepciones',
-          label: label(PackageCheck, 'Recepciones'),
+          icon: FileCheck,
+          text: 'Órdenes de compra',
+          fallback: <SectionTableSkeleton />,
+          children: <OrdersTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'compras',
           tabSlug: 'recepciones',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Recepciones">
-              <Suspense fallback={<PurchasesSectionSkeleton />}>
-                <ReceiptsTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'facturas',
-          label: label(ReceiptText, 'Facturas'),
+          icon: PackageCheck,
+          text: 'Recepciones',
+          fallback: <SectionTableSkeleton />,
+          children: <ReceiptsTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'compras',
           tabSlug: 'facturas',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Facturas">
-              <Suspense fallback={<PurchasesSectionSkeleton />}>
-                <InvoicesTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'pagos',
-          label: label(Banknote, 'Pagos'),
+          icon: ReceiptText,
+          text: 'Facturas',
+          fallback: <SectionTableSkeleton />,
+          children: <InvoicesTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'compras',
           tabSlug: 'pagos',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Pagos">
-              <Suspense fallback={<PurchasesSectionSkeleton />}>
-                <PaymentsTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'retenciones',
-          label: label(Percent, 'Retenciones'),
+          icon: Banknote,
+          text: 'Pagos',
+          fallback: <SectionTableSkeleton />,
+          children: <PaymentsTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'compras',
           tabSlug: 'retenciones',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Retenciones">
-              <Suspense fallback={<WithholdingsSkeleton />}>
-                <WithholdingsTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'libro-iva',
-          label: label(BookOpenText, 'Libro IVA'),
+          icon: Percent,
+          text: 'Retenciones',
+          fallback: <PeriodReportSkeleton columnCount={7} />,
+          children: <WithholdingsTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'compras',
           tabSlug: 'libro-iva',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Libro IVA">
-              <Suspense fallback={<VatBookSkeleton />}>
-                <VatBookTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'proveedores',
-          label: label(Truck, 'Proveedores'),
+          icon: BookOpenText,
+          text: 'Libro IVA',
+          fallback: <PeriodReportSkeleton columnCount={8} />,
+          children: <VatBookTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'compras',
           tabSlug: 'proveedores',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Proveedores">
-              <Suspense fallback={<PurchasesSectionSkeleton />}>
-                <SuppliersTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'config-compras',
-          label: label(Settings, 'Configuración'),
+          icon: Truck,
+          text: 'Proveedores',
+          fallback: <SectionTableSkeleton />,
+          children: <SuppliersTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'compras',
           tabSlug: 'config-compras',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Configuración">
-              <Suspense fallback={<PurchasesSettingsSkeleton />}>
-                <SettingsTabContent permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
+          icon: Settings,
+          text: 'Configuración',
+          fallback: <PurchasesSettingsSkeleton />,
+          children: <SettingsTabContent permissions={permissions} />,
+        }),
       ]}
     />
   );

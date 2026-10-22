@@ -1,8 +1,9 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { exportRowLimitMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
@@ -129,7 +130,7 @@ export async function getAllEmployeesForExport(
     if (data.length > EMPLOYEE_EXPORT_MAX_ROWS) {
       return {
         ok: false,
-        message: `La exportación de empleados supera el máximo de ${EMPLOYEE_EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`,
+        message: exportRowLimitMessage(EMPLOYEE_EXPORT_MAX_ROWS, 'empleados'),
       };
     }
 

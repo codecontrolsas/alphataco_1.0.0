@@ -1,12 +1,8 @@
 'use client';
 
 import { ActivityHistoryModal } from '@/features/Mantenimiento/components/ActivityHistoryModal';
-import {
-  DataTable,
-  type DataTableFacetedFilterConfig,
-  type DataTableSearchParams,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { conditionLabels } from '@/shared/utils/mappers';
 import { CircleOff, Truck } from 'lucide-react';

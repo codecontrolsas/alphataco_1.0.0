@@ -1,21 +1,25 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  actionsColumn,
+  contractorColumn,
+  denyReasonColumn,
+  documentStateColumn,
+  documentTypeColumn,
+  mandatoryColumn,
+  multiresourceColumn,
+  uploadedAtColumn,
+} from '@/features/Documentacion/lists-shared/document-columns';
 import { formatExportDbDate } from '@/features/Documentacion/lists-shared/document-list-export';
 import {
   DocumentEquipmentCell,
   DocumentExpiryCell,
-  DocumentNameCell,
   DocumentRowActions,
-  DocumentStatePill,
-  documentListStateLabels,
-  documentStateIcons,
 } from '@/features/Documentacion/shared/components/DocumentCells';
 import { RequirementUpload } from '@/features/Documentacion/shared/components/RequirementUpload';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { contractTypeVehiclesLabels } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
 import Link from 'next/link';
@@ -45,10 +49,6 @@ export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = [
   'vehicle_contract_type',
   'vehicle_contract_expiration',
 ];
-
-/** Íconos y labels de estado: los mismos que usa la pill de la tabla (los consume el filtro de Estado). */
-export const stateIcons = documentStateIcons;
-export const stateLabels = documentListStateLabels;
 
 // ============================================================================
 // HELPERS
@@ -107,8 +107,7 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
   {
     id: 'vehicle',
     accessorFn: (row) => row.vehicles?.domain ?? row.vehicles?.serie ?? '',
-    meta: { title: 'Dominio' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Dominio" />,
+    ...titled('Dominio'),
     cell: ({ row }) => {
       const v = row.original.vehicles;
       if (!v) return <span className="text-muted-foreground">-</span>;
@@ -147,54 +146,16 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
     enableSorting: false,
   },
 
-  // ─── Documento (nombre + obligatorio/opcional + motivo de rechazo) ────────
-  {
-    id: 'document_type',
-    accessorFn: (row) => row.document_types?.name ?? '',
-    meta: { title: 'Documento' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Documento" />,
-    cell: ({ row }) => (
-      <DocumentNameCell
-        name={row.original.document_types?.name}
-        mandatory={row.original.document_types?.mandatory}
-        denyReason={row.original.deny_reason}
-        state={row.original.state}
-        requestedBy={row.original.requestedBy}
-        archived={row.original.notApplicable}
-      />
-    ),
-    filterFn: (row, _id, value: string[]) => {
-      const id = row.original.id_document_types;
-      if (id == null) return value.includes(NULL_FILTER_VALUE);
-      return value.includes(id);
-    },
-    enableSorting: true,
-  },
-
-  // ─── Estado ───────────────────────────────────────────────────────────────
-  {
-    id: 'state',
-    accessorKey: 'state',
-    meta: { title: 'Estado' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-    cell: ({ row }) => (
-      // Documento archivado: historial / no vigente (solo visible en el detalle del equipo)
-      <DocumentStatePill state={row.original.state} archived={row.original.notApplicable} />
-    ),
-    filterFn: (row, id, value: string[]) => {
-      const val = row.getValue(id) as string | null;
-      if (val == null) return value.includes(NULL_FILTER_VALUE);
-      return value.includes(val);
-    },
-    enableSorting: true,
-  },
+  // Documento (nombre + obligatorio/opcional + motivo de rechazo)
+  documentTypeColumn<EquipmentPermanentDocumentListItem>('document_type', false),
+  // Documento archivado: historial / no vigente (solo visible en el detalle del equipo)
+  documentStateColumn<EquipmentPermanentDocumentListItem>(),
 
   // ─── Vencimiento ──────────────────────────────────────────────────────────
   {
     id: 'validity',
     accessorKey: 'validity',
-    meta: { title: 'Vencimiento' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Vencimiento" />,
+    ...titled('Vencimiento'),
     cell: ({ row }) => (
       <DocumentExpiryCell
         validity={row.original.document_types?.explired ? row.original.validity : null}
@@ -206,28 +167,14 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
     enableSorting: true,
   },
 
-  // ─── Subido el ────────────────────────────────────────────────────────────
-  {
-    id: 'created_at',
-    accessorKey: 'created_at',
-    meta: { title: 'Subido el' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Subido el" />,
-    cell: ({ row }) => {
-      // Usar la fecha del log más reciente si existe, sino created_at
-      const latestLog = row.original.documents_equipment_logs?.[0];
-      const date = latestLog?.updated_at ?? row.original.created_at;
-      if (row.original.isMissing || !date) return <span className="text-muted-foreground">No disponible</span>;
-      return <span className="font-mono tabular-nums">{formatArgentinaDay(date)}</span>;
-    },
-    enableSorting: true,
-  },
+  // Usa la fecha del log más reciente si existe, sino created_at
+  uploadedAtColumn<EquipmentPermanentDocumentListItem>((row) => row.documents_equipment_logs?.[0]?.updated_at),
 
   // ─── Serie (vehicles.serie) ──────────────────────────────────────────────
   {
     id: 'serie',
     accessorFn: (row) => row.vehicles?.serie ?? '',
-    meta: { title: 'Serie' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Serie" />,
+    ...titled('Serie'),
     cell: ({ row }) => (
       <span className="text-sm">
         {row.original.vehicles?.serie ?? <span className="text-muted-foreground">-</span>}
@@ -240,113 +187,23 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
   {
     id: 'policy_number',
     accessorKey: 'policy_number',
-    meta: { title: 'N° de Póliza' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="N° de Póliza" />,
+    ...titled('N° de Póliza'),
     cell: ({ row }) => (
       <span className="text-sm">{row.original.policy_number ?? <span className="text-muted-foreground">-</span>}</span>
     ),
     enableSorting: true,
   },
 
-  // ─── Afectado a ───────────────────────────────────────────────────────────
-  {
-    id: 'contractor',
-    accessorFn: (row) => {
-      const names = row.vehicles?.contractor_equipment?.map((ce) => ce.customers?.name ?? '').filter(Boolean) ?? [];
-      return names.join(', ');
-    },
-    meta: { title: 'Afectado a' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Afectado a" />,
-    cell: ({ row }) => {
-      const contractors =
-        row.original.vehicles?.contractor_equipment?.map((ce) => ce.customers?.name ?? '').filter(Boolean) ?? [];
-
-      if (contractors.length === 0) return <Badge variant="outline">Sin afectar</Badge>;
-
-      const [first, ...rest] = contractors;
-      if (rest.length === 0) return <Badge>{first}</Badge>;
-
-      return (
-        <TooltipProvider delayDuration={100}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Badge className="cursor-pointer">
-                {first} +{rest.length}
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent className="bg-black text-white rounded-lg p-2">
-              <div className="flex flex-col gap-1">
-                {contractors.map((name) => (
-                  <span key={name}>{name}</span>
-                ))}
-              </div>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
-    },
-    filterFn: (row, _id, value: string[]) => {
-      const contractors = row.original.vehicles?.contractor_equipment ?? [];
-      if (contractors.length === 0) return value.includes(NULL_FILTER_VALUE);
-      return contractors.some((ce) => ce.customers?.id && value.includes(ce.customers.id));
-    },
-    enableSorting: false,
-  },
-
-  // ─── Mandatorio ───────────────────────────────────────────────────────────
-  {
-    id: 'mandatory',
-    accessorFn: (row) => (row.document_types?.mandatory != null ? String(row.document_types.mandatory) : null),
-    meta: { title: 'Mandatorio' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Mandatorio" />,
-    cell: ({ row }) => {
-      const val = row.original.document_types?.mandatory;
-      if (val == null) return <span className="text-muted-foreground">-</span>;
-      return <span>{val ? 'Sí' : 'No'}</span>;
-    },
-    filterFn: (row, _id, value: string[]) => {
-      const val = row.original.document_types?.mandatory;
-      if (val == null) return value.includes(NULL_FILTER_VALUE);
-      return value.includes(String(val));
-    },
-    enableSorting: false,
-  },
-
-  // ─── Multirecurso ─────────────────────────────────────────────────────────
-  {
-    id: 'multiresource',
-    accessorFn: (row) => (row.document_types?.multiresource != null ? String(row.document_types.multiresource) : null),
-    meta: { title: 'Multirecurso' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Multirecurso" />,
-    cell: ({ row }) => {
-      const val = row.original.document_types?.multiresource;
-      if (val == null) return <span className="text-muted-foreground">-</span>;
-      return <span>{val ? 'Sí' : 'No'}</span>;
-    },
-    filterFn: (row, _id, value: string[]) => {
-      const val = row.original.document_types?.multiresource;
-      if (val == null) return value.includes(NULL_FILTER_VALUE);
-      return value.includes(String(val));
-    },
-    enableSorting: false,
-  },
-
-  // ─── Motivo de rechazo ────────────────────────────────────────────────────
-  {
-    id: 'deny_reason',
-    accessorKey: 'deny_reason',
-    meta: { title: 'Motivo de rechazo' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Motivo de rechazo" />,
-    cell: ({ row }) => <span className="text-sm text-muted-foreground">{row.original.deny_reason ?? '-'}</span>,
-    enableSorting: false,
-  },
+  contractorColumn<EquipmentPermanentDocumentListItem>((row) => row.vehicles?.contractor_equipment),
+  mandatoryColumn<EquipmentPermanentDocumentListItem>(),
+  multiresourceColumn<EquipmentPermanentDocumentListItem>(),
+  denyReasonColumn<EquipmentPermanentDocumentListItem>('Motivo de rechazo'),
 
   // ─── Tipo (vehicles.type → type_vehicles_typeTotype) ─────────────────────
   {
     id: 'vehicle_type',
     accessorFn: (row) => row.vehicles?.type_vehicles_typeTotype?.name ?? '',
-    meta: { title: 'Tipo' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
+    ...titled('Tipo'),
     cell: ({ row }) => (
       <span className="text-sm">
         {row.original.vehicles?.type_vehicles_typeTotype?.name ?? <span className="text-muted-foreground">-</span>}
@@ -364,8 +221,7 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
   {
     id: 'vehicle_subtype',
     accessorFn: (row) => row.vehicles?.sub_type?.name ?? '',
-    meta: { title: 'Subtipo' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Subtipo" />,
+    ...titled('Subtipo'),
     cell: ({ row }) => (
       <span className="text-sm">
         {row.original.vehicles?.sub_type?.name ?? <span className="text-muted-foreground">-</span>}
@@ -383,8 +239,7 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
   {
     id: 'vehicle_brand',
     accessorFn: (row) => row.vehicles?.brand_vehicles?.name ?? '',
-    meta: { title: 'Marca' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Marca" />,
+    ...titled('Marca'),
     cell: ({ row }) => (
       <span className="text-sm">
         {row.original.vehicles?.brand_vehicles?.name ?? <span className="text-muted-foreground">-</span>}
@@ -402,8 +257,7 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
   {
     id: 'vehicle_year',
     accessorFn: (row) => row.vehicles?.year ?? '',
-    meta: { title: 'Año' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Año" />,
+    ...titled('Año'),
     cell: ({ row }) => (
       <span className="text-sm">{row.original.vehicles?.year ?? <span className="text-muted-foreground">-</span>}</span>
     ),
@@ -414,8 +268,7 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
   {
     id: 'vehicle_owner',
     accessorFn: (row) => getOwnerDisplayName(row.vehicles),
-    meta: { title: 'Propietario' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Propietario" />,
+    ...titled('Propietario'),
     cell: ({ row }) => {
       const owner = getOwnerDisplayName(row.original.vehicles);
       return <span className="text-sm">{owner || <span className="text-muted-foreground">-</span>}</span>;
@@ -432,8 +285,7 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
   {
     id: 'vehicle_sector',
     accessorFn: (row) => row.vehicles?.hierarchy?.name ?? '',
-    meta: { title: 'Sector' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Sector" />,
+    ...titled('Sector'),
     cell: ({ row }) => (
       <span className="text-sm">
         {row.original.vehicles?.hierarchy?.name ?? <span className="text-muted-foreground">-</span>}
@@ -451,8 +303,7 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
   {
     id: 'vehicle_chassis',
     accessorFn: (row) => row.vehicles?.chassis ?? '',
-    meta: { title: 'Chasis' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Chasis" />,
+    ...titled('Chasis'),
     cell: ({ row }) => (
       <span className="text-sm">
         {row.original.vehicles?.chassis ?? <span className="text-muted-foreground">-</span>}
@@ -465,8 +316,7 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
   {
     id: 'vehicle_engine',
     accessorFn: (row) => row.vehicles?.engine ?? '',
-    meta: { title: 'Motor' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Motor" />,
+    ...titled('Motor'),
     cell: ({ row }) => (
       <span className="text-sm">
         {row.original.vehicles?.engine ?? <span className="text-muted-foreground">-</span>}
@@ -483,8 +333,7 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
       if (!val) return '';
       return contractTypeVehiclesLabels[val] ?? val;
     },
-    meta: { title: 'Tipo de contrato' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de contrato" />,
+    ...titled('Tipo de contrato'),
     cell: ({ row }) => {
       const val = row.original.vehicles?.type_of_contract;
       if (!val) return <span className="text-muted-foreground">-</span>;
@@ -502,8 +351,7 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
   {
     id: 'vehicle_contract_expiration',
     accessorFn: (row) => row.vehicles?.contract_expiration_date ?? null,
-    meta: { title: 'Venc. de contrato' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Venc. de contrato" />,
+    ...titled('Venc. de contrato'),
     cell: ({ row }) => {
       const date = row.original.vehicles?.contract_expiration_date;
       if (!date) return <span className="text-muted-foreground">-</span>;
@@ -513,12 +361,5 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
     enableSorting: true,
   },
 
-  // ─── Acciones ─────────────────────────────────────────────────────────────
-  {
-    id: 'actions',
-    meta: { excludeFromExport: true, title: '' },
-    enableSorting: false,
-    enableHiding: false,
-    cell: ({ row }) => <ActionsCell row={row.original} />,
-  },
+  actionsColumn<EquipmentPermanentDocumentListItem>((row) => <ActionsCell row={row} />),
 ];

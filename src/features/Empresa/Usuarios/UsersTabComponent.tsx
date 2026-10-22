@@ -1,9 +1,9 @@
 import { AccesosExternosTabContent } from '@/features/Empresa/AccesosExternos/AccesosExternosTabContent';
 import { ExternalApiClientsTableSkeleton } from '@/features/Empresa/AccesosExternos/list/fallback/ExternalApiClientsTableSkeleton';
-import { ViewManagerServer } from '@/features/TabsManager';
-import { RoleManagerContent } from '@/features/UserPermissionsManager/components';
+import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
+import { RoleManagerContent } from '@/features/UserPermissionsManager/components/RoleManagerContent';
 import { RoleManagerSkeleton } from '@/features/UserPermissionsManager/fallback/RoleManagerSkeleton';
-import type { DataTableSearchParams } from '@/shared/components/common/DataTable';
+import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { Suspense } from 'react';
 import { UsersTableSkeleton } from './fallback/UsersTableSkeleton';
 import { UsersTableList } from './table/UsersTableList';

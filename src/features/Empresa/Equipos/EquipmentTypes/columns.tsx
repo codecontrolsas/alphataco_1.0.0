@@ -1,12 +1,15 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import {
+  RowLinkButton,
+  activeStatusColumn,
+  createdAtColumn,
+  nameColumn,
+} from '@/features/Empresa/components/catalog-columns';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ActiveStatusBadge } from '../../components/ActiveStatusBadge';
 import type { EquipmentTypeListItem } from './actions.server';
 
 // ============================================================================
@@ -46,19 +49,12 @@ export function getColumns(
 
   return [
     // ── Nombre ──────────────────────────────────────────────────────────────
-    {
-      accessorKey: 'name',
-      meta: { title: 'Nombre' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
-      cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
-      // filterFn no necesario para filtros text
-    },
+    nameColumn<EquipmentTypeListItem>(),
 
     // ── Aplica a ─────────────────────────────────────────────────────────────
     {
       accessorKey: 'applies_to',
-      meta: { title: 'Aplica a' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Aplica a" />,
+      ...titled('Aplica a'),
       cell: ({ row }) => {
         const val = row.original.applies_to;
         if (!val) return <span className="text-muted-foreground">—</span>;
@@ -72,23 +68,12 @@ export function getColumns(
     },
 
     // ── Estado (is_active — booleano nullable) ───────────────────────────────
-    {
-      accessorKey: 'is_active',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-      cell: ({ row }) => <ActiveStatusBadge value={row.original.is_active} />,
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id);
-        if (val === null || val === undefined) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(String(val));
-      },
-    },
+    activeStatusColumn<EquipmentTypeListItem>(),
 
     // ── Unidad Tractora (oculta por defecto) ──────────────────────────────────
     {
       accessorKey: 'is_tractor_unit',
-      meta: { title: 'Unidad Tractora' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Unidad Tractora" />,
+      ...titled('Unidad Tractora'),
       cell: ({ row }) => {
         const val = row.original.is_tractor_unit;
         if (val === null || val === undefined) return <span className="text-muted-foreground">—</span>;
@@ -104,8 +89,7 @@ export function getColumns(
     // ── Lleva Enganche (oculta por defecto) ───────────────────────────────────
     {
       accessorKey: 'has_hitch',
-      meta: { title: 'Lleva Enganche' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Lleva Enganche" />,
+      ...titled('Lleva Enganche'),
       cell: ({ row }) => {
         const val = row.original.has_hitch;
         if (val === null || val === undefined) return <span className="text-muted-foreground">—</span>;
@@ -117,8 +101,7 @@ export function getColumns(
     // ── Operativo (oculta por defecto) ────────────────────────────────────────
     {
       accessorKey: 'is_operative',
-      meta: { title: 'Operativo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Operativo" />,
+      ...titled('Operativo'),
       cell: ({ row }) => {
         const val = row.original.is_operative;
         if (val === null || val === undefined) return <span className="text-muted-foreground">—</span>;
@@ -130,8 +113,7 @@ export function getColumns(
     // ── Genera QR (oculta por defecto) ────────────────────────────────────────
     {
       accessorKey: 'generates_qr',
-      meta: { title: 'Genera QR' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Genera QR" />,
+      ...titled('Genera QR'),
       cell: ({ row }) => {
         const val = row.original.generates_qr;
         if (val === null || val === undefined) return <span className="text-muted-foreground">—</span>;
@@ -141,15 +123,7 @@ export function getColumns(
     },
 
     // ── Fecha de creación (oculta por defecto) ─────────────────────────────────
-    {
-      accessorKey: 'created_at',
-      meta: { title: 'Fecha de creación' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de creación" />,
-      cell: ({ row }) => {
-        const val = row.original.created_at;
-        return <span>{val ? formatArgentinaDay(val) : '-'}</span>;
-      },
-    },
+    createdAtColumn<EquipmentTypeListItem>(),
 
     // ── Acciones ─────────────────────────────────────────────────────────────
     ...(canUpdate || onViewRelated
@@ -162,28 +136,18 @@ export function getColumns(
             cell: ({ row }) => (
               <div className="flex items-center gap-3">
                 {canUpdate ? (
-                  <Button
-                    size="sm"
-                    variant="link"
-                    type="button"
-                    className="h-auto p-0"
-                    aria-label={`Editar ${row.original.name ?? 'tipo'}`}
+                  <RowLinkButton
+                    label="Editar"
+                    ariaLabel={`Editar ${row.original.name ?? 'tipo'}`}
                     onClick={() => onEdit(row.original)}
-                  >
-                    Editar
-                  </Button>
+                  />
                 ) : null}
                 {onViewRelated ? (
-                  <Button
-                    size="sm"
-                    variant="link"
-                    type="button"
-                    className="h-auto p-0"
-                    aria-label={`Ver subtipos de ${row.original.name ?? 'tipo'}`}
+                  <RowLinkButton
+                    label="Ver subtipos"
+                    ariaLabel={`Ver subtipos de ${row.original.name ?? 'tipo'}`}
                     onClick={() => onViewRelated(row.original)}
-                  >
-                    Ver subtipos
-                  </Button>
+                  />
                 ) : null}
               </div>
             ),

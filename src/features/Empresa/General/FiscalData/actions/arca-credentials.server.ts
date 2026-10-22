@@ -2,8 +2,8 @@
 
 import { formatSalesPoint, formatVoucherNumber } from '@/features/Comercial/Facturacion/lib/invoice-type';
 import { errorMessage, fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { isValidCuit } from '@/features/Empresa/General/lib/company-form';
-import { checkPermissionServer } from '@/features/Permissions';
+
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import type { arca_environment } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
@@ -27,6 +27,7 @@ import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argent
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { isValidCuit } from '@/shared/utils/cuit-text';
 import { revalidatePath } from 'next/cache';
 import type { ConnectionCheck } from '../lib/fiscal-data-overview.server';
 import { ENVIRONMENT_LABELS, certificateAliasSchema } from '../schemas/fiscal-data';

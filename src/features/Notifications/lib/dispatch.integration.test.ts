@@ -1,4 +1,4 @@
-import type { MailMessage } from '@/shared/lib/mail';
+import type { MailMessage } from '@/shared/lib/mail/transport';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 /**

@@ -1,11 +1,8 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import {
-  DataTableColumnHeader,
-  inMemoryDateSortingFn,
-  inMemoryTextFilterFn,
-} from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { inMemoryDateSortingFn, inMemoryTextFilterFn } from '@/shared/components/common/DataTable/in-memory';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { ColumnDef, Row } from '@tanstack/react-table';
 import Link from 'next/link';

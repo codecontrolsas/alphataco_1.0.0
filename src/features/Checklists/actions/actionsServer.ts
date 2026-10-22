@@ -281,8 +281,6 @@ export const CreateChecklistAnswer = async (templateId: string, answerData: Chec
   return data;
 };
 
-export type ChecklistAnswerData = Awaited<ReturnType<typeof CreateChecklistAnswer>>;
-
 /**
  * Obtiene la lista de clientes activos para el checklist
  */
@@ -299,8 +297,6 @@ export async function fetchActiveCustomersForChecklist() {
     return [];
   }
 }
-
-export type CustomerForChecklist = Awaited<ReturnType<typeof fetchActiveCustomersForChecklist>>[number];
 
 /**
  * Clientes activos de la empresa DEL EQUIPO, para el flujo QR anónimo
@@ -344,8 +340,6 @@ export async function fetchActiveEmployeesForChecklist() {
     return [];
   }
 }
-
-export type EmployeeForChecklist = Awaited<ReturnType<typeof fetchActiveEmployeesForChecklist>>[number];
 
 /**
  * Supervisores de turno de una empresa (usuarios con rol "Administrador Operaciones").
@@ -505,5 +499,3 @@ export async function fetchSupervisorsForResource(kind: 'vehicle' | 'other_equip
     return [];
   }
 }
-
-export type SupervisorForChecklist = Awaited<ReturnType<typeof fetchSupervisorsForChecklist>>[number];

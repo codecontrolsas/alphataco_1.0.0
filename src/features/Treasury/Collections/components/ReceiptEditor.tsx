@@ -12,18 +12,16 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { Textarea } from '@/components/ui/textarea';
 import { SearchCombobox } from '@/features/Warehouses/components/SearchCombobox';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { DateFormField, TextareaFormField } from '@/shared/components/common/form-fields';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Save, Trash2 } from 'lucide-react';
-import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
@@ -31,11 +29,11 @@ import { toast } from 'sonner';
 import { searchCollectionCustomers } from '../../actions/customer-statement.server';
 import { findDuplicateReceiptChecks, getReceiptFormData } from '../../actions/receipt-reads.server';
 import { confirmReceipt, deleteReceiptDraft, saveReceiptDraft } from '../../actions/receipts.server';
-import type { ReceiptFormData } from '../../lib/receipt-types';
 import { attachWithholdingCertificate } from '../../actions/withholdings.server';
 import { invalidateTreasury } from '../../lib/invalidate';
 import { TREASURY_QUERY_KEYS } from '../../lib/query-keys';
 import { previewReceipt } from '../../lib/receipt-preview';
+import type { ReceiptFormData } from '../../lib/receipt-types';
 import { receiptFormSchema, type ReceiptFormValues } from '../../schemas/receipts';
 import { ReceiptAdvancesSection } from './ReceiptAdvancesSection';
 import { ReceiptCheckDebtsSection } from './ReceiptCheckDebtsSection';
@@ -92,10 +90,15 @@ export function ReceiptEditor({
   });
   const data = fetched ?? (customerId ? null : initialData);
 
-  const invoiceInfo = Object.fromEntries((data?.openInvoices ?? []).map((i) => [i.invoiceId, { currency: i.currency, exchangeRate: i.exchangeRate }]));
+  const invoiceInfo = Object.fromEntries(
+    (data?.openInvoices ?? []).map((i) => [i.invoiceId, { currency: i.currency, exchangeRate: i.exchangeRate }])
+  );
   const preview = previewReceipt(values, invoiceInfo);
   const isEmpty =
-    values.invoices.length === 0 && values.advancesApplied.length === 0 && !values.advance.amount && (values.rejectedChecks ?? []).length === 0;
+    values.invoices.length === 0 &&
+    values.advancesApplied.length === 0 &&
+    !values.advance.amount &&
+    (values.rejectedChecks ?? []).length === 0;
   const drawer = data?.customer ? { name: data.customer.name, cuit: data.customer.cuit } : null;
 
   const changeCustomer = (option: { id: string; label: string } | null) => {
@@ -130,7 +133,10 @@ export function ReceiptEditor({
     const failed = await uploadCertificates(withholdingIds);
     // Las retenciones nuevas ya tienen id: el próximo guardado las actualiza en vez de recrearlas.
     withholdingIds.forEach((id, index) => form.setValue(`withholdings.${index}.id`, id));
-    if (failed > 0) toast.warning(`${failed === 1 ? 'Un certificado no se pudo subir' : `${failed} certificados no se pudieron subir`}: adjuntalos desde el recibo.`);
+    if (failed > 0)
+      toast.warning(
+        `${failed === 1 ? 'Un certificado no se pudo subir' : `${failed} certificados no se pudieron subir`}: adjuntalos desde el recibo.`
+      );
     invalidateTreasury(queryClient);
   };
 
@@ -138,13 +144,14 @@ export function ReceiptEditor({
     mutationFn: async (v: ReceiptFormValues) => unwrapAction(await saveReceiptDraft(receiptId, v)),
     onSuccess: async (saved) => {
       await afterWrite(saved.withholdingIds);
-      toast.success('Borrador guardado', { description: preview.closes ? 'Cierra: ya se puede confirmar.' : preview.closing });
+      toast.success('Borrador guardado', {
+        description: preview.closes ? 'Cierra: ya se puede confirmar.' : preview.closing,
+      });
       // Una ruta nueva ya trae datos frescos: refrescar encima cancela la navegación.
       if (!receiptId) {
         setNavigating(true);
         router.replace(`/dashboard/treasury/receipts/${saved.id}`);
-      }
-      else router.refresh();
+      } else router.refresh();
     },
     onError: (error) => {
       logger.error('Error al guardar el recibo', { data: { error } });
@@ -213,40 +220,24 @@ export function ReceiptEditor({
                     <FormLabel>Cliente</FormLabel>
                     {/* El combo compartido no se achica por debajo de su texto: acá sí, para el ancho de un celular. */}
                     <div className="min-w-0 [&_[role=combobox]]:min-w-0">
-                    <FormControl>
-                      <SearchCombobox
-                        queryKey={['treasury-receipt-customers']}
-                        search={(query) => searchCollectionCustomers(query, true)}
-                        value={field.value}
-                        selectedLabel={customerLabel}
-                        onSelect={changeCustomer}
-                        placeholder="Elegí el cliente"
-                        searchPlaceholder="Razón social o CUIT…"
-                        noun="clientes"
-                      />
-                    </FormControl>
+                      <FormControl>
+                        <SearchCombobox
+                          queryKey={['treasury-receipt-customers']}
+                          search={(query) => searchCollectionCustomers(query, true)}
+                          value={field.value}
+                          selectedLabel={customerLabel}
+                          onSelect={changeCustomer}
+                          placeholder="Elegí el cliente"
+                          searchPlaceholder="Razón social o CUIT…"
+                          noun="clientes"
+                        />
+                      </FormControl>
                     </div>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="date"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fecha del cobro</FormLabel>
-                    <FormControl>
-                      <EnhancedDatePicker
-                        date={field.value ? moment(field.value, 'YYYY-MM-DD').toDate() : undefined}
-                        setDate={(d) => field.onChange(d ? moment(d).format('YYYY-MM-DD') : '')}
-                        placeholder="DD/MM/AAAA"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <DateFormField control={form.control} name="date" label="Fecha del cobro" />
             </div>
             {values.rates.length > 0 && (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -259,7 +250,12 @@ export function ReceiptEditor({
                       <FormItem>
                         <FormLabel>Cotización del {r.currency} del cobro</FormLabel>
                         <FormControl>
-                          <Input inputMode="decimal" placeholder="1.250,00" className="text-right tabular-nums" {...field} />
+                          <Input
+                            inputMode="decimal"
+                            placeholder="1.250,00"
+                            className="text-right tabular-nums"
+                            {...field}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -277,7 +273,13 @@ export function ReceiptEditor({
               <CardTitle className="text-base">Qué se cobra</CardTitle>
             </CardHeader>
             <CardContent className="space-y-5">
-              <ReceiptInvoicesSection form={form} values={values} invoices={data?.openInvoices ?? []} preview={preview} loading={!data} />
+              <ReceiptInvoicesSection
+                form={form}
+                values={values}
+                invoices={data?.openInvoices ?? []}
+                preview={preview}
+                loading={!data}
+              />
               <ReceiptCheckDebtsSection form={form} values={values} debts={data?.checkDebts ?? []} />
               <Separator />
               <ReceiptAdvancesSection form={form} values={values} advances={data?.advances ?? []} />
@@ -315,26 +317,19 @@ export function ReceiptEditor({
               <CardTitle className="text-base">Medios</CardTitle>
             </CardHeader>
             <CardContent>
-              <ReceiptPaymentsSection form={form} accounts={data?.accounts ?? initialData.accounts} gap={preview.gap} drawer={drawer} />
+              <ReceiptPaymentsSection
+                form={form}
+                accounts={data?.accounts ?? initialData.accounts}
+                gap={preview.gap}
+                drawer={drawer}
+              />
             </CardContent>
           </Card>
         )}
 
         <Card>
           <CardContent className="pt-6">
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Observaciones (opcional)</FormLabel>
-                  <FormControl>
-                    <Textarea rows={2} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <TextareaFormField control={form.control} name="notes" label="Observaciones (opcional)" rows={2} />
           </CardContent>
         </Card>
 
@@ -352,7 +347,12 @@ export function ReceiptEditor({
                 <Save className="mr-1 h-4 w-4" />
                 {save.isPending ? 'Guardando…' : 'Guardar borrador'}
               </Button>
-              <Button type="button" size="sm" disabled={busy || !customerId || isEmpty || !preview.closes || preview.missingRates.length > 0} onClick={askConfirm}>
+              <Button
+                type="button"
+                size="sm"
+                disabled={busy || !customerId || isEmpty || !preview.closes || preview.missingRates.length > 0}
+                onClick={askConfirm}
+              >
                 <CheckCircle2 className="mr-1 h-4 w-4" />
                 {confirm.isPending ? 'Confirmando…' : 'Confirmar'}
               </Button>
@@ -366,7 +366,10 @@ export function ReceiptEditor({
           <AlertDialogHeader>
             <AlertDialogTitle>¿Confirmar el recibo?</AlertDialogTitle>
             <AlertDialogDescription>
-              Toma número, cancela {values.invoices.length === 1 ? 'el comprobante' : `${values.invoices.length} comprobantes`} y registra {values.payments.length === 1 ? 'el medio' : `${values.payments.length} medios`} en las cuentas. Un recibo confirmado no se edita: si hay un error, se anula.
+              Toma número, cancela{' '}
+              {values.invoices.length === 1 ? 'el comprobante' : `${values.invoices.length} comprobantes`} y registra{' '}
+              {values.payments.length === 1 ? 'el medio' : `${values.payments.length} medios`} en las cuentas. Un recibo
+              confirmado no se edita: si hay un error, se anula.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {duplicates.length > 0 && (
@@ -402,7 +405,9 @@ export function ReceiptEditor({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Borrar el borrador?</AlertDialogTitle>
-            <AlertDialogDescription>Libera los comprobantes y anticipos que reservaba y borra sus certificados. No se puede deshacer.</AlertDialogDescription>
+            <AlertDialogDescription>
+              Libera los comprobantes y anticipos que reservaba y borra sus certificados. No se puede deshacer.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={remove.isPending}>Volver</AlertDialogCancel>

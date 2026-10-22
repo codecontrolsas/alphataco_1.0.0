@@ -20,11 +20,17 @@ const INCOME = 'e9400000-0000-4000-8000-000000000031';
 const state = vi.hoisted(() => ({ denied: new Set<string>() }));
 
 vi.mock('@/shared/lib/tenant', () => ({ getActiveCompanyId: async () => 'e9400000-0000-4000-8000-000000000001' }));
-vi.mock('@/features/Permissions', () => ({
-  checkPermissionServer: async (module: string, tab: string, action: string) => !state.denied.has(`${module}:${tab}:${action}`),
+vi.mock('@/features/Permissions/actions/permissions.server', () => ({
+  checkPermissionServer: async (module: string, tab: string, action: string) =>
+    !state.denied.has(`${module}:${tab}:${action}`),
 }));
 vi.mock('@/shared/actions/auth.actions', () => {
-  const current = () => ({ id: 'e9400000-0000-4000-8000-000000000003', credentialId: 'e9400000-0000-4000-8000-000000000003', fullname: null, email: null });
+  const current = () => ({
+    id: 'e9400000-0000-4000-8000-000000000003',
+    credentialId: 'e9400000-0000-4000-8000-000000000003',
+    fullname: null,
+    email: null,
+  });
   return { getServerAuthProfile: async () => current(), requireServerAuthProfile: async () => current() };
 });
 vi.mock('next/cache', () => ({ revalidatePath: () => undefined }));
@@ -85,7 +91,12 @@ const PROFILE: Profile = {
   decimalSeparator: ',',
 };
 const header = ['Fecha', 'Concepto', 'Referencia', 'Importe'];
-const row = (offset: number, description: string, amount: string, reference = '') => [dmy(day(offset)), description, reference, amount];
+const row = (offset: number, description: string, amount: string, reference = '') => [
+  dmy(day(offset)),
+  description,
+  reference,
+  amount,
+];
 
 async function importRows(rows: string[][], fileName = 'extracto.csv') {
   const actions = await import('./reconciliation.server');
@@ -96,13 +107,23 @@ async function importRows(rows: string[][], fileName = 'extracto.csv') {
 async function manual(offset: number, direction: 'IN' | 'OUT', amount: string, description = '') {
   const movements = await import('./movements.server');
   return expectOk(
-    await movements.createManualMovement({ accountId: BANK, date: day(offset), direction, amount, conceptId: direction === 'IN' ? INCOME : FEES, description })
+    await movements.createManualMovement({
+      accountId: BANK,
+      date: day(offset),
+      direction,
+      amount,
+      conceptId: direction === 'IN' ? INCOME : FEES,
+      description,
+    })
   ).id;
 }
 
 async function lineByDescription(description: string) {
   const prisma = await db();
-  return prisma.bank_statement_lines.findFirstOrThrow({ where: { company_id: COMPANY, description }, select: { id: true, status: true, movement_id: true } });
+  return prisma.bank_statement_lines.findFirstOrThrow({
+    where: { company_id: COMPANY, description },
+    select: { id: true, status: true, movement_id: true },
+  });
 }
 
 describe.skipIf(!RUN)('conciliación bancaria (integracion)', () => {
@@ -115,11 +136,24 @@ describe.skipIf(!RUN)('conciliación bancaria (integracion)', () => {
       [OTHER_COMPANY, '30999999951'],
     ] as const) {
       await prisma.company.create({
-        data: { id, company_name: `Conciliación test ${cuit}`, description: 'x', contact_email: 'conc@alphataco.local', contact_phone: '+542991234567', address: 'C', city: city.id, country: 'argentina', industry: 'Petroleo', company_cuit: cuit },
+        data: {
+          id,
+          company_name: `Conciliación test ${cuit}`,
+          description: 'x',
+          contact_email: 'conc@alphataco.local',
+          contact_phone: '+542991234567',
+          address: 'C',
+          city: city.id,
+          country: 'argentina',
+          industry: 'Petroleo',
+          company_cuit: cuit,
+        },
       });
     }
     await prisma.profile.create({ data: { id: USER, credential_id: USER, email: 'conc@alphataco.local' } });
-    await prisma.suppliers.create({ data: { id: SUPPLIER, company_id: COMPANY, name: 'Proveedor SA', cuit: BigInt(30744444442), vat_condition_id: 1 } });
+    await prisma.suppliers.create({
+      data: { id: SUPPLIER, company_id: COMPANY, name: 'Proveedor SA', cuit: BigInt(30744444442), vat_condition_id: 1 },
+    });
     await prisma.treasury_accounts.createMany({
       data: [
         { id: BANK, company_id: COMPANY, kind: 'BANK', name: 'Banco conc', bank_name: 'Banco Galicia' },
@@ -146,12 +180,27 @@ describe.skipIf(!RUN)('conciliación bancaria (integracion)', () => {
   it('importar: guarda el perfil, crea las líneas y concilia sola la única coincidencia; reimportar saltea las repetidas', async () => {
     const prisma = await db();
     const movement = await manual(-10, 'IN', '5000', 'Cobro');
-    const result = expectOk(await importRows([row(-9, 'Transferencia recibida', '5.000,00', 'T1'), row(-8, 'Comisión mantenimiento', '-1.200,00'), ['', '', '', '']]));
+    const result = expectOk(
+      await importRows([
+        row(-9, 'Transferencia recibida', '5.000,00', 'T1'),
+        row(-8, 'Comisión mantenimiento', '-1.200,00'),
+        ['', '', '', ''],
+      ])
+    );
     expect(result).toMatchObject({ imported: 2, skipped: 0, matched: 1 });
-    expect(await lineByDescription('Transferencia recibida')).toMatchObject({ status: 'MATCHED', movement_id: movement });
+    expect(await lineByDescription('Transferencia recibida')).toMatchObject({
+      status: 'MATCHED',
+      movement_id: movement,
+    });
     expect(await prisma.bank_statement_profiles.count({ where: { account_id: BANK } })).toBe(1);
 
-    const again = expectOk(await importRows([row(-9, 'Transferencia recibida', '5.000,00', 'T1'), row(-8, 'Comisión mantenimiento', '-1.200,00'), row(-7, 'Nueva', '-10,00')]));
+    const again = expectOk(
+      await importRows([
+        row(-9, 'Transferencia recibida', '5.000,00', 'T1'),
+        row(-8, 'Comisión mantenimiento', '-1.200,00'),
+        row(-7, 'Nueva', '-10,00'),
+      ])
+    );
     expect(again).toMatchObject({ imported: 1, skipped: 2 });
   });
 
@@ -165,18 +214,37 @@ describe.skipIf(!RUN)('conciliación bancaria (integracion)', () => {
 
   it('solo cuentas bancarias de la empresa', async () => {
     const actions = await import('./reconciliation.server');
-    expect(expectFail(await actions.importStatement({ accountId: CASH, fileName: 'x.csv', profile: PROFILE, rows: [header, row(0, 'X', '1')] }))).toBe('Elegí una cuenta bancaria');
-    expect(expectFail(await actions.importStatement({ accountId: FOREIGN_BANK, fileName: 'x.csv', profile: PROFILE, rows: [header, row(0, 'X', '1')] }))).toBe('La cuenta no existe');
+    expect(
+      expectFail(
+        await actions.importStatement({
+          accountId: CASH,
+          fileName: 'x.csv',
+          profile: PROFILE,
+          rows: [header, row(0, 'X', '1')],
+        })
+      )
+    ).toBe('Elegí una cuenta bancaria');
+    expect(
+      expectFail(
+        await actions.importStatement({
+          accountId: FOREIGN_BANK,
+          fileName: 'x.csv',
+          profile: PROFILE,
+          rows: [header, row(0, 'X', '1')],
+        })
+      )
+    ).toBe('La cuenta no existe');
   });
 
   it('dos movimientos candidatos no se concilian solos; a mano sí', async () => {
     const actions = await import('./reconciliation.server');
+    const reads = await import('./reconciliation-reads.server');
     const a = await manual(-6, 'OUT', '777');
     await manual(-5, 'OUT', '777');
     expectOk(await importRows([row(-5, 'Débito ambiguo', '-777,00')]));
     const line = await lineByDescription('Débito ambiguo');
     expect(line.status).toBe('PENDING');
-    const data = (await actions.getReconciliationData(BANK))!;
+    const data = (await reads.getReconciliationData(BANK))!;
     expect(data.suggestions[line.id]?.movements).toHaveLength(2);
     expectOk(await actions.matchLine({ lineId: line.id, movementId: a }));
     expect(await lineByDescription('Débito ambiguo')).toMatchObject({ status: 'MATCHED', movement_id: a });
@@ -187,23 +255,32 @@ describe.skipIf(!RUN)('conciliación bancaria (integracion)', () => {
     const other = await manual(-4, 'OUT', '55');
     expectOk(await importRows([row(-4, 'Importe distinto', '-56,00')]));
     const wrong = await lineByDescription('Importe distinto');
-    expect(expectFail(await actions.matchLine({ lineId: wrong.id, movementId: other }))).toBe('El movimiento no tiene el importe de la línea');
+    expect(expectFail(await actions.matchLine({ lineId: wrong.id, movementId: other }))).toBe(
+      'El movimiento no tiene el importe de la línea'
+    );
     expectOk(await importRows([row(-4, 'Otra línea', '-55,00')]));
     const second = await lineByDescription('Otra línea');
     // Se concilió sola al importar (único candidato).
     expect(second).toMatchObject({ status: 'MATCHED', movement_id: other });
-    expect(expectFail(await actions.matchLine({ lineId: wrong.id, movementId: other }))).toBe('El movimiento ya está conciliado con otra línea');
+    expect(expectFail(await actions.matchLine({ lineId: wrong.id, movementId: other }))).toBe(
+      'El movimiento ya está conciliado con otra línea'
+    );
   });
 
   it('registrar: crea el movimiento manual con concepto en la fecha de la línea, ya conciliado', async () => {
     const actions = await import('./reconciliation.server');
     const prisma = await db();
     const line = await lineByDescription('Comisión mantenimiento');
-    expect(expectFail(await actions.registerLine({ lineId: line.id, conceptId: INCOME, description: '' }))).toBe('El concepto «Otros ingresos» es solo de ingresos');
+    expect(expectFail(await actions.registerLine({ lineId: line.id, conceptId: INCOME, description: '' }))).toBe(
+      'El concepto «Otros ingresos» es solo de ingresos'
+    );
     expectOk(await actions.registerLine({ lineId: line.id, conceptId: FEES, description: '' }));
     const after = await lineByDescription('Comisión mantenimiento');
     expect(after.status).toBe('CREATED');
-    const movement = await prisma.treasury_movements.findUniqueOrThrow({ where: { id: after.movement_id! }, select: { kind: true, amount: true, date: true, concept_id: true, description: true } });
+    const movement = await prisma.treasury_movements.findUniqueOrThrow({
+      where: { id: after.movement_id! },
+      select: { kind: true, amount: true, date: true, concept_id: true, description: true },
+    });
     expect(movement).toMatchObject({ kind: 'MANUAL', concept_id: FEES, description: 'Comisión mantenimiento' });
     expect(movement.amount.toString()).toBe('-1200');
     expect(movement.date.toISOString().slice(0, 10)).toBe(day(-8));
@@ -214,9 +291,20 @@ describe.skipIf(!RUN)('conciliación bancaria (integracion)', () => {
     const movements = await import('./movements.server');
     const line = await lineByDescription('Transferencia recibida');
     const movementId = line.movement_id!;
-    expect(expectFail(await movements.cancelManualMovement(movementId, 'x'))).toBe(`El movimiento del ${dmy(day(-10)).slice(0, 5)} por $ 5.000,00 está conciliado con el extracto: desconcilialo primero`);
+    expect(expectFail(await movements.cancelManualMovement(movementId, 'x'))).toBe(
+      `El movimiento del ${dmy(day(-10)).slice(0, 5)} por $ 5.000,00 está conciliado con el extracto: desconcilialo primero`
+    );
     expect(
-      expectFail(await movements.updateManualMovement(movementId, { accountId: BANK, date: day(-10), direction: 'IN', amount: '5001', conceptId: INCOME, description: '' }))
+      expectFail(
+        await movements.updateManualMovement(movementId, {
+          accountId: BANK,
+          date: day(-10),
+          direction: 'IN',
+          amount: '5001',
+          conceptId: INCOME,
+          description: '',
+        })
+      )
     ).toMatch(/está conciliado con el extracto/);
     expectOk(await actions.unmatchLine(line.id, 'Me equivoqué'));
     expect((await lineByDescription('Transferencia recibida')).status).toBe('PENDING');
@@ -228,7 +316,10 @@ describe.skipIf(!RUN)('conciliación bancaria (integracion)', () => {
     const prisma = await db();
     const line = await lineByDescription('Comisión mantenimiento');
     expectOk(await actions.unmatchLine(line.id, 'Duplicada'));
-    const movement = await prisma.treasury_movements.findUniqueOrThrow({ where: { id: line.movement_id! }, select: { cancelled_at: true, cancel_reason: true } });
+    const movement = await prisma.treasury_movements.findUniqueOrThrow({
+      where: { id: line.movement_id! },
+      select: { cancelled_at: true, cancel_reason: true },
+    });
     expect(movement.cancelled_at).not.toBeNull();
     expect(movement.cancel_reason).toBe('Desconciliado del extracto: Duplicada');
     expect((await lineByDescription('Comisión mantenimiento')).status).toBe('PENDING');
@@ -245,37 +336,73 @@ describe.skipIf(!RUN)('conciliación bancaria (integracion)', () => {
 
   it('débito de un cheque propio desde su línea: confirma el débito con la fecha de la línea y concilia', async () => {
     const actions = await import('./reconciliation.server');
+    const reads = await import('./reconciliation-reads.server');
     const prisma = await db();
     // Cheque propio emitido (como lo deja registerPayment): orden pagada + medio + cheque.
     const order = await prisma.payment_orders.create({
       data: {
-        company_id: COMPANY, number: 'OP-C00001', supplier_id: SUPPLIER, status: 'PAID', planned_on: new Date(`${day(-12)}T00:00:00.000Z`), paid_on: new Date(`${day(-12)}T00:00:00.000Z`), paid_by: USER,
-        invoices_total: 0, credits_total: 0, advance_total: 4321, withholdings_total: 0, net_total: 4321, created_by: USER,
-        payments: { create: [{ method: 'CHECK', treasury_account_id: BANK, amount: 4321, check_number: '9001', check_due_on: new Date(`${day(-3)}T00:00:00.000Z`) }] },
+        company_id: COMPANY,
+        number: 'OP-C00001',
+        supplier_id: SUPPLIER,
+        status: 'PAID',
+        planned_on: new Date(`${day(-12)}T00:00:00.000Z`),
+        paid_on: new Date(`${day(-12)}T00:00:00.000Z`),
+        paid_by: USER,
+        invoices_total: 0,
+        credits_total: 0,
+        advance_total: 4321,
+        withholdings_total: 0,
+        net_total: 4321,
+        created_by: USER,
+        payments: {
+          create: [
+            {
+              method: 'CHECK',
+              treasury_account_id: BANK,
+              amount: 4321,
+              check_number: '9001',
+              check_due_on: new Date(`${day(-3)}T00:00:00.000Z`),
+            },
+          ],
+        },
       },
       select: { id: true, payments: { select: { id: true } } },
     });
     const check = await prisma.own_checks.create({
       data: {
-        company_id: COMPANY, kind: 'ECHECK', account_id: BANK, number: '9001', amount: 4321, issue_date: new Date(`${day(-12)}T00:00:00.000Z`), payment_date: new Date(`${day(-3)}T00:00:00.000Z`),
-        supplier_id: SUPPLIER, payment_order_payment_id: order.payments[0]!.id, created_by: USER,
+        company_id: COMPANY,
+        kind: 'ECHECK',
+        account_id: BANK,
+        number: '9001',
+        amount: 4321,
+        issue_date: new Date(`${day(-12)}T00:00:00.000Z`),
+        payment_date: new Date(`${day(-3)}T00:00:00.000Z`),
+        supplier_id: SUPPLIER,
+        payment_order_payment_id: order.payments[0]!.id,
+        created_by: USER,
       },
       select: { id: true },
     });
     expectOk(await importRows([row(-4, 'Cheque 9001 anticipado', '-4.321,00'), row(-2, 'Cheque 9001', '-4.321,00')]));
     const early = await lineByDescription('Cheque 9001 anticipado');
-    const data = (await actions.getReconciliationData(BANK))!;
+    const data = (await reads.getReconciliationData(BANK))!;
     expect(data.suggestions[early.id]?.checks.map((c) => c.id)).toEqual([check.id]);
     expect(expectFail(await actions.debitCheckFromLine({ lineId: early.id, checkId: check.id }))).toBe(
       `Cheque Nº 9001: su fecha de pago es el ${dmy(day(-3))}; el débito no puede ser anterior`
     );
     const line = await lineByDescription('Cheque 9001');
     expectOk(await actions.debitCheckFromLine({ lineId: line.id, checkId: check.id }));
-    const own = await prisma.own_checks.findUniqueOrThrow({ where: { id: check.id }, select: { status: true, debited_on: true } });
+    const own = await prisma.own_checks.findUniqueOrThrow({
+      where: { id: check.id },
+      select: { status: true, debited_on: true },
+    });
     expect(own.status).toBe('DEBITED');
     expect(own.debited_on?.toISOString().slice(0, 10)).toBe(day(-2));
     const matched = await lineByDescription('Cheque 9001');
-    const movement = await prisma.treasury_movements.findUniqueOrThrow({ where: { id: matched.movement_id! }, select: { kind: true, own_check_id: true } });
+    const movement = await prisma.treasury_movements.findUniqueOrThrow({
+      where: { id: matched.movement_id! },
+      select: { kind: true, own_check_id: true },
+    });
     expect(movement).toEqual({ kind: 'OWN_CHECK', own_check_id: check.id });
     // Conciliado: deshacer el débito desde el cheque queda trabado.
     const own2 = await import('./own-checks.server');
@@ -289,7 +416,10 @@ describe.skipIf(!RUN)('conciliación bancaria (integracion)', () => {
     expectOk(await importRows([row(-1, 'Carrera A', '-31,41'), row(-1, 'Carrera B', '-31,41')]));
     const a = await lineByDescription('Carrera A');
     const b = await lineByDescription('Carrera B');
-    const results = await Promise.all([actions.matchLine({ lineId: a.id, movementId: target }), actions.matchLine({ lineId: b.id, movementId: target })]);
+    const results = await Promise.all([
+      actions.matchLine({ lineId: a.id, movementId: target }),
+      actions.matchLine({ lineId: b.id, movementId: target }),
+    ]);
     expect(results.filter((r) => r.ok)).toHaveLength(1);
   });
 
@@ -299,18 +429,33 @@ describe.skipIf(!RUN)('conciliación bancaria (integracion)', () => {
     const free = expectOk(await importRows([row(-3, 'Suelta para borrar', '-1,00')], 'borrable.csv'));
     expectOk(await actions.deleteStatement(free.statementId!));
     expect(await prisma.bank_statement_lines.count({ where: { description: 'Suelta para borrar' } })).toBe(0);
-    const used = await prisma.bank_statement_lines.findFirstOrThrow({ where: { company_id: COMPANY, status: 'MATCHED' }, select: { statement_id: true } });
-    expect(expectFail(await actions.deleteStatement(used.statement_id))).toMatch(/^La importación tiene \d+ líneas? conciliadas?: desconcilialas primero$/);
+    const used = await prisma.bank_statement_lines.findFirstOrThrow({
+      where: { company_id: COMPANY, status: 'MATCHED' },
+      select: { statement_id: true },
+    });
+    expect(expectFail(await actions.deleteStatement(used.statement_id))).toMatch(
+      /^La importación tiene \d+ líneas? conciliadas?: desconcilialas primero$/
+    );
   });
 
   it('una transferencia conciliada no se anula hasta desconciliar', async () => {
     const actions = await import('./reconciliation.server');
     const transfers = await import('./transfers.server');
-    const transfer = expectOk(await transfers.createTransfer({ fromAccountId: BANK, toAccountId: CASH, date: day(-1), amount: '2718', notes: '' }));
+    const transfer = expectOk(
+      await transfers.createTransfer({
+        fromAccountId: BANK,
+        toAccountId: CASH,
+        date: day(-1),
+        amount: '2718',
+        notes: '',
+      })
+    );
     expectOk(await importRows([row(-1, 'Extracción caja', '-2.718,00')]));
     const line = await lineByDescription('Extracción caja');
     expect(line.status).toBe('MATCHED');
-    expect(expectFail(await transfers.cancelTransfer(transfer.id, 'x'))).toMatch(/está conciliado con el extracto: desconcilialo primero$/);
+    expect(expectFail(await transfers.cancelTransfer(transfer.id, 'x'))).toMatch(
+      /está conciliado con el extracto: desconcilialo primero$/
+    );
     expectOk(await actions.unmatchLine(line.id, 'Revisión'));
     expectOk(await transfers.cancelTransfer(transfer.id, 'Ahora sí'));
   });
@@ -325,8 +470,14 @@ describe.skipIf(!RUN)('conciliación bancaria (integracion)', () => {
       await manual(-2, 'OUT', amount.replace(',', '.'));
       expectOk(await importRows([row(-2, `Carrera anular ${i}`, `-${amount}`)]));
       const line = await lineByDescription(`Carrera anular ${i}`);
-      await Promise.all([actions.matchLine({ lineId: line.id, movementId: target }), movements.cancelManualMovement(target, 'carrera')]);
-      const after = await prisma.bank_statement_lines.findUniqueOrThrow({ where: { id: line.id }, select: { status: true, movement: { select: { cancelled_at: true } } } });
+      await Promise.all([
+        actions.matchLine({ lineId: line.id, movementId: target }),
+        movements.cancelManualMovement(target, 'carrera'),
+      ]);
+      const after = await prisma.bank_statement_lines.findUniqueOrThrow({
+        where: { id: line.id },
+        select: { status: true, movement: { select: { cancelled_at: true } } },
+      });
       expect(after.status === 'MATCHED' && after.movement?.cancelled_at !== null).toBe(false);
     }
   });
@@ -343,9 +494,19 @@ describe.skipIf(!RUN)('conciliación bancaria (integracion)', () => {
       const line = await lineByDescription(`Carrera editar ${i}`);
       await Promise.all([
         actions.matchLine({ lineId: line.id, movementId: target }),
-        movements.updateManualMovement(target, { accountId: BANK, date: day(-2), direction: 'OUT', amount: `${amount}.5`, conceptId: FEES, description: '' }),
+        movements.updateManualMovement(target, {
+          accountId: BANK,
+          date: day(-2),
+          direction: 'OUT',
+          amount: `${amount}.5`,
+          conceptId: FEES,
+          description: '',
+        }),
       ]);
-      const after = await prisma.bank_statement_lines.findUniqueOrThrow({ where: { id: line.id }, select: { status: true, amount: true, movement: { select: { amount: true } } } });
+      const after = await prisma.bank_statement_lines.findUniqueOrThrow({
+        where: { id: line.id },
+        select: { status: true, amount: true, movement: { select: { amount: true } } },
+      });
       if (after.status === 'MATCHED') expect(after.movement?.amount.toString()).toBe(after.amount.toString());
     }
   });
@@ -354,29 +515,53 @@ describe.skipIf(!RUN)('conciliación bancaria (integracion)', () => {
     const prisma = await db();
     const accounts = await import('./accounts.server');
     const actions = await import('./reconciliation.server');
-    const fresh = expectOk(await accounts.createTreasuryAccount({ kind: 'BANK', name: 'Banco con extracto', bankName: '', accountNumber: '', cbu: '', openingDate: '', openingAmount: '' })).id;
-    expectOk(await actions.importStatement({ accountId: fresh, fileName: 'x.csv', profile: PROFILE, rows: [header, row(0, 'Algo', '1,00')] }));
+    const fresh = expectOk(
+      await accounts.createTreasuryAccount({
+        kind: 'BANK',
+        name: 'Banco con extracto',
+        bankName: '',
+        accountNumber: '',
+        cbu: '',
+        openingDate: '',
+        openingAmount: '',
+      })
+    ).id;
+    expectOk(
+      await actions.importStatement({
+        accountId: fresh,
+        fileName: 'x.csv',
+        profile: PROFILE,
+        rows: [header, row(0, 'Algo', '1,00')],
+      })
+    );
     expect(expectFail(await accounts.deleteTreasuryAccount(fresh))).toBe('La cuenta tiene movimientos: desactivala');
     expect(await prisma.treasury_accounts.count({ where: { id: fresh } })).toBe(1);
   });
 
   it('el resumen suma todas las pendientes aunque la lista se recorte, y "Ver todas" empieza por las más nuevas', async () => {
-    const actions = await import('./reconciliation.server');
+    const reads = await import('./reconciliation-reads.server');
     const prisma = await db();
-    const pending = await prisma.bank_statement_lines.aggregate({ where: { account_id: BANK, status: 'PENDING', amount: { lt: 0 } }, _sum: { amount: true } });
-    const data = (await actions.getReconciliationData(BANK))!;
+    const pending = await prisma.bank_statement_lines.aggregate({
+      where: { account_id: BANK, status: 'PENDING', amount: { lt: 0 } },
+      _sum: { amount: true },
+    });
+    const data = (await reads.getReconciliationData(BANK))!;
     expect(data.summary.pendingDebits).toBe(pending._sum.amount!.toFixed(2));
     expect(data.totalLines).toBeGreaterThanOrEqual(data.lines.length);
-    const all = (await actions.getReconciliationData(BANK, { showAll: true }))!;
+    const all = (await reads.getReconciliationData(BANK, { showAll: true }))!;
     expect(all.lines[0]!.date >= all.lines[all.lines.length - 1]!.date).toBe(true);
   });
 
   it('el filtro "Conciliado" de Movimientos trae solo los vigentes conciliados (y uno hostil se ignora)', async () => {
     const movements = await import('../Movements/MovementsList/actions.server');
     const prisma = await db();
-    const reconciled = await prisma.treasury_movements.count({ where: { company_id: COMPANY, cancelled_at: null, statement_line: { isNot: null } } });
+    const reconciled = await prisma.treasury_movements.count({
+      where: { company_id: COMPANY, cancelled_at: null, statement_line: { isNot: null } },
+    });
     expect(reconciled).toBeGreaterThan(0);
-    expect((await movements.getTreasuryMovementsPaginated({ state: 'RECONCILED', pageSize: '100' })).total).toBe(reconciled);
+    expect((await movements.getTreasuryMovementsPaginated({ state: 'RECONCILED', pageSize: '100' })).total).toBe(
+      reconciled
+    );
     const all = (await movements.getTreasuryMovementsPaginated({ pageSize: '100' })).total;
     expect((await movements.getTreasuryMovementsPaginated({ state: '__proto__', pageSize: '100' })).total).toBe(all);
   });
@@ -385,6 +570,8 @@ describe.skipIf(!RUN)('conciliación bancaria (integracion)', () => {
     const actions = await import('./reconciliation.server');
     state.denied.add('tesoreria:conciliacion:update');
     const line = await lineByDescription('Nueva');
-    expect(expectFail(await actions.ignoreLine({ lineId: line.id, reason: 'x' }))).toBe('No tenés permiso para realizar esta acción');
+    expect(expectFail(await actions.ignoreLine({ lineId: line.id, reason: 'x' }))).toBe(
+      'No tenés permiso para realizar esta acción'
+    );
   });
 });

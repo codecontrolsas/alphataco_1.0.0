@@ -27,7 +27,6 @@ export function CustomerServiceSection({
 }: CustomerServiceSectionProps) {
   const selectedCustomerId = form.watch('customer');
   const selectedServiceId = form.watch('services');
-  const selectedItemId = form.watch('item');
 
   const {
     activeCustomers,

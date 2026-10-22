@@ -1,9 +1,10 @@
 import 'server-only';
 
+import { EXPIRING_SOON_DAYS } from '@/features/Documentacion/shared/lib/document-expiry';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { typeAppliesTo } from '../../shared/compliance/applicability';
-import { arToday, daysUntil, EXPIRING_SOON_DAYS } from '../../shared/compliance/dates';
+import { arToday, daysUntil } from '../../shared/compliance/dates';
 import { deriveState } from '../../shared/compliance/evaluation';
 import { loadComplianceDataset } from '../../shared/compliance/server/dataset.server';
 import type { ComplianceKind, DocumentState } from '../../shared/compliance/types';

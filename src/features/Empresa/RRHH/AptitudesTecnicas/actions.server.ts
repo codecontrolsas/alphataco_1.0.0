@@ -1,7 +1,6 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable';
 import {
   NULL_FILTER_VALUE,
   buildSearchWhere,
@@ -9,7 +8,8 @@ import {
   parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
-import { fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
+import { fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
@@ -17,12 +17,7 @@ import { sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { z } from 'zod';
 import { aptitudeCreateSchema, aptitudeUpdateSchema } from '../../lib/catalog-input-schemas';
-import {
-  CATALOG_EXPORT_MAX_ROWS,
-  buildIsActiveWhere,
-  catalogExportFailure,
-  catalogTooLargeMessage,
-} from '../../lib/catalog-table.server';
+import { CATALOG_EXPORT_MAX_ROWS, buildIsActiveWhere, catalogExportFailure } from '../../lib/catalog-table.server';
 import { requireConfigTabPermission } from '../../lib/config-access.server';
 import { assertPositionsOwned } from '../lib/catalog-guards';
 
@@ -178,7 +173,7 @@ export async function getAllAptitudesTecnicasForExport(
           where: { id: { in: ids }, company_id: companyId },
           select: aptitudSelect,
         }),
-      tooLargeMessage: catalogTooLargeMessage('aptitudes técnicas'),
+      tooLargeMessage: tooManyRowsMessage('aptitudes técnicas'),
     });
     return { ok: true, data: rows };
   } catch (error) {

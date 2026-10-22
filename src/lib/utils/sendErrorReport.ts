@@ -1,8 +1,8 @@
 'use server';
 
 import { sendEmail } from '@/features/Auth/lib/email';
-import { BRAND_NAME } from '@/shared/lib/branding';
 import { Logger } from '@/lib/logger';
+import { BRAND_NAME } from '@/shared/lib/branding';
 
 const logger = new Logger('sendErrorReport');
 
@@ -144,9 +144,6 @@ export async function sendErrorReport(params: ErrorReportParams) {
     const result = await sendEmail({
       to: ERROR_REPORT_RECIPIENTS,
       subject,
-      // `sendEmail` ignora `userEmail` cuando se le pasa `html` (solo lo usan los
-      // templates), pero el tipo lo exige. Dominio `.invalid`: nadie debe responder aca.
-      userEmail: 'sistema@alphataco.invalid',
       html,
     });
 

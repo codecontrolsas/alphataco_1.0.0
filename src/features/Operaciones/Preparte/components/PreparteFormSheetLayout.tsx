@@ -6,10 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Building, Loader2 } from 'lucide-react';
 import type { PreparteFormController } from '../hooks/usePreparteFormController';
+import type { Cliente } from '../types/entities';
 import { CustomerContractSection } from './preparte-form/CustomerContractSection';
 import { ItemsSection } from './preparte-form/ItemsSection';
 import { LocationSection } from './preparte-form/LocationSection';
-import type { Cliente } from '../types/entities';
 
 interface PreparteFormSheetLayoutProps {
   controller: PreparteFormController;
@@ -66,7 +66,6 @@ export function PreparteFormSheetLayout({ controller, clientes, isEditing, onCan
               form={form}
               clientes={clientes}
               isEditing={isEditing}
-              isLoading={isLoading}
               sectorList={sectorList}
               areaList={areaList}
               equipmentList={equipmentList}

@@ -277,10 +277,4 @@ export async function unassignTemplateFromSubType(subTypeId: string) {
     throw error;
   }
 }
-
-// ============================================================================
-// EXPORTED TYPES
-// ============================================================================
-
-export type TemplateDetail = Awaited<ReturnType<typeof getTemplateById>>;
 export type SubTypeForAssign = Awaited<ReturnType<typeof getSubTypesForTemplateAssign>>[number];

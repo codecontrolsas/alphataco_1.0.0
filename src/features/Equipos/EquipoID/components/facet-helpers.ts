@@ -1,4 +1,4 @@
-import type { DataTableFilterOption, DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable';
+import type { DataTableFilterOption, DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { CircleOff } from 'lucide-react';
 

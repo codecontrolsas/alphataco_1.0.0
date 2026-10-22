@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { argentinaDate } from '@/features/Jobs/lib/dates';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import type { Prisma } from '@/generated/prisma/client';
 import { dateColumnToYmd, daysBetween } from './batch-expiry';
 import { DESTINATION_SELECT, destinationLabel } from './labels';
@@ -92,5 +92,3 @@ export function toLoan(unit: LoanUnitRow, today: string = argentinaDate()) {
     days: since ? Math.max(0, daysBetween(since, today)) : null,
   };
 }
-
-export type Loan = ReturnType<typeof toLoan>;

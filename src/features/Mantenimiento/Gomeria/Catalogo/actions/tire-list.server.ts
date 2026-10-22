@@ -1,12 +1,8 @@
 'use server';
 
 import { requireGomeriaPermission } from '@/features/Mantenimiento/Gomeria/shared/access.server';
-import {
-  composeAnd,
-  GOMERIA_EXPORT_MAX_ROWS,
-  gomeriaExportTooLargeMessage,
-} from '@/features/Mantenimiento/Gomeria/shared/list-query';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { composeAnd, GOMERIA_EXPORT_MAX_ROWS } from '@/features/Mantenimiento/Gomeria/shared/list-query';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { getBelowMinimumMaterials } from '@/features/Warehouses/lib/stock-levels';
 import type { Prisma } from '@/generated/prisma/client';
 import type { TireStatus, TireTreadType } from '@/generated/prisma/enums';
@@ -20,6 +16,7 @@ import {
   parseSearchParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { exportRowLimitMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
@@ -365,7 +362,7 @@ export async function getTiresForExport(searchParams: DataTableSearchParams): Pr
     });
 
     if (raw.length > GOMERIA_EXPORT_MAX_ROWS) {
-      return { ok: false, message: gomeriaExportTooLargeMessage('cubiertas') };
+      return { ok: false, message: exportRowLimitMessage(GOMERIA_EXPORT_MAX_ROWS, 'cubiertas') };
     }
     return { ok: true, data: await serializeTires(raw, canViewPrices) };
   } catch (error) {

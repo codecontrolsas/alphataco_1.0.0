@@ -14,11 +14,3 @@ export async function invalidateCacheTags(tags: readonly string[]) {
     updateTag(tag);
   }
 }
-
-/**
- * Invalida TODO el cache de mantenimiento (emergencia).
- * Usar solo como ultimo recurso.
- */
-export async function invalidateAllMaintenanceCacheTags() {
-  updateTag('maint');
-}

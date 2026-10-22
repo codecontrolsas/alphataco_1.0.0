@@ -20,11 +20,7 @@ const WO_OF_OTHER_ORDER = 'c5000000-0000-4000-8000-000000000031';
 
 let canViewPrices = true;
 
-vi.mock('@/features/Permissions', () => ({
-  checkPermissionServer: async (_module: string, _tab: string, action: string) =>
-    action === 'view_prices' ? canViewPrices : true,
-}));
-vi.mock('@/features/Permissions/actionsServer', () => ({
+vi.mock('@/features/Permissions/actions/permissions.server', () => ({
   checkPermissionServer: async (_module: string, _tab: string, action: string) =>
     action === 'view_prices' ? canViewPrices : true,
   checkMultiplePermissionsServer: async (checks: Array<{ moduleSlug: string; tabSlug: string; actionSlug: string }>) =>

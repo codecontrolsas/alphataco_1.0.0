@@ -9,21 +9,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import {
   DEFAULT_ANSWER_OPTIONS,
-  NOT_APPLICABLE_LABEL,
-  NOT_APPLICABLE_VALUE,
   OBS_MAX_LENGTH,
   OBS_SUFFIX,
   cleanLabel,
   getOptionLabel,
-  getOptionValue,
   isSideValidationItem,
-  normalizeChecklistValue,
   withNotApplicable,
   type ChecklistTemplateItem,
 } from '@/features/Checklists/lib/checklist-form-schema';
 import { logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, Calendar, MessageSquarePlus, X } from 'lucide-react';
+import { AlertTriangle, Calendar, MessageSquarePlus } from 'lucide-react';
 import { useState } from 'react';
 import { useWatch, type Control, type FieldValues, type UseFormReturn } from 'react-hook-form';
 

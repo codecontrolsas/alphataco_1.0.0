@@ -1,6 +1,6 @@
 'use client';
 
-import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -9,16 +9,16 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
-import { cn } from '@/lib/utils';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
+import { cn } from '@/lib/utils';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import { AlertTriangle, Eye, MoreHorizontal, Settings2, Wrench } from 'lucide-react';
-import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
-import { ORDER_STATUS_UI } from '../../lib/status-presentation';
 import { ATTENTION_THRESHOLDS } from '../../lib/attention-thresholds';
 import { buildSectorRoute } from '../../lib/sector-route';
+import { ORDER_STATUS_UI } from '../../lib/status-presentation';
 import { MaintenanceStatusPill } from '../../shared/components/MaintenanceStatusPill';
 import { ResourceCell, toResourceCellResource } from '../../shared/components/ResourceCell';
 import { SectorRoute } from '../../shared/components/SectorRoute';
@@ -26,25 +26,11 @@ import { getResourceLabel } from '../../shared/maintenance-resource';
 // Import directo al modulo del boton (no hay barrel en `pdf/`): el boton carga
 // react-pdf y el layout recien al hacer clic, asi que esta linea no mete el
 // renderer en el chunk de la tabla.
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { MaintenanceOrderReportButton } from '../pdf/MaintenanceOrderReportButton';
 import { computeCurrentSector } from '../utils/currentSector';
 import type { MaintenanceOrderListItem } from './actions.server';
 import { daysSinceArgentinaDay } from './lib/workshop-days';
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-type BadgeVariant = NonNullable<BadgeProps['variant']>;
-
-type StatusType =
-  | 'scheduled'
-  | 'in_workshop'
-  | 'pending_workshop_validation'
-  | 'pending_operations_validation'
-  | 'operations_rejected'
-  | 'workshop_rejected'
-  | 'completed';
 
 // ============================================================================
 // STATUS CONFIG
@@ -62,7 +48,13 @@ export const statusLabels: Record<string, string> = Object.fromEntries(
  * Las columnas compuestas (N° Orden + descripción, Recorrido Sectores) reemplazan a estas atómicas, que
  * quedan ocultas y no borradas: siguen disponibles en el selector de columnas y alimentan sus filtros.
  */
-export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['order_number', 'description', 'status', 'currentSector', 'created_at'];
+export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = [
+  'order_number',
+  'description',
+  'status',
+  'currentSector',
+  'created_at',
+];
 
 // ============================================================================
 // TYPES FOR CALLBACKS
@@ -176,8 +168,7 @@ export function getMaintenanceOrdersColumns({
       id: 'vehicle',
       // Ticket 596: la fila puede ser de un vehiculo o de un equipamiento
       accessorFn: (row) => getResourceLabel(row),
-      meta: { title: 'Equipo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo" />,
+      ...titled('Equipo'),
       cell: ({ row }) => <ResourceCell resource={toResourceCellResource(row.original)} />,
       filterFn: (row, _id, value: string[]) => {
         const resourceId = row.original.vehicles?.id ?? row.original.other_equipment?.id;
@@ -190,8 +181,7 @@ export function getMaintenanceOrdersColumns({
     {
       accessorKey: 'workshop_entry_date',
       id: 'workshop_entry_date',
-      meta: { title: 'Ingreso a Taller' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Ingreso a Taller" />,
+      ...titled('Ingreso a Taller'),
       cell: ({ row }) => {
         const date = row.original.workshop_entry_date;
         if (!date) return <span className="text-muted-foreground">-</span>;
@@ -250,8 +240,7 @@ export function getMaintenanceOrdersColumns({
     {
       id: 'progress',
       accessorFn: (row) => calculateProgress(row).percent,
-      meta: { title: 'Progreso' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Progreso" />,
+      ...titled('Progreso'),
       cell: ({ row }) => {
         const { percent, completed, total } = calculateProgress(row.original);
         return (
@@ -272,8 +261,7 @@ export function getMaintenanceOrdersColumns({
           .filter((i) => !i.is_diagnostico && i.description)
           .map((i) => i.description)
           .join(' • '),
-      meta: { title: 'Necesidades' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Necesidades" />,
+      ...titled('Necesidades'),
       cell: ({ row }) => {
         const items = (row.original.maintenance_order_items ?? []).filter((i) => !i.is_diagnostico && i.description);
         if (items.length === 0) return <span className="text-muted-foreground text-sm">—</span>;
@@ -291,15 +279,13 @@ export function getMaintenanceOrdersColumns({
     {
       accessorKey: 'order_number',
       id: 'order_number',
-      meta: { title: 'N° Orden' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="N° Orden" />,
+      ...titled('N° Orden'),
       cell: ({ row }) => <span className="font-mono text-sm font-medium">{row.original.order_number ?? '-'}</span>,
     },
     {
       id: 'description',
       accessorFn: (row) => getOrderDescription(row),
-      meta: { title: 'Descripción' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
+      ...titled('Descripción'),
       cell: ({ row }) => {
         const value = getOrderDescription(row.original);
         if (!value) return <span className="text-muted-foreground text-sm">—</span>;
@@ -315,8 +301,7 @@ export function getMaintenanceOrdersColumns({
     {
       id: 'currentSector',
       accessorFn: (row) => getCurrentSector(row)?.name ?? '',
-      meta: { title: 'Sector Actual' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Sector Actual" />,
+      ...titled('Sector Actual'),
       cell: ({ row }) => {
         const sector = getCurrentSector(row.original);
         if (!sector) return <Badge variant="outline">Sin asignar</Badge>;
@@ -334,8 +319,7 @@ export function getMaintenanceOrdersColumns({
     {
       accessorKey: 'status',
       id: 'status',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => <MaintenanceStatusPill entity="order" status={row.original.status} />,
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id) as string | null;
@@ -346,8 +330,7 @@ export function getMaintenanceOrdersColumns({
     {
       accessorKey: 'created_at',
       id: 'created_at',
-      meta: { title: 'Fecha Creación' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha Creación" />,
+      ...titled('Fecha Creación'),
       cell: ({ row }) => {
         const date = row.original.created_at;
         return <span>{date ? formatArgentinaDateTime(date) : '-'}</span>;
@@ -371,7 +354,13 @@ export function getMaintenanceOrdersColumns({
             {/* Abrir el wizard exige `update` en la misma tab que valida el servidor (`access.ts`) */}
             {canManage && onManageOrder ? (
               <PermissionGuard module="mantenimiento" tab="gestion_ordenes" action="update">
-                <Button type="button" variant="ghost" size="sm" onClick={() => onManageOrder(order)} title="Gestionar orden">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onManageOrder(order)}
+                  title="Gestionar orden"
+                >
                   <Settings2 className="mr-1 h-4 w-4" aria-hidden="true" />
                   Gestionar
                 </Button>

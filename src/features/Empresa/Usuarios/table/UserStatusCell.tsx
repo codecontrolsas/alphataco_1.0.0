@@ -43,7 +43,6 @@ export function UserStatusCell({ row, canBan, canReactivate }: UserStatusCellPro
   const queryClient = useQueryClient();
   const [step, setStep] = useState<DialogStep>('idle');
   const [isPending, setIsPending] = useState(false);
-  const [banWithEmployee, setBanWithEmployee] = useState(false);
 
   const form = useForm<TerminationFormValues>({
     resolver: zodResolver(terminationSchema),
@@ -63,7 +62,6 @@ export function UserStatusCell({ row, canBan, canReactivate }: UserStatusCellPro
 
   const resetState = () => {
     setStep('idle');
-    setBanWithEmployee(false);
     form.reset();
   };
 
@@ -77,7 +75,6 @@ export function UserStatusCell({ row, canBan, canReactivate }: UserStatusCellPro
   };
 
   const handleCascadeChoice = (withEmployee: boolean) => {
-    setBanWithEmployee(withEmployee);
     if (withEmployee) {
       setStep('termination-form');
     } else {

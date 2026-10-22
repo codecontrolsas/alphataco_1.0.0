@@ -11,7 +11,8 @@ import { DOCUMENT_FILES_BUCKET, storageRemove, storageUpload } from '@/shared/li
 import { formatValidityDay, toPathExtension, toPathIdentifier } from '@/shared/lib/storage-file-name';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { formatDocumentTypeName, formatPathSegment } from '@/shared/utils/legacy-mappers';
-import { arToday, typeAppliesTo } from '../compliance';
+import { arToday } from '@/features/Documentacion/shared/compliance/dates';
+import { typeAppliesTo } from '@/features/Documentacion/shared/compliance/applicability';
 import { loadComplianceDataset } from '../compliance/server/dataset.server';
 import { refreshDocumentStatus } from '../compliance/server/document-status.server';
 import { withUniqueFolder } from '../lib/document-file-names';

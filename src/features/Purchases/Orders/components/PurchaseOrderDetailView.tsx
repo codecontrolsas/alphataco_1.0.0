@@ -1,12 +1,13 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AttentionBanner } from '@/features/Mantenimiento/shared/components/AttentionBanner';
-import { formatCuit } from '@/features/Purchases/lib/supplier-ids';
+
 import { formatMoney, formatQuantity } from '@/features/Warehouses/lib/format';
 import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
 import { SectionCard } from '@/shared/components/common/SectionCard';
 import { VAT_RATE_LABELS, isVatRateId } from '@/shared/lib/arca/catalogs';
 import { formatDateAr } from '@/shared/lib/argentina-time';
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import Link from 'next/link';
 import { SupplierInvoiceStatusBadge } from '../../Invoices/components/SupplierInvoiceStatusBadge';
 import { ExpiredSupplierDocumentsAlert } from '../../components/ExpiredSupplierDocumentsAlert';
@@ -85,7 +86,7 @@ export function PurchaseOrderDetailView({ order }: { order: PurchaseOrderDetail 
               {order.supplier.name}
             </Link>
             <span className="block text-xs font-normal text-muted-foreground tabular-nums">
-              {formatCuit(order.supplier.cuit)}
+              {formatCuitText(order.supplier.cuit)}
             </span>
           </Field>
           <Field label="Fecha de entrega">{order.deliveryDate ? formatDateAr(order.deliveryDate) : 'Sin fecha'}</Field>

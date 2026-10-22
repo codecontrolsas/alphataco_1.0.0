@@ -2,15 +2,16 @@
 
 import { documentListStateLabels as documentStateLabels } from '@/features/Documentacion/shared/components/DocumentCells';
 import { state as stateEnum } from '@/generated/prisma/enums';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { buildEnumFacetResult, buildFkFacetResult } from '@/shared/components/common/DataTable/facet-results';
 import {
-  DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
   type FacetResult,
-} from '@/shared/components/common/DataTable';
+} from '@/shared/components/common/DataTable/types';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
-import { User } from 'lucide-react';
+import { User, type LucideIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import {
   getAllCompanyDocsForExport,
@@ -18,7 +19,7 @@ import {
   getCompanyDocsSingleFacet,
   type CompanyDocListItem,
 } from '../actions.server';
-import { buildBooleanFacetResult, buildEnumFacetResult, buildFkFacetResult } from '../lib/facet-results';
+import { buildBooleanFacetResult } from '../lib/facet-results';
 import { HIDDEN_COLUMNS_BY_DEFAULT, documentStateIcons, getCompanyDocsColumns } from './columns';
 
 // ============================================================================
@@ -107,10 +108,10 @@ export default function _CompanyDocsDataTable({
   );
 
   const makeFkFetchFacet = useCallback(
-    (columnId: string, options?: Parameters<typeof buildFkFacetResult>[2]) =>
+    (columnId: string, options?: { nullLabel?: string; icon?: LucideIcon }) =>
       async (params: DataTableSearchParams): Promise<FacetResult> => {
         const result = await getCompanyDocsSingleFacet(columnId, isMonthly, params);
-        return buildFkFacetResult(result.resolvedOptions, result.counts, options);
+        return buildFkFacetResult(result.resolvedOptions, result.counts, options?.nullLabel, options?.icon);
       },
     [isMonthly]
   );

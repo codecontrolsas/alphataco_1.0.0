@@ -13,7 +13,6 @@
 import { resourceMatchesConditions as matchesComplianceConditions } from '../../shared/compliance/applicability';
 import type { ComplianceResource, DocumentCondition } from '../../shared/compliance/types';
 
-export { parseDocumentConditions } from '../../shared/compliance/applicability';
 export type {
   ConditionApplies,
   DirectDocumentCondition,

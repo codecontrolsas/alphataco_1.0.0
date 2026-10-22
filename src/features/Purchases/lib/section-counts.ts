@@ -1,7 +1,7 @@
 import 'server-only';
 
-import { argentinaDate } from '@/features/Jobs/lib/dates';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { argentinaDate } from '@/shared/lib/argentina-time';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { supplierCheckDebtSql } from '@/features/Treasury/lib/rejected-checks';
 import { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/shared/lib/prisma';

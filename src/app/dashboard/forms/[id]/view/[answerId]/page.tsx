@@ -1,10 +1,14 @@
-import { fetchActiveCustomersForChecklist, fetchActiveEmployeesForChecklist } from '@/features/Checklists';
-import { fetchChecklistAnswerById, fetchChecklistTemplateById } from '@/features/Checklists/actions/checklist-queries';
+import {
+  fetchActiveCustomersForChecklist,
+  fetchActiveEmployeesForChecklist,
+} from '@/features/Checklists/actions/actionsServer';
+import { fetchChecklistAnswerById } from '@/features/Checklists/actions/checklist-answer-queries';
+import { fetchChecklistTemplateById } from '@/features/Checklists/actions/checklist-queries';
 import { ChecklistPDFDownloadButton } from '@/features/Checklists/components/ChecklistPDFDownloadButton';
 import { NormalizedChecklistForm } from '@/features/Checklists/components/NormalizedChecklistForm';
 import { fetchEquipmentsByIdsForChecklist, getCurrentProfile } from '@/features/Formularios/actions/form-actions';
 import { formatAnswerDate, readAnswerData, toPdfSections } from '@/features/Formularios/utils/checklistView';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { mapEquipmentToChecklistFormat } from '@/lib/utils';
 import BackButton from '@/shared/components/common/BackButton';
 import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';

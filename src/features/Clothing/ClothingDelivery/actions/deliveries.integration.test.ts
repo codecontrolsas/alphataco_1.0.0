@@ -24,7 +24,7 @@ vi.mock('@/shared/lib/session', () => ({
   isSessionAnonymous: async () => false,
 }));
 vi.mock('@/shared/lib/tenant', () => ({ getActiveCompanyId: async () => COMPANY }));
-vi.mock('@/features/Permissions', () => ({ checkPermissionServer: async () => true }));
+vi.mock('@/features/Permissions/actions/permissions.server', () => ({ checkPermissionServer: async () => true }));
 vi.mock('@/shared/actions/auth.actions', () => ({
   getServerAuthProfile: async () => ({ id: PROFILE, credentialId: PROFILE, fullname: null, email: null }),
 }));

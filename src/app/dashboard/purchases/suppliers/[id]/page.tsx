@@ -1,4 +1,4 @@
-import { getSupplierDetail } from '@/features/Purchases/actions/suppliers.server';
+import { getSupplierDetail } from '@/features/Purchases/actions/supplier-queries.server';
 import { SupplierDetailPage } from '@/features/Purchases/Suppliers/SupplierPages';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';

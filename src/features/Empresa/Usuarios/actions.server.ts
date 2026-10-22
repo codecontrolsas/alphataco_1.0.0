@@ -1,14 +1,15 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import { stateToPrismaParams, type DataTableSearchParams } from '@/shared/components/common/DataTable';
+import { stateToPrismaParams } from '@/shared/components/common/DataTable/helpers';
+import { type DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { CACHE_TAGS, CACHE_TTL } from '@/shared/constants/cache';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { ExportTooLargeError, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { assertCompanyAccess } from '@/shared/lib/tenant';
 import { cacheLife, cacheTag } from 'next/cache';
-import { CATALOG_EXPORT_MAX_ROWS, catalogExportFailure, catalogTooLargeMessage } from '../lib/catalog-table.server';
+import { CATALOG_EXPORT_MAX_ROWS, catalogExportFailure } from '../lib/catalog-table.server';
 import { USERS_VIEW_DENIED_MESSAGE, assertCanViewCompanyUsers, canViewCompanyUsers } from './lib/users-access';
 import {
   SHARE_USER_SELECT,
@@ -114,7 +115,7 @@ async function getAllCompanyUsersForExportCached(
             }),
             companyId
           ),
-        tooLargeMessage: catalogTooLargeMessage('usuarios'),
+        tooLargeMessage: tooManyRowsMessage('usuarios'),
       }),
       getCompanyOwner(companyId),
     ]);

@@ -4,16 +4,16 @@ import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Logger } from '@/lib/logger';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { SectionCard } from '@/shared/components/common/SectionCard';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { updateDirectExitLimitAction } from '../../actions/settings.server';
-import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
 import { formatMoney } from '../../lib/format';
-import { unwrapAction } from '../../lib/unwrap-action';
+import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
 import { directExitLimitSchema, type DirectExitLimitFormValues } from '../../schemas/requests';
 
 const logger = new Logger('Warehouses/DirectExitSection');
@@ -39,7 +39,9 @@ export function DirectExitSection({
   const mutation = useMutation({
     mutationFn: async (values: DirectExitLimitFormValues) => unwrapAction(await updateDirectExitLimitAction(values)),
     onSuccess: (_, values) => {
-      toast.success(values.amount ? 'Monto máximo de salida directa guardado' : 'La salida directa queda sin límite de monto');
+      toast.success(
+        values.amount ? 'Monto máximo de salida directa guardado' : 'La salida directa queda sin límite de monto'
+      );
       form.reset(values);
       void queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.settings });
       void queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.movements });
@@ -60,11 +62,15 @@ export function DirectExitSection({
     >
       {!amountVisible ? (
         <p className="text-muted-foreground text-sm">
-          <span aria-hidden="true">—</span> El monto máximo es un importe y solo lo ven quienes tienen permiso para ver precios.
+          <span aria-hidden="true">—</span> El monto máximo es un importe y solo lo ven quienes tienen permiso para ver
+          precios.
         </p>
       ) : canUpdate ? (
         <Form {...form}>
-          <form onSubmit={form.handleSubmit((values) => mutation.mutate(values))} className="flex flex-wrap items-end gap-3">
+          <form
+            onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
+            className="flex flex-wrap items-end gap-3"
+          >
             <FormField
               control={form.control}
               name="amount"

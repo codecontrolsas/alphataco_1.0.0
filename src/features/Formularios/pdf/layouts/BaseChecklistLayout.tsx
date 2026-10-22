@@ -1,6 +1,7 @@
 'use client';
 
 import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
+import { PdfSignature } from './PdfSignature';
 
 const styles = StyleSheet.create({
   page: {
@@ -207,16 +208,14 @@ export const BaseChecklistLayout = ({
   const itemsPerPage = 30;
   const pages = Math.ceil(data.items?.length / itemsPerPage);
 
-  const renderSignature = () => (
-    <View style={styles.signatureContainer}>
-      {singurl && !singurl.endsWith('_files/') ? (
-        <Image style={styles.signatureImage} src={singurl} />
-      ) : data.conductor ? (
-        <Text>Sin firma</Text>
-      ) : null}
-      <Text style={styles.signatureText}>FIRMA DEL CONDUCTOR</Text>
+  const renderInfoRow = (label: string, value?: string) => (
+    <View style={styles.infoRow}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue}>{value || ''}</Text>
     </View>
   );
+
+  const renderSignature = () => <PdfSignature singurl={singurl} driverName={data.conductor} styles={styles} />;
 
   return (
     <Document>
@@ -240,41 +239,17 @@ export const BaseChecklistLayout = ({
                 <>
                   <View style={styles.infoGrid}>
                     <View style={styles.infoColumn}>
-                      <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Interno:</Text>
-                        <Text style={styles.infoValue}>{data.interno || ''}</Text>
-                      </View>
-                      <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Dominio/patente:</Text>
-                        <Text style={styles.infoValue}>{data.dominio || ''}</Text>
-                      </View>
-                      <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Kilometraje:</Text>
-                        <Text style={styles.infoValue}>{data.kilometers || ''}</Text>
-                      </View>
-                      <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Nombre del conductor:</Text>
-                        <Text style={styles.infoValue}>{data.conductor || ''}</Text>
-                      </View>
+                      {renderInfoRow('Interno:', data.interno)}
+                      {renderInfoRow('Dominio/patente:', data.dominio)}
+                      {renderInfoRow('Kilometraje:', data.kilometers)}
+                      {renderInfoRow('Nombre del conductor:', data.conductor)}
                     </View>
 
                     <View style={styles.infoColumn}>
-                      <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Servicio/Proyecto:</Text>
-                        <Text style={styles.infoValue}>{data.servicio || ''}</Text>
-                      </View>
-                      <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Marca:</Text>
-                        <Text style={styles.infoValue}>{data.marca || ''}</Text>
-                      </View>
-                      <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Modelo:</Text>
-                        <Text style={styles.infoValue}>{data.modelo || ''}</Text>
-                      </View>
-                      <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Fecha:</Text>
-                        <Text style={styles.infoValue}>{data.fecha || ''}</Text>
-                      </View>
+                      {renderInfoRow('Servicio/Proyecto:', data.servicio)}
+                      {renderInfoRow('Marca:', data.marca)}
+                      {renderInfoRow('Modelo:', data.modelo)}
+                      {renderInfoRow('Fecha:', data.fecha)}
                     </View>
                   </View>
 

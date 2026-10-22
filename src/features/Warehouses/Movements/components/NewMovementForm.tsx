@@ -5,12 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Logger } from '@/lib/logger';
+import { InputFormField } from '@/shared/components/common/form-fields';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Info, Plus } from 'lucide-react';
@@ -23,7 +24,6 @@ import type { MovementFormLookups } from '../../actions/options.server';
 import { formatMoney } from '../../lib/format';
 import { MOVEMENT_TYPE_LABELS } from '../../lib/labels';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
-import { unwrapAction } from '../../lib/unwrap-action';
 import {
   emptyStockMovementLine,
   stockMovementSchema,
@@ -53,14 +53,20 @@ interface NewMovementFormProps {
   initialType?: StockMovementTypeValue;
 }
 
-export function NewMovementForm({ lookups, allowedTypes, canDirectExit, canRequest, initialType }: NewMovementFormProps) {
+export function NewMovementForm({
+  lookups,
+  allowedTypes,
+  canDirectExit,
+  canRequest,
+  initialType,
+}: NewMovementFormProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
 
   const form = useForm<StockMovementFormValues>({
     resolver: zodResolver(stockMovementSchema),
     defaultValues: {
-      type: initialType && allowedTypes.includes(initialType) ? initialType : (allowedTypes[0] ?? 'ENTRY'),
+      type: initialType && allowedTypes.includes(initialType) ? initialType : allowedTypes[0] ?? 'ENTRY',
       warehouseId: lookups.warehouses.length === 1 ? lookups.warehouses[0]!.id : '',
       targetWarehouseId: '',
       occurredOn: new Date(),
@@ -212,18 +218,11 @@ export function NewMovementForm({ lookups, allowedTypes, canDirectExit, canReque
                   </FormItem>
                 )}
               />
-              <FormField
+              <InputFormField
                 control={form.control}
                 name="reference"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Referencia</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Remito, factura… (opcional)" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                label="Referencia"
+                placeholder="Remito, factura… (opcional)"
               />
             </div>
 
@@ -249,7 +248,8 @@ export function NewMovementForm({ lookups, allowedTypes, canDirectExit, canReque
               <Alert>
                 <Info className="h-4 w-4" />
                 <AlertDescription>
-                  No tenés permiso de salida directa: las salidas van por pedido de materiales, que aprueba un responsable.{' '}
+                  No tenés permiso de salida directa: las salidas van por pedido de materiales, que aprueba un
+                  responsable.{' '}
                   {canRequest && (
                     <Link href="/dashboard/warehouse/requests/new" className="font-medium underline">
                       Hacer un pedido

@@ -3,16 +3,12 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
-import {
-  DataTable,
-  DataTableColumnHeader,
-  inMemoryFacetedFilterFn,
-  inMemoryTextFilterFn,
-  useDataTableFilter,
-  type DataTableFacetedFilterConfig,
-  type TablePreferences,
-} from '@/shared/components/common/DataTable';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
+import { NULL_FILTER_VALUE, type TablePreferences } from '@/shared/components/common/DataTable/helpers';
+import { inMemoryFacetedFilterFn, inMemoryTextFilterFn } from '@/shared/components/common/DataTable/in-memory';
+import { type DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable/types';
+import { useDataTableFilter } from '@/shared/components/common/DataTable/useDataTableFilter';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import { Building2, Check, CircleOff, Layers, MapPin, Pencil, Truck, X } from 'lucide-react';
 import { use, useCallback, useMemo, type ReactNode } from 'react';
@@ -39,15 +35,13 @@ export function getTalleresColumns(
   const columns: ColumnDef<Workshop>[] = [
     {
       accessorKey: 'name',
-      meta: { title: 'Nombre' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
+      ...titled('Nombre'),
       cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
       filterFn: inMemoryTextFilterFn,
     },
     {
       accessorKey: 'type',
-      meta: { title: 'Tipo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
+      ...titled('Tipo'),
       cell: ({ row }) => {
         const Icon = row.original.type === 'interno' ? Building2 : Truck;
         return (
@@ -62,72 +56,63 @@ export function getTalleresColumns(
     {
       id: 'address',
       accessorFn: (row) => row.address ?? '',
-      meta: { title: 'Dirección' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Dirección" />,
+      ...titled('Dirección'),
       cell: ({ row }) => row.original.address || <span className="text-muted-foreground">-</span>,
       filterFn: inMemoryTextFilterFn,
     },
     {
       id: 'province',
       accessorFn: (row) => row.provinces?.name ?? '',
-      meta: { title: 'Provincia' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Provincia" />,
+      ...titled('Provincia'),
       cell: ({ row }) => row.original.provinces?.name || <span className="text-muted-foreground">-</span>,
       filterFn: nullableFacetedFilterFn,
     },
     {
       id: 'city',
       accessorFn: (row) => row.cities?.name ?? '',
-      meta: { title: 'Ciudad' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Ciudad" />,
+      ...titled('Ciudad'),
       cell: ({ row }) => row.original.cities?.name || <span className="text-muted-foreground">-</span>,
       filterFn: nullableFacetedFilterFn,
     },
     {
       id: 'provider_name',
       accessorFn: (row) => row.provider_name ?? '',
-      meta: { title: 'Proveedor' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Proveedor" />,
+      ...titled('Proveedor'),
       cell: ({ row }) => row.original.provider_name || <span className="text-muted-foreground">-</span>,
       filterFn: inMemoryTextFilterFn,
     },
     {
       id: 'provider_phone',
       accessorFn: (row) => row.provider_phone ?? '',
-      meta: { title: 'Teléfono proveedor' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Teléfono proveedor" />,
+      ...titled('Teléfono proveedor'),
       cell: ({ row }) => row.original.provider_phone || <span className="text-muted-foreground">-</span>,
       filterFn: inMemoryTextFilterFn,
     },
     {
       id: 'provider_email',
       accessorFn: (row) => row.provider_email ?? '',
-      meta: { title: 'Email proveedor' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Email proveedor" />,
+      ...titled('Email proveedor'),
       cell: ({ row }) => row.original.provider_email || <span className="text-muted-foreground">-</span>,
       filterFn: inMemoryTextFilterFn,
     },
     {
       id: 'latitude',
       accessorFn: (row) => (row.latitude == null ? '' : String(row.latitude)),
-      meta: { title: 'Latitud' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Latitud" />,
+      ...titled('Latitud'),
       cell: ({ row }) => row.original.latitude ?? <span className="text-muted-foreground">-</span>,
       filterFn: inMemoryTextFilterFn,
     },
     {
       id: 'longitude',
       accessorFn: (row) => (row.longitude == null ? '' : String(row.longitude)),
-      meta: { title: 'Longitud' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Longitud" />,
+      ...titled('Longitud'),
       cell: ({ row }) => row.original.longitude ?? <span className="text-muted-foreground">-</span>,
       filterFn: inMemoryTextFilterFn,
     },
     {
       id: 'is_active',
       accessorFn: (row) => String(row.is_active),
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => (
         <Badge variant={row.original.is_active ? 'success' : 'secondary'}>
           {row.original.is_active ? (
@@ -191,7 +176,7 @@ function uniqueSorted(values: (string | null | undefined)[]): string[] {
 const SECTORS_ANCHOR_ID = 'sectores-taller';
 const SECTORS_TABLE_ID = 'workshop-sectors';
 
-export function TalleresTable({
+function TalleresTable({
   workshops,
   preferences,
   onEdit,

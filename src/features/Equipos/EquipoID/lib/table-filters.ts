@@ -1,18 +1,13 @@
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { isUuid } from '@/shared/lib/uuid';
 
 /**
  * Utilidades puras para armar los `where` de las tablas de la ficha del equipo (historial de mantenimiento,
  * solicitudes rechazadas y checklists). Sin directiva: se importan desde Server Actions.
  */
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /** UUID nulo: no existe ningún registro con este id. */
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
-
-export function isUuid(value: string): boolean {
-  return UUID_PATTERN.test(value);
-}
 
 /**
  * Los filtros que llegan de la URL son texto libre: un id mal formado en un `in` de una columna `uuid` hace

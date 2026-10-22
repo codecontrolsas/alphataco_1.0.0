@@ -1,5 +1,5 @@
-import { getUserPermissionsMapServer } from '@/features/Permissions';
-import { SectionManagerServer } from '@/features/TabsManager';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
+import { SectionManagerServer } from '@/features/TabsManager/SectionManagerServer';
 import { Suspense } from 'react';
 import PartesDiariosTabContent from './PartesDiarios/PartesDiariosTabContent';
 import { DailyReportTableSkeleton } from './PartesDiarios/list/fallback/DailyReportTableSkeleton';

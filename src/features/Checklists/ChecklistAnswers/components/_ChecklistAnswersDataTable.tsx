@@ -1,12 +1,13 @@
 'use client';
 
-import {
-  DataTable,
-  type DataTableFacetedFilterConfig,
-  type DataTableSearchParams,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { EMPTY_FACET } from '@/shared/components/common/DataTable/facet-filters';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import type {
+  DataTableFacetedFilterConfig,
+  DataTableSearchParams,
+  FacetResult,
+} from '@/shared/components/common/DataTable/types';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import type { LucideIcon } from 'lucide-react';
@@ -36,8 +37,6 @@ const ALL_FILTER_IDS = [
   'customer_id',
   'observations',
 ];
-
-const EMPTY_FACET: FacetResult = { options: [], counts: new Map() };
 
 // ============================================================================
 // PROPS

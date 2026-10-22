@@ -108,7 +108,6 @@ function EquipmentSubTypesForm({
   );
   const {
     handleSubmit,
-    reset,
     formState: { isSubmitting },
     watch,
   } = form;
@@ -416,7 +415,7 @@ function EquipmentSubTypesForm({
           <FormField
             control={form.control}
             name="is_active"
-            render={({ field }) => (
+            render={() => (
               <FormItem className="space-y-3">
                 <FormLabel>Activo</FormLabel>
                 <FormControl>

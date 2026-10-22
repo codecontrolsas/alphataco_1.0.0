@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getPreparteChangeLogs, getPreparteChangeLogsByOrderNumber } from '../actions/queries.server';
+import { getPreparteChangeLogs } from '../actions/queries.server';
 
 // Tipo inferido de la respuesta
 export type PreparteChangeLogEntry = Awaited<ReturnType<typeof getPreparteChangeLogs>>[number];
@@ -17,23 +17,6 @@ export function usePreparteChangeLogs(preparteId: string | undefined, isOpen = t
       return getPreparteChangeLogs(preparteId);
     },
     enabled: !!preparteId && isOpen,
-    staleTime: 2 * 60 * 1000, // 2 minutos
-    gcTime: 5 * 60 * 1000, // 5 minutos en cache
-  });
-}
-
-/**
- * Hook para obtener el historial de cambios de todos los prepartes de un pedido
- * Útil para ver todos los cambios en el modal de detalle por número de pedido
- */
-export function usePreparteChangeLogsByOrderNumber(numeroPedido: string | undefined) {
-  return useQuery({
-    queryKey: ['preparte-change-logs-order', numeroPedido],
-    queryFn: async () => {
-      if (!numeroPedido) return [];
-      return getPreparteChangeLogsByOrderNumber(numeroPedido);
-    },
-    enabled: !!numeroPedido,
     staleTime: 2 * 60 * 1000, // 2 minutos
     gcTime: 5 * 60 * 1000, // 5 minutos en cache
   });

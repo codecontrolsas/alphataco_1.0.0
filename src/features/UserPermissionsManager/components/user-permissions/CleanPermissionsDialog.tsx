@@ -13,7 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Eraser } from 'lucide-react';
 import { useState } from 'react';
-import type { UserRolesData } from '../../actions.server';
+import type { UserRolesData } from '@/features/Permissions/actions/roles.server';
 import type { UserPermissionEditorState } from '../../hooks/useUserPermissionEditor';
 
 interface CleanPermissionsDialogProps {

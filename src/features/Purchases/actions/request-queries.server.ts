@@ -1,12 +1,12 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { DESTINATION_SELECT, destinationLabel } from '@/features/Warehouses/lib/labels';
 import type { StockDestinationTypeValue } from '@/features/Warehouses/schemas/stock-movement';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { UUID_RE } from '../lib/action-errors';
+import { isUuid } from '@/shared/lib/uuid';
 import { orderedByLine, remainingOf } from '../lib/order-progress';
 import { maskAmount } from '../lib/price-visibility';
 import { canViewPurchasePrices } from '../lib/price-visibility.server';
@@ -16,6 +16,7 @@ import {
   canCopyPurchaseRequest,
   type PurchaseRequestStatus,
 } from '../lib/request-state-machine';
+import { userName } from '../lib/user-name';
 
 function isOrderableRequest(status: PurchaseRequestStatus): boolean {
   const orderable: readonly PurchaseRequestStatus[] = ORDERABLE_REQUEST_STATUSES;
@@ -24,7 +25,7 @@ function isOrderableRequest(status: PurchaseRequestStatus): boolean {
 
 /** Solicitudes de compra de un pedido de Almacenes, para su detalle. */
 export async function getPurchaseRequestsForMaterialRequest(materialRequestId: string) {
-  if (!UUID_RE.test(materialRequestId)) return [];
+  if (!isUuid(materialRequestId)) return [];
   const [canView, canViewAll, profile] = await Promise.all([
     checkPermissionServer('compras', 'solicitudes', 'view'),
     checkPermissionServer('compras', 'solicitudes', 'view_all_requests'),
@@ -49,7 +50,7 @@ export async function getPurchaseRequestsForMaterialRequest(materialRequestId: s
 
 /** Detalle de una solicitud. Con solo `view`, nada mas las propias. */
 export async function getPurchaseRequestDetail(id: string) {
-  if (!UUID_RE.test(id)) return null;
+  if (!isUuid(id)) return null;
   const [
     canView,
     canViewAll,
@@ -144,8 +145,6 @@ export async function getPurchaseRequestDetail(id: string) {
       })
     : [];
 
-  const userName = (p: { fullname: string | null; email: string | null } | null) =>
-    p ? p.fullname ?? p.email ?? 'Usuario' : null;
   const status = request.status as PurchaseRequestStatus;
   const isRequester = request.requested_by === profile.id;
   const at = (d: Date | null) => d?.toISOString() ?? null;

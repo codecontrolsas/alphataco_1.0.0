@@ -58,16 +58,6 @@ async function assertGroupInActiveCompany(groupId: string, companyId: string): P
   if (!group) throw new Error('El grupo de reparaciones no pertenece a la empresa activa');
 }
 
-/** Ids de los tipos ya asociados al grupo. */
-async function getGroupTypeIds(groupId: string): Promise<string[]> {
-  const relations = await prisma.maintenance_group_type_of_repairs.findMany({
-    where: { group_id: groupId },
-    select: { type_id: true },
-  });
-
-  return relations.map((relation) => relation.type_id);
-}
-
 /** Crea un grupo de reparaciones y sus relaciones con los tipos elegidos. */
 export const createMaintenanceGroupAction = async (rawGroupData: MaintenanceGroupInput, rawTypeIds: string[]) => {
   try {

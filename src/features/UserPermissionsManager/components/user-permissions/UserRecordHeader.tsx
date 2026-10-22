@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { EditNameButton } from '@/features/Empresa/Usuarios/components/EditNameButton';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
 import { Briefcase, Mail } from 'lucide-react';
-import type { UserDetailData, UserRolesData } from '../../actions.server';
+import type { UserDetailData, UserRolesData } from '@/features/Permissions/actions/roles.server';
 import { UserRoleBadges } from './UserRoleBadges';
 
 type Profile = NonNullable<NonNullable<UserDetailData>['profile']>;

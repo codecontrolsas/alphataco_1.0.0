@@ -1,17 +1,17 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
+import { isUuid } from '@/shared/lib/uuid';
+import { revalidatePath } from 'next/cache';
+import { NO_PERMISSION, PURCHASES_PATH, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { supplierCategoryFormSchema, type SupplierCategoryFormValues } from '../schemas/suppliers';
 
 const logger = new Logger('features/Purchases/categories');
 
-const PURCHASES_PATH = '/dashboard/purchases';
 const DUPLICATE = 'Ya existe un rubro con ese nombre';
 
 /** Rubros de la empresa (activos e inactivos) con la cantidad de proveedores de cada uno. */
@@ -28,7 +28,9 @@ export async function getSupplierCategories() {
 
 export type SupplierCategoryRow = Awaited<ReturnType<typeof getSupplierCategories>>[number];
 
-export async function createSupplierCategory(values: SupplierCategoryFormValues): Promise<ActionResult<{ id: string }>> {
+export async function createSupplierCategory(
+  values: SupplierCategoryFormValues
+): Promise<ActionResult<{ id: string }>> {
   if (!(await checkPermissionServer('compras', 'config-compras', 'update'))) return fail(NO_PERMISSION);
   const parsed = supplierCategoryFormSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
@@ -49,7 +51,7 @@ export async function updateSupplierCategory(id: string, values: SupplierCategor
   if (!(await checkPermissionServer('compras', 'config-compras', 'update'))) return fail(NO_PERMISSION);
   const parsed = supplierCategoryFormSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
-  if (!UUID_RE.test(id)) return fail('El rubro no existe');
+  if (!isUuid(id)) return fail('El rubro no existe');
   const companyId = await getActiveCompanyId();
   try {
     const { count } = await prisma.supplier_categories.updateMany({
@@ -70,7 +72,7 @@ export async function updateSupplierCategory(id: string, values: SupplierCategor
  */
 export async function setSupplierCategoryActive(id: string, isActive: boolean): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'config-compras', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('El rubro no existe');
+  if (!isUuid(id)) return fail('El rubro no existe');
   const companyId = await getActiveCompanyId();
   try {
     const { count } = await prisma.supplier_categories.updateMany({

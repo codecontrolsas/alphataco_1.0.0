@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/shared/components/skeletons/TableSkeleton';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { getActiveMoneyAccountOptions } from '../actions/accounts.server';
 import { getTreasuryConcepts } from '../actions/concepts.server';
@@ -5,7 +6,7 @@ import { Suspense } from 'react';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import { NewMovementButton } from './components/NewMovementButton';
 import { MovementsList } from './MovementsList/MovementsList';
-import { MovementsTableSkeleton } from './MovementsList/fallback/MovementsTableSkeleton';
+
 
 /**
  * Tab Movimientos: todos los movimientos de las cuentas y cajas (manuales, saldos iniciales,
@@ -27,7 +28,7 @@ export default async function MovementsTabContent({
       <div className="flex flex-wrap items-center justify-end gap-2">
         {canCreate && <NewMovementButton accounts={accounts} concepts={concepts} />}
       </div>
-      <Suspense fallback={<MovementsTableSkeleton />}>
+      <Suspense fallback={<TableSkeleton inCard columnCount={6} rowCount={6} />}>
         <MovementsList searchParams={searchParams} canUpdate={canUpdate} accounts={accounts} concepts={concepts} />
       </Suspense>
     </div>

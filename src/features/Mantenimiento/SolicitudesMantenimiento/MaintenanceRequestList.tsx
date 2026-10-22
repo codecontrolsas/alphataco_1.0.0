@@ -1,14 +1,15 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
-import { stripPrefixFromSearchParams, type DataTableSearchParams } from '@/shared/components/common/DataTable';
+import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
+import { type DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { Suspense } from 'react';
 import { MaintenanceRequestDataTable } from './_MaintenanceRequestDataTable';
 import { getAllMaintenanceRequestsForExport, getMaintenanceRequestsPaginated } from './actions/actionsTableServer';
 import { getMaintenanceRequestMetrics } from './actions/metrics.server';
 import { RequestMetrics, type RequestMetricsData } from './components/RequestMetrics';
 import { REQUESTS_PARAM_NAMESPACE, REQUESTS_TABLE_ID } from './constants';
-import { RequestMetricsSkeleton } from './fallback';
+import { RequestMetricsSkeleton } from '@/features/Mantenimiento/SolicitudesMantenimiento/fallback/SolicitudesTableSkeleton';
 
 export const TABLE_ID = REQUESTS_TABLE_ID;
 

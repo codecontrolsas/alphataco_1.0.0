@@ -8,7 +8,7 @@ import { getEquipmentsWithDeviationsPaginated } from './actions.server';
 import { DeviationMetrics, type DeviationMetricsData } from './components/DeviationMetrics';
 import { _EquiposConDesviosDataTable } from './components/_EquiposConDesviosDataTable';
 import { DEVIATIONS_PARAM_NAMESPACE, DEVIATIONS_TABLE_ID } from './constants';
-import { DeviationMetricsSkeleton } from './fallback';
+import { DeviationMetricsSkeleton } from '@/features/Mantenimiento/EquiposConDesvios/fallback/EquipmentsWithDeviationsSkeleton';
 
 interface Props {
   searchParams: DataTableSearchParams;

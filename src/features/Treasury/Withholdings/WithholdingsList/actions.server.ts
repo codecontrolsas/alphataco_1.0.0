@@ -1,25 +1,20 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
-import { formatCuit } from '@/features/Purchases/lib/supplier-ids';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { storagePublicUrl } from '@/shared/lib/storage';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import {
-  buildTreasuryDateRangeWhere,
-  isUuid,
-  ownEntry,
-  parseAmountText,
-  safePaging,
-  textValue,
-} from '../../lib/filter-values';
+import { isUuid } from '@/shared/lib/uuid';
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import { isoDay } from '../../lib/dates';
+import { buildTreasuryDateRangeWhere, ownEntry, parseAmountText, safePaging, textValue } from '../../lib/filter-values';
 import { CUSTOMER_FILES_BUCKET } from '../../lib/storage-files';
 import { CUSTOMER_WITHHOLDING_TAX_LABELS } from '../../schemas/receipts';
 
@@ -163,7 +158,7 @@ async function shape(rows: Prisma.customer_receipt_withholdingsGetPayload<{ sele
       certificateUrl: r.file_path ? await storagePublicUrl(CUSTOMER_FILES_BUCKET, r.file_path) : null,
       certificateName: r.file_name,
       customer: { id: r.receipt.customer.id, name: r.receipt.customer.name },
-      cuit: formatCuit(r.receipt.customer.cuit),
+      cuit: formatCuitText(r.receipt.customer.cuit),
       receipt: { id: r.receipt.id, number: r.receipt.number },
     }))
   );
@@ -189,7 +184,11 @@ export async function getWithholdingsPaginated(searchParams: DataTableSearchPara
       if (mapper) resolvedSorts.push(...mapper(dir));
       else if (VALID_SORT_FIELDS.has(s.id)) resolvedSorts.push({ [s.id]: dir });
     }
-    const orderBy: WithholdingOrderBy[] = [...resolvedSorts, { certificate_date: 'desc' }, { certificate_number: 'asc' }];
+    const orderBy: WithholdingOrderBy[] = [
+      ...resolvedSorts,
+      { certificate_date: 'desc' },
+      { certificate_number: 'asc' },
+    ];
 
     const [rows, total] = await Promise.all([
       prisma.customer_receipt_withholdings.findMany({ where, orderBy, skip, take, select: WITHHOLDING_SELECT }),
@@ -225,20 +224,12 @@ export async function getAllWithholdingsForExport(
           where: { id: { in: ids }, company_id: companyId },
           select: WITHHOLDING_SELECT,
         }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} retenciones con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('retenciones'),
     });
     return { ok: true, data: await shape(rows) };
   } catch (error) {
     logger.error('Error al exportar retenciones sufridas', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError
-          ? error.message
-          : 'No se pudo exportar la lista de retenciones. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de retenciones. Intente nuevamente.');
   }
 }
 
@@ -340,4 +331,3 @@ export async function getWithholdingSingleFacet(
 // ============================================================================
 
 export type WithholdingListItem = Awaited<ReturnType<typeof getWithholdingsPaginated>>['data'][number];
-export type WithholdingTotals = Awaited<ReturnType<typeof getWithholdingTotalsByTax>>;

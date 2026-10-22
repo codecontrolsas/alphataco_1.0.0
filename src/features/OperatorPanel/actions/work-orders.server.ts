@@ -1,19 +1,18 @@
 'use server';
 
-import type { Prisma } from '@/generated/prisma/client';
 import { areAllWorkOrdersClosed } from '@/features/Mantenimiento/lib/order-status';
 import { ACTIVITY_LOG } from '@/features/Mantenimiento/shared/activity-log/action-types';
 import { logActivity } from '@/features/Mantenimiento/shared/activity-log/log-activity';
 import { logWorkOrderCompletedOnMaintenanceOrder } from '@/features/Mantenimiento/shared/activity-log/log-work-order-completed';
 import { withMaintenanceActor } from '@/features/Mantenimiento/shared/maintenance-actor';
 import { lockMaintenanceOrder } from '@/features/Mantenimiento/shared/order-lock';
-import { findMaintenanceOrderIdByWorkOrder } from '@/features/Mantenimiento/shared/work-order-order';
 import { assertOrderTransition, OrderTransitionError } from '@/features/Mantenimiento/shared/order-transition';
+import { findMaintenanceOrderIdByWorkOrder } from '@/features/Mantenimiento/shared/work-order-order';
 import { getWorkOrderBlockingStatus } from '@/features/OperatorPanel/actions/blocking';
 import { assertWorkOrderInScope } from '@/features/OperatorPanel/actions/perimeter';
 import { assertOperatorAction, resolveWorkOrderCloseStatus } from '@/features/OperatorPanel/lib/work-order-status';
+import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
-import { prisma } from '@/shared/lib/prisma';
 import { revalidatePath } from 'next/cache';
 
 const logger = new Logger('OperatorPanel/work-orders');

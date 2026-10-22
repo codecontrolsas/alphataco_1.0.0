@@ -1,14 +1,11 @@
 'use server';
 
+import { signInLinkedEmployee } from '@/features/Auth/lib/employee-login';
 import { Logger } from '@/lib/logger';
 import { auth } from '@/shared/lib/auth';
-import { normalizeEmail, rejectLogin } from '@/shared/lib/auth-credentials';
-import { prisma } from '@/shared/lib/prisma';
-import { prismaSystem } from '@/shared/lib/prisma-system';
 import { getSessionToken } from '@/shared/lib/session';
 import { writeCompanyClaim } from '@/shared/lib/session-claims';
 import { clearActiveCompanyCookie, setActiveCompanyCookie } from '@/shared/lib/tenant';
-import { APIError } from 'better-auth/api';
 import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -25,45 +22,12 @@ const logger = new Logger('features/Clothing/session');
  * cookie, sale del empleado (`perimeter.ts`).
  */
 export async function clothingLogin(email: string, password: string) {
-  const requestHeaders = await headers();
-  let userId: string;
-  let sessionToken: string;
-
-  try {
-    const result = await auth.api.signInEmail({
-      body: { email: normalizeEmail(email), password },
-      headers: requestHeaders,
-    });
-    userId = result.user.id;
-    sessionToken = result.token;
-  } catch (error) {
-    logger.warn('Clothing login auth failed', { data: { email } });
-    if (error instanceof APIError) {
-      return { error: error.body?.message ?? 'Correo o contraseña inválidos' };
-    }
-    return { error: 'No se pudo autenticar' };
-  }
-
-  // Login: todavia no hay empresa activa, asi que el perfil y el legajo se leen con el cliente de sistema.
-  const profile = await prismaSystem.profile.findUnique({
-    where: { credential_id: userId },
-    select: { employee_id: true },
+  const login = await signInLinkedEmployee(email, password, {
+    requireCompany: false,
+    onAuthFailure: () => logger.warn('Clothing login auth failed', { data: { email } }),
   });
-
-  if (!profile?.employee_id) {
-    await rejectLogin(sessionToken, requestHeaders);
-    return { error: 'Tu usuario no tiene un empleado vinculado. Contacta al administrador.' };
-  }
-
-  const employee = await prismaSystem.employees.findUnique({
-    where: { id: profile.employee_id },
-    select: { id: true, company_id: true },
-  });
-
-  if (!employee) {
-    await rejectLogin(sessionToken, requestHeaders);
-    return { error: 'No se encontro el empleado vinculado. Contacta al administrador.' };
-  }
+  if ('error' in login) return { error: login.error };
+  const { employee } = login;
 
   if (employee.company_id) {
     // La empresa activa tiene que ser la DEL LEGAJO, y para eso hay que escribir el claim: el
@@ -80,7 +44,7 @@ export async function clothingLogin(email: string, password: string) {
     await setActiveCompanyCookie(employee.company_id, 60 * 60 * 24 * 365);
   }
 
-  logger.info('Clothing login successful', { data: { userId } });
+  logger.info('Clothing login successful', { data: { userId: login.userId } });
   return { success: true };
 }
 

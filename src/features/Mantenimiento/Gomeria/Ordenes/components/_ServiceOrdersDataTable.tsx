@@ -12,16 +12,17 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { buildEnumFacetResult, buildFkFacetResult } from '@/features/Mantenimiento/Gomeria/shared/facet-helpers';
 import { tireServiceOrderStatusLabels } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
 import { TIRE_SERVICE_ORDER_STATUS_UI } from '@/features/Mantenimiento/Gomeria/shared/tire-status-presentation';
+import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
 import { TireServiceOrderStatus } from '@/generated/prisma/enums';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { buildEnumFacetResult, buildFkFacetResult } from '@/shared/components/common/DataTable/facet-results';
 import {
-  DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
   type FacetResult,
-} from '@/shared/components/common/DataTable';
+} from '@/shared/components/common/DataTable/types';
 import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useQueryClient } from '@tanstack/react-query';
@@ -94,13 +95,7 @@ export default function _ServiceOrdersDataTable({
   initialFilterVisibility,
 }: ServiceOrdersDataTableProps) {
   // ─── Permissions ──────────────────────────────────────────────────────────
-  const permissions = useMemo(
-    () => ({
-      hasPermission: (module: string, tab: string, action: string) =>
-        permissionsMap[`${module}:${tab}:${action}`] === true,
-    }),
-    [permissionsMap]
-  );
+  const permissions = usePermissionChecker(permissionsMap);
 
   const canCreate = permissions.hasPermission('mantenimiento', 'ordenes_gomeria', 'create');
   const canUpdate = permissions.hasPermission('mantenimiento', 'ordenes_gomeria', 'update');

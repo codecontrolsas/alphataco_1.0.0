@@ -1,13 +1,12 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { activeStatusColumn, createdAtColumn, editActionColumn } from '@/features/Empresa/components/catalog-columns';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ActiveStatusBadge } from '../../components/ActiveStatusBadge';
 import type { WorkDiagramListItem } from './actions.server';
 
 // ============================================================================
@@ -38,8 +37,7 @@ export function getColumns(
     // ── Nombre ────────────────────────────────────────────────────────────────
     {
       accessorKey: 'name',
-      meta: { title: 'Nombre' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
+      ...titled('Nombre'),
       cell: ({ row }) => (
         <span className={`font-medium ${!row.original.is_active ? 'opacity-50' : ''}`}>{row.original.name}</span>
       ),
@@ -49,8 +47,7 @@ export function getColumns(
     // ── Días activos ──────────────────────────────────────────────────────────
     {
       accessorKey: 'active_working_days',
-      meta: { title: 'Días activos' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Días activos" />,
+      ...titled('Días activos'),
       cell: ({ row }) => {
         const val = row.original.active_working_days;
         return (
@@ -64,8 +61,7 @@ export function getColumns(
     // ── Días inactivos ────────────────────────────────────────────────────────
     {
       accessorKey: 'inactive_working_days',
-      meta: { title: 'Días inactivos' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Días inactivos" />,
+      ...titled('Días inactivos'),
       cell: ({ row }) => {
         const val = row.original.inactive_working_days;
         return (
@@ -77,17 +73,7 @@ export function getColumns(
     },
 
     // ── Estado (is_active — booleano nullable) ────────────────────────────────
-    {
-      accessorKey: 'is_active',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-      cell: ({ row }) => <ActiveStatusBadge value={row.original.is_active} />,
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id);
-        if (val === null || val === undefined) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(String(val));
-      },
-    },
+    activeStatusColumn<WorkDiagramListItem>(),
 
     // ── Novedades activas (M:M — work_diagram_active_novelties) ──────────────
     {
@@ -169,38 +155,9 @@ export function getColumns(
     },
 
     // ── Fecha de creación (oculta por defecto) ────────────────────────────────
-    {
-      accessorKey: 'created_at',
-      meta: { title: 'Fecha de creación' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de creación" />,
-      cell: ({ row }) => {
-        const val = row.original.created_at;
-        return <span>{val ? formatArgentinaDay(val) : '—'}</span>;
-      },
-    },
+    createdAtColumn<WorkDiagramListItem>('—'),
 
     // ── Acciones ──────────────────────────────────────────────────────────────
-    ...(canUpdate
-      ? ([
-          {
-            id: 'actions',
-            meta: { title: '', excludeFromExport: true },
-            enableSorting: false,
-            enableHiding: false,
-            cell: ({ row }) => (
-              <Button
-                size="sm"
-                variant="link"
-                type="button"
-                className="h-auto p-0"
-                aria-label={`Editar ${row.original.name}`}
-                onClick={() => onEdit(row.original)}
-              >
-                Editar
-              </Button>
-            ),
-          },
-        ] as ColumnDef<WorkDiagramListItem>[])
-      : []),
+    ...editActionColumn<WorkDiagramListItem>({ canEdit: canUpdate, onEdit, getName: (item) => item.name }),
   ];
 }

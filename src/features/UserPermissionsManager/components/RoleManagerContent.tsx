@@ -1,4 +1,4 @@
-import { getAllRolePermissions, getAllRolesWithCounts, getModulesWithTabsServer } from '../actions.server';
+import { getAllRolePermissions, getAllRolesWithCounts, getModulesWithTabsServer } from '@/features/Permissions/actions/roles.server';
 import { RoleManager } from './RoleManager';
 
 /**

@@ -1,18 +1,18 @@
 'use client';
 
 import { formatMoney } from '@/features/Warehouses/lib/format';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { createFacetFilters } from '@/shared/components/common/DataTable/facet-filters';
 import {
-  DataTable,
   type DataTableExportConfig,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { formatArgentinaDateTime, formatDateAr } from '@/shared/lib/argentina-time';
+} from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
+import { formatArgentinaDateTime, formatDateOnlyAr } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
-import { CircleOff, FileText, Truck, User } from 'lucide-react';
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { FileText, Truck, User } from 'lucide-react';
+import { useCallback, useMemo, type ReactNode } from 'react';
 import {
   PURCHASE_ORDER_STATUSES,
   PURCHASE_ORDER_STATUS_LABELS,
@@ -43,7 +43,13 @@ interface Props {
 
 const DEFAULT_VISIBLE_FILTERS = ['status', 'supplier', 'created_at'];
 
-const EMPTY_FACET: FacetResult = { options: [], counts: new Map() };
+const facets = createFacetFilters(getPurchaseOrderSingleFacet);
+
+const STATUS_OPTIONS = PURCHASE_ORDER_STATUSES.map((value) => ({
+  value,
+  label: PURCHASE_ORDER_STATUS_LABELS[value],
+  icon: purchaseOrderStatusIcons[value],
+}));
 
 export function _OrdersDataTable({
   data,
@@ -55,91 +61,20 @@ export function _OrdersDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-  const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getPurchaseOrdersPaginated(params), []);
 
   const columns = useMemo(() => getColumns({ canViewPrices }), [canViewPrices]);
 
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((c) => [c, false]));
-    return { ...defaults, ...initialColumnVisibility };
-  }, [initialColumnVisibility]);
-
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
-      {
-        columnId: 'status',
-        title: 'Estado',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getPurchaseOrderSingleFacet('status', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: PURCHASE_ORDER_STATUSES.map((value) => ({
-              value,
-              label: PURCHASE_ORDER_STATUS_LABELS[value],
-              icon: purchaseOrderStatusIcons[value],
-            })),
-            counts: result.counts,
-          };
-        },
-      },
-      {
-        columnId: 'supplier',
-        title: 'Proveedor',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getPurchaseOrderSingleFacet('supplier', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: (result.resolvedOptions ?? []).map((o) => ({ value: o.id, label: o.name ?? '', icon: Truck })),
-            counts: result.counts,
-          };
-        },
-      },
+      facets.fixed('status', 'Estado', STATUS_OPTIONS),
+      facets.lookup('supplier', 'Proveedor', Truck),
       { columnId: 'created_at', title: 'Fecha de alta', type: 'dateRange' as const },
       { columnId: 'delivery_date', title: 'Fecha de entrega', type: 'dateRange' as const },
       { columnId: 'sent_at', title: 'Enviada', type: 'dateRange' as const },
-      {
-        columnId: 'requests',
-        title: 'Solicitudes de origen',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getPurchaseOrderSingleFacet('requests', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: (result.resolvedOptions ?? []).map((o) => ({ value: o.id, label: o.name ?? '', icon: FileText })),
-            counts: result.counts,
-          };
-        },
-      },
-      {
-        columnId: 'creator',
-        title: 'Creó',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getPurchaseOrderSingleFacet('creator', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: (result.resolvedOptions ?? []).map((o) => ({ value: o.id, label: o.name ?? '', icon: User })),
-            counts: result.counts,
-          };
-        },
-      },
-      {
-        columnId: 'approver',
-        title: 'Aprobó',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getPurchaseOrderSingleFacet('approver', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: [
-              ...(result.resolvedOptions ?? []).map((o) => ({ value: o.id, label: o.name ?? '', icon: User })),
-              ...(result.counts.has(NULL_FILTER_VALUE)
-                ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-                : []),
-            ],
-            counts: result.counts,
-          };
-        },
-      },
+      facets.lookup('requests', 'Solicitudes de origen', FileText),
+      facets.lookup('creator', 'Creó', User),
+      facets.lookup('approver', 'Aprobó', User, { label: 'Sin asignar' }),
       { columnId: 'number', title: 'Número', type: 'text' as const, placeholder: 'Buscar por número...' },
       ...(canViewPrices
         ? [{ columnId: 'total', title: 'Total', type: 'text' as const, placeholder: 'Importe exacto (ej. 1250,50)...' }]
@@ -148,10 +83,15 @@ export function _OrdersDataTable({
     [canViewPrices]
   );
 
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) return initialFilterVisibility;
-    return Object.fromEntries(facetedFilters.map((f) => [f.columnId, DEFAULT_VISIBLE_FILTERS.includes(f.columnId)]));
-  }, [initialFilterVisibility, facetedFilters]);
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   const exportConfig: DataTableExportConfig<PurchaseOrderListItem> = useMemo(
     () => ({
@@ -160,8 +100,7 @@ export function _OrdersDataTable({
       formatters: {
         status: (value) => PURCHASE_ORDER_STATUS_LABELS[value as PurchaseOrderStatus] ?? String(value),
         created_at: (value) => (value ? formatArgentinaDateTime(value as string | Date) : ''),
-        delivery_date: (value) =>
-          value ? formatDateAr(new Date(value as string | Date).toISOString().slice(0, 10)) : '',
+        delivery_date: (value) => (value ? formatDateOnlyAr(value as string | Date) : ''),
         sent_at: (value) => (value ? formatArgentinaDateTime(value as string | Date) : ''),
         total: (value) => (canViewPrices ? formatMoney(value == null ? null : String(value)) : 'Sin permiso'),
       },
@@ -176,16 +115,9 @@ export function _OrdersDataTable({
         columns={columns}
         data={data}
         totalRows={totalRows}
-        searchParams={searchParams}
-        tableId={tableId}
-        paramNamespace={tableId}
-        facetedFilters={facetedFilters}
-        initialColumnVisibility={mergedColumnVisibility}
-        initialFilterVisibility={mergedFilterVisibility}
-        showFilterToggle
+        {...tableProps}
         queryFn={tableQueryFn}
         queryKey={[...PURCHASES_QUERY_KEYS.orders]}
-        onStateChange={handleStateChange}
         searchPlaceholder="Buscar por número o proveedor"
         emptyMessage="No hay órdenes de compra"
         exportConfig={exportConfig}

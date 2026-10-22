@@ -1,5 +1,6 @@
+import { parseDocumentConditions } from '@/features/Documentacion/shared/compliance/applicability';
 import { describe, expect, it } from 'vitest';
-import { parseDocumentConditions, resourceMatchesConditions, type DocumentCondition } from './document-conditions';
+import { resourceMatchesConditions, type DocumentCondition } from './document-conditions';
 
 const POSITION_A = '11111111-1111-4111-8111-111111111111';
 const POSITION_B = '22222222-2222-4222-8222-222222222222';

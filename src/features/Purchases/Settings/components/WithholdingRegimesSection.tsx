@@ -9,8 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatMoney } from '@/features/Warehouses/lib/format';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { InputFormField } from '@/shared/components/common/form-fields';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { Pencil, Plus, Power, RotateCcw, Trash2 } from 'lucide-react';
@@ -55,11 +56,20 @@ function summary(r: WithholdingRegimeRow): string {
 }
 
 /** Regimenes de retencion por impuesto: alicuotas, minimos y escala (spec Compras etapa 5 §2.3). */
-export function WithholdingRegimesSection({ regimes, canUpdate }: { regimes: WithholdingRegimeRow[]; canUpdate: boolean }) {
+export function WithholdingRegimesSection({
+  regimes,
+  canUpdate,
+}: {
+  regimes: WithholdingRegimeRow[];
+  canUpdate: boolean;
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState<WithholdingRegimeRow | 'new' | null>(null);
 
-  const form = useForm<WithholdingRegimeFormValues>({ resolver: zodResolver(withholdingRegimeFormSchema), defaultValues: EMPTY });
+  const form = useForm<WithholdingRegimeFormValues>({
+    resolver: zodResolver(withholdingRegimeFormSchema),
+    defaultValues: EMPTY,
+  });
   const scale = useFieldArray({ control: form.control, name: 'scale' });
   const tax = useWatch({ control: form.control, name: 'tax' });
 
@@ -76,7 +86,12 @@ export function WithholdingRegimesSection({ regimes, canUpdate }: { regimes: Wit
             monthlyExemptAmount: target.monthlyExemptAmount,
             minimumWithholding: target.minimumWithholding,
             vatPercentage: target.vatPercentage ?? '',
-            scale: (target.scale ?? []).map((row) => ({ from: row.from, to: row.to ?? '', fixed: row.fixed, rate: row.rate })),
+            scale: (target.scale ?? []).map((row) => ({
+              from: row.from,
+              to: row.to ?? '',
+              fixed: row.fixed,
+              rate: row.rate,
+            })),
           }
     );
     setEditing(target);
@@ -84,7 +99,11 @@ export function WithholdingRegimesSection({ regimes, canUpdate }: { regimes: Wit
 
   const save = useMutation({
     mutationFn: async (values: WithholdingRegimeFormValues) =>
-      unwrapAction(editing && editing !== 'new' ? await updateWithholdingRegime(editing.id, values) : await createWithholdingRegime(values)),
+      unwrapAction(
+        editing && editing !== 'new'
+          ? await updateWithholdingRegime(editing.id, values)
+          : await createWithholdingRegime(values)
+      ),
     onSuccess: (_data, values) => {
       toast.success(`Régimen ${values.code} de ${WITHHOLDING_TAX_LABELS[values.tax]} guardado`);
       setEditing(null);
@@ -97,7 +116,8 @@ export function WithholdingRegimesSection({ regimes, canUpdate }: { regimes: Wit
   });
 
   const toggle = useMutation({
-    mutationFn: async (regime: WithholdingRegimeRow) => unwrapAction(await setWithholdingRegimeActive(regime.id, !regime.is_active)),
+    mutationFn: async (regime: WithholdingRegimeRow) =>
+      unwrapAction(await setWithholdingRegimeActive(regime.id, !regime.is_active)),
     onSuccess: (_data, regime) => {
       toast.success(regime.is_active ? `Régimen ${regime.code} desactivado` : `Régimen ${regime.code} reactivado`);
       router.refresh();
@@ -111,7 +131,8 @@ export function WithholdingRegimesSection({ regimes, canUpdate }: { regimes: Wit
         <div className="space-y-1">
           <CardTitle>Regímenes de retención</CardTitle>
           <CardDescription>
-            Alícuotas y mínimos de Ganancias, IVA, IIBB y SUSS. Revisalos cuando cambien las normas: las órdenes ya pagadas no se recalculan.
+            Alícuotas y mínimos de Ganancias, IVA, IIBB y SUSS. Revisalos cuando cambien las normas: las órdenes ya
+            pagadas no se recalculan.
           </CardDescription>
         </div>
         {canUpdate && (
@@ -123,7 +144,9 @@ export function WithholdingRegimesSection({ regimes, canUpdate }: { regimes: Wit
       </CardHeader>
       <CardContent className="space-y-4">
         {regimes.length === 0 && (
-          <p className="py-6 text-center text-sm text-muted-foreground">Todavía no hay regímenes. Sin régimen no se practican retenciones.</p>
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            Todavía no hay regímenes. Sin régimen no se practican retenciones.
+          </p>
         )}
         {WITHHOLDING_TAXES.map((t) => {
           const rows = regimes.filter((r) => r.tax === t);
@@ -137,14 +160,23 @@ export function WithholdingRegimesSection({ regimes, canUpdate }: { regimes: Wit
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-xs">{r.code}</span>
-                        <span className={r.is_active ? 'truncate text-sm' : 'truncate text-sm text-muted-foreground'}>{r.description}</span>
+                        <span className={r.is_active ? 'truncate text-sm' : 'truncate text-sm text-muted-foreground'}>
+                          {r.description}
+                        </span>
                         {!r.is_active && <Badge variant="outline">Inactivo</Badge>}
                       </div>
                       <p className="truncate text-xs text-muted-foreground tabular-nums">{summary(r)}</p>
                     </div>
                     {canUpdate && (
                       <>
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8" aria-label={`Editar el régimen ${r.code}`} onClick={() => openForm(r)}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          aria-label={`Editar el régimen ${r.code}`}
+                          onClick={() => openForm(r)}
+                        >
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <Button
@@ -152,7 +184,9 @@ export function WithholdingRegimesSection({ regimes, canUpdate }: { regimes: Wit
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          aria-label={r.is_active ? `Desactivar el régimen ${r.code}` : `Reactivar el régimen ${r.code}`}
+                          aria-label={
+                            r.is_active ? `Desactivar el régimen ${r.code}` : `Reactivar el régimen ${r.code}`
+                          }
                           onClick={() => toggle.mutate(r)}
                           disabled={toggle.isPending}
                         >
@@ -200,91 +234,55 @@ export function WithholdingRegimesSection({ regimes, canUpdate }: { regimes: Wit
                     </FormItem>
                   )}
                 />
-                <FormField
+                <InputFormField
                   control={form.control}
                   name="code"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Código</FormLabel>
-                      <FormControl>
-                        <Input inputMode="numeric" maxLength={3} placeholder="078" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Código"
+                  inputMode="numeric"
+                  maxLength={3}
+                  placeholder="078"
                 />
               </div>
-              <FormField
+              <InputFormField
                 control={form.control}
                 name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Descripción</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enajenación de bienes muebles" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                label="Descripción"
+                placeholder="Enajenación de bienes muebles"
               />
               {tax === 'IVA' ? (
-                <FormField
+                <InputFormField
                   control={form.control}
                   name="vatPercentage"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Porcentaje del IVA a retener</FormLabel>
-                      <FormControl>
-                        <Input inputMode="decimal" placeholder="50" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Porcentaje del IVA a retener"
+                  inputMode="decimal"
+                  placeholder="50"
                 />
               ) : (
                 <div className="grid grid-cols-2 gap-3">
-                  <FormField
+                  <InputFormField
                     control={form.control}
                     name="rateRegistered"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Alícuota (%)</FormLabel>
-                        <FormControl>
-                          <Input inputMode="decimal" placeholder="2" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    label="Alícuota (%)"
+                    inputMode="decimal"
+                    placeholder="2"
                   />
-                  <FormField
+                  <InputFormField
                     control={form.control}
                     name="rateUnregistered"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>No inscriptos (%)</FormLabel>
-                        <FormControl>
-                          <Input inputMode="decimal" placeholder="10" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    label="No inscriptos (%)"
+                    inputMode="decimal"
+                    placeholder="10"
                   />
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3">
                 {tax === 'GANANCIAS' && (
-                  <FormField
+                  <InputFormField
                     control={form.control}
                     name="monthlyExemptAmount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Mínimo no sujeto mensual</FormLabel>
-                        <FormControl>
-                          <Input inputMode="decimal" placeholder="0,00" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    label="Mínimo no sujeto mensual"
+                    inputMode="decimal"
+                    placeholder="0,00"
                   />
                 )}
                 <FormField
@@ -306,14 +304,20 @@ export function WithholdingRegimesSection({ regimes, canUpdate }: { regimes: Wit
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label>Escala (honorarios, opcional)</Label>
-                    <Button type="button" size="sm" variant="outline" onClick={() => scale.append({ from: '', to: '', fixed: '', rate: '' })}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => scale.append({ from: '', to: '', fixed: '', rate: '' })}
+                    >
                       <Plus className="mr-1 h-4 w-4" />
                       Tramo
                     </Button>
                   </div>
                   {scale.fields.length > 0 && (
                     <p className="text-xs text-muted-foreground">
-                      Sobre el importe que supera el mínimo no sujeto: fijo + alícuota sobre el excedente del «desde». «Hasta» vacío = sin tope.
+                      Sobre el importe que supera el mínimo no sujeto: fijo + alícuota sobre el excedente del «desde».
+                      «Hasta» vacío = sin tope.
                     </p>
                   )}
                   {scale.fields.map((f, i) => (
@@ -337,12 +341,21 @@ export function WithholdingRegimesSection({ regimes, canUpdate }: { regimes: Wit
                           )}
                         />
                       ))}
-                      <Button type="button" variant="ghost" size="icon" className="h-9 w-9" aria-label="Quitar el tramo" onClick={() => scale.remove(i)}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9"
+                        aria-label="Quitar el tramo"
+                        onClick={() => scale.remove(i)}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   ))}
-                  {form.formState.errors.scale && <p className="text-sm text-destructive">Revisá los tramos de la escala</p>}
+                  {form.formState.errors.scale && (
+                    <p className="text-sm text-destructive">Revisá los tramos de la escala</p>
+                  )}
                 </div>
               )}
               <DialogFooter>

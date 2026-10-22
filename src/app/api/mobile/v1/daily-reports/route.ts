@@ -1,7 +1,7 @@
 import { mobileRoute } from '@/features/MobileApi/lib/handler';
 import { mobileError, mobileJson } from '@/features/MobileApi/lib/http';
 import { hasDailyReportPermission } from '@/features/MobileApi/lib/permissions';
-import { argentinaDate } from '@/features/Jobs/lib/dates';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { toReportDateString } from '@/features/Operaciones/PartesDiarios/detail/lib/report-date';
 import { prismaBase } from '@/shared/lib/prisma';
 import { runWithTenantContext } from '@/shared/lib/tenant-context';

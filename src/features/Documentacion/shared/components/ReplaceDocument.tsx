@@ -26,14 +26,12 @@ import { invalidateDocumentLists } from '../lib/document-query-keys';
 export default function ReplaceDocument({
   documentName,
   resource,
-  id,
   expires,
   montly,
   appliesId,
 }: {
   documentName: string | null;
   resource: string | null;
-  id: string;
   expires: string | null;
   montly: string | null;
   appliesId: string | null;
@@ -232,7 +230,7 @@ export default function ReplaceDocument({
                   <FormField
                     control={form.control}
                     name="period"
-                    render={({ field }) => (
+                    render={() => (
                       <FormItem className="flex flex-col mt-4">
                         <FormLabel>Periodo</FormLabel>
                         <Input

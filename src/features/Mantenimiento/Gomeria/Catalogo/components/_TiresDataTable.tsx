@@ -11,24 +11,25 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { buildEnumFacetResult, buildFkFacetResult } from '@/features/Mantenimiento/Gomeria/shared/facet-helpers';
 import {
   tireRetreadLabels,
   tireStatusLabels,
   tireTreadTypeLabels,
 } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
 import { TIRE_STATUS_UI } from '@/features/Mantenimiento/Gomeria/shared/tire-status-presentation';
+import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
 import { formatMoney } from '@/features/Warehouses/lib/format';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { TireRetreadLevel, TireStatus, TireTreadType } from '@/generated/prisma/enums';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { buildEnumFacetResult, buildFkFacetResult } from '@/shared/components/common/DataTable/facet-results';
 import {
-  DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
   type FacetResult,
-} from '@/shared/components/common/DataTable';
+} from '@/shared/components/common/DataTable/types';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
 import { Layers, Plus } from 'lucide-react';
@@ -101,13 +102,7 @@ export default function _TiresDataTable({
   initialFilterVisibility,
 }: TiresDataTableProps) {
   // ─── Permissions ──────────────────────────────────────────────────────────
-  const permissions = useMemo(
-    () => ({
-      hasPermission: (module: string, tab: string, action: string) =>
-        permissionsMap[`${module}:${tab}:${action}`] === true,
-    }),
-    [permissionsMap]
-  );
+  const permissions = usePermissionChecker(permissionsMap);
 
   const canCreate = permissions.hasPermission('mantenimiento', 'catalogo_cubiertas', 'create');
   const canViewPrices = permissions.hasPermission('almacenes', 'movimientos', 'view_prices');

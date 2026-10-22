@@ -10,19 +10,20 @@ import {
   parseSearchParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { ExportTooLargeError, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
+import { isUuid } from '@/shared/lib/uuid';
 import {
   EQUIPMENT_HISTORY_TAB,
   EquipmentHistoryAccessError,
   requireEquipmentTabView,
 } from '../equipment-history-access';
 import { repairsKey, summarizeOrderItems } from '../equipment-order-summary';
-import { argentinaDateRange, isUuid, sanitizeUuidFilters } from '../table-filters';
+import { argentinaDateRange, sanitizeUuidFilters } from '../table-filters';
 
 const logger = new Logger('Equipos/vehicle-operations-actions');
 
@@ -267,8 +268,7 @@ export async function getEquipmentOrdersForExport(
           where: { AND: [{ id: { in: ids } }, { company_id: companyId }, { equipment_id: equipmentId }] },
           select: ORDER_LIST_SELECT,
         }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} órdenes con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('órdenes'),
     });
 
     return { ok: true, data: await withOrderSummaries(orders) };

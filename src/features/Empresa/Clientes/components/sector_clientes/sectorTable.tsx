@@ -1,11 +1,9 @@
 'use client';
 
-import {
-  DataTable,
-  DataTableColumnHeader,
-  inMemoryTextFilterFn,
-  type DataTableFacetedFilterConfig,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
+import { inMemoryTextFilterFn } from '@/shared/components/common/DataTable/in-memory';
+import { type DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable/types';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 import type { SectorRow } from '../../actions/sectors.server';
@@ -27,16 +25,14 @@ export function getSectorColumns(customerId: string, canEdit: boolean): ColumnDe
     {
       id: 'name',
       accessorFn: (row) => row.sectors.name,
-      meta: { title: 'Nombre' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
+      ...titled('Nombre'),
       cell: ({ row }) => <span className="font-medium">{row.original.sectors.name}</span>,
       filterFn: inMemoryTextFilterFn,
     },
     {
       id: 'descripcion_corta',
       accessorFn: (row) => row.sectors.descripcion_corta ?? '',
-      meta: { title: 'Descripción' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
+      ...titled('Descripción'),
       cell: ({ row }) => row.original.sectors.descripcion_corta || <span className="text-muted-foreground">-</span>,
       filterFn: inMemoryTextFilterFn,
     },

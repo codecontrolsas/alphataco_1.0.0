@@ -1,15 +1,15 @@
 'use client';
 
 import { Alert, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { loginSchema, type LoginValues } from '@/shared/schemas/schemas';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CircleAlert, Loader2 } from 'lucide-react';
+import { CircleAlert } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 import { useForm } from 'react-hook-form';
+import { LoginSubmitButton } from './LoginSubmitButton';
 import { PasswordInput } from './PasswordInput';
 
 interface CredentialsLoginFormProps {
@@ -90,16 +90,7 @@ export function CredentialsLoginForm({ action, redirectTo, helpText }: Credentia
               </FormItem>
             )}
           />
-          <Button type="submit" size="lg" className="w-full" disabled={isPending} aria-busy={isPending}>
-            {isPending ? (
-              <>
-                <Loader2 className="animate-spin motion-reduce:animate-none" />
-                Ingresando…
-              </>
-            ) : (
-              'Ingresar'
-            )}
-          </Button>
+          <LoginSubmitButton isPending={isPending} />
         </form>
       </Form>
 

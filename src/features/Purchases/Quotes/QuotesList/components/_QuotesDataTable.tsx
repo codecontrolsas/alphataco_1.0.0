@@ -1,18 +1,18 @@
 'use client';
 
 import { formatMoney } from '@/features/Warehouses/lib/format';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { createFacetFilters } from '@/shared/components/common/DataTable/facet-filters';
 import {
-  DataTable,
   type DataTableExportConfig,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
-import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+} from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
+import { formatArgentinaDay, formatDateOnlyAr } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { FileText, Truck, User } from 'lucide-react';
-import moment from 'moment';
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, type ReactNode } from 'react';
 import { PURCHASES_QUERY_KEYS } from '../../../lib/query-keys';
 import {
   PURCHASE_QUOTE_STATUSES,
@@ -43,7 +43,13 @@ interface Props {
 
 const DEFAULT_VISIBLE_FILTERS = ['status', 'supplier', 'created_at'];
 
-const EMPTY_FACET: FacetResult = { options: [], counts: new Map() };
+const facets = createFacetFilters(getPurchaseQuoteSingleFacet);
+
+const STATUS_OPTIONS = PURCHASE_QUOTE_STATUSES.map((value) => ({
+  value,
+  label: PURCHASE_QUOTE_STATUS_LABELS[value],
+  icon: purchaseQuoteStatusIcons[value],
+}));
 
 export function _QuotesDataTable({
   data,
@@ -55,84 +61,34 @@ export function _QuotesDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-  const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getPurchaseQuotesPaginated(params), []);
 
   const columns = useMemo(() => getColumns({ canViewPrices }), [canViewPrices]);
 
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((c) => [c, false]));
-    return { ...defaults, ...initialColumnVisibility };
-  }, [initialColumnVisibility]);
-
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
-      {
-        columnId: 'status',
-        title: 'Estado',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getPurchaseQuoteSingleFacet('status', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: PURCHASE_QUOTE_STATUSES.map((value) => ({
-              value,
-              label: PURCHASE_QUOTE_STATUS_LABELS[value],
-              icon: purchaseQuoteStatusIcons[value],
-            })),
-            counts: result.counts,
-          };
-        },
-      },
-      {
-        columnId: 'supplier',
-        title: 'Proveedor',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getPurchaseQuoteSingleFacet('supplier', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: (result.resolvedOptions ?? []).map((o) => ({ value: o.id, label: o.name ?? '', icon: Truck })),
-            counts: result.counts,
-          };
-        },
-      },
+      facets.fixed('status', 'Estado', STATUS_OPTIONS),
+      facets.lookup('supplier', 'Proveedor', Truck),
       { columnId: 'created_at', title: 'Fecha de alta', type: 'dateRange' as const },
       { columnId: 'sent_at', title: 'Enviada', type: 'dateRange' as const },
       { columnId: 'received_at', title: 'Respondida', type: 'dateRange' as const },
       { columnId: 'valid_until', title: 'Validez', type: 'dateRange' as const },
-      {
-        columnId: 'requests',
-        title: 'Solicitudes de origen',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getPurchaseQuoteSingleFacet('requests', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: (result.resolvedOptions ?? []).map((o) => ({ value: o.id, label: o.name ?? '', icon: FileText })),
-            counts: result.counts,
-          };
-        },
-      },
-      {
-        columnId: 'creator',
-        title: 'Creó',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getPurchaseQuoteSingleFacet('creator', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: (result.resolvedOptions ?? []).map((o) => ({ value: o.id, label: o.name ?? '', icon: User })),
-            counts: result.counts,
-          };
-        },
-      },
+      facets.lookup('requests', 'Solicitudes de origen', FileText),
+      facets.lookup('creator', 'Creó', User),
       { columnId: 'number', title: 'Número', type: 'text' as const, placeholder: 'Buscar por número...' },
     ],
     []
   );
 
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) return initialFilterVisibility;
-    return Object.fromEntries(facetedFilters.map((f) => [f.columnId, DEFAULT_VISIBLE_FILTERS.includes(f.columnId)]));
-  }, [initialFilterVisibility, facetedFilters]);
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   const exportConfig: DataTableExportConfig<PurchaseQuoteListItem> = useMemo(
     () => ({
@@ -142,8 +98,8 @@ export function _QuotesDataTable({
         status: (value) => PURCHASE_QUOTE_STATUS_LABELS[value as PurchaseQuoteStatus] ?? String(value),
         created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : ''),
         sent_at: (value) => (value ? formatArgentinaDay(value as string | Date) : ''),
-        received_at: (value) => (value ? moment.utc(value as string | Date).format('DD/MM/YYYY') : ''),
-        valid_until: (value) => (value ? moment.utc(value as string | Date).format('DD/MM/YYYY') : ''),
+        received_at: (value) => (value ? formatDateOnlyAr(value as string | Date) : ''),
+        valid_until: (value) => (value ? formatDateOnlyAr(value as string | Date) : ''),
         total_quoted: (value) => (!canViewPrices ? 'Sin permiso' : value ? formatMoney(String(value)) : ''),
       },
     }),
@@ -157,16 +113,9 @@ export function _QuotesDataTable({
         columns={columns}
         data={data}
         totalRows={totalRows}
-        searchParams={searchParams}
-        tableId={tableId}
-        paramNamespace={tableId}
-        facetedFilters={facetedFilters}
-        initialColumnVisibility={mergedColumnVisibility}
-        initialFilterVisibility={mergedFilterVisibility}
-        showFilterToggle
+        {...tableProps}
         queryFn={tableQueryFn}
         queryKey={[...PURCHASES_QUERY_KEYS.quotes]}
-        onStateChange={handleStateChange}
         searchPlaceholder="Buscar por número o proveedor"
         emptyMessage="No hay pedidos de cotización"
         exportConfig={exportConfig}

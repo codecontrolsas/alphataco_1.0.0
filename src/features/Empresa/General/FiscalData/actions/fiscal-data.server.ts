@@ -1,7 +1,7 @@
 'use server';
 
 import { errorMessage, fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import type { arca_environment } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import { normalizeCompanyCuit } from '@/shared/lib/arca/server/session';

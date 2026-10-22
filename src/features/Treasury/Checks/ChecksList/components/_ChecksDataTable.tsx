@@ -2,16 +2,16 @@
 
 import { Button } from '@/components/ui/button';
 import { formatMoney } from '@/features/Warehouses/lib/format';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { createFacetFilters } from '@/shared/components/common/DataTable/facet-filters';
 import {
-  DataTable,
   type DataTableExportConfig,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+} from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { unwrapExportResult } from '@/shared/lib/export-result';
-import { CircleOff, Landmark, Percent, Users, Wallet } from 'lucide-react';
+import { Landmark, Percent, Users, Wallet } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { CHECK_KIND_LABELS, CHECK_STATUS_LABELS } from '../../../lib/check-transitions';
 import { TREASURY_QUERY_KEYS } from '../../../lib/query-keys';
@@ -33,7 +33,7 @@ interface Props {
 
 const DEFAULT_VISIBLE_FILTERS = ['status', 'portfolio', 'deposit_deadline'];
 
-const EMPTY_FACET: FacetResult = { options: [], counts: new Map() };
+const facets = createFacetFilters(getCheckSingleFacet);
 
 export function _ChecksDataTable({
   data,
@@ -44,8 +44,6 @@ export function _ChecksDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-  const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getChecksPaginated(params), []);
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -59,79 +57,30 @@ export function _ChecksDataTable({
 
   const columns = useMemo(() => getColumns(), []);
 
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((c) => [c, false]));
-    return { ...defaults, ...initialColumnVisibility };
-  }, [initialColumnVisibility]);
-
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
-      {
-        columnId: 'status',
-        title: 'Estado',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getCheckSingleFacet('status', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: CHECK_STATUS_VALUES.map((value) => ({
-              value,
-              label: CHECK_STATUS_LABELS[value],
-              icon: checkStatusIcons[value],
-            })),
-            counts: result.counts,
-          };
-        },
-      },
-      {
-        columnId: 'portfolio',
-        title: 'Cartera',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getCheckSingleFacet('portfolio', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: (result.resolvedOptions ?? []).map((o) => ({ value: o.id, label: o.name ?? '', icon: Wallet })),
-            counts: result.counts,
-          };
-        },
-      },
+      facets.fixed(
+        'status',
+        'Estado',
+        CHECK_STATUS_VALUES.map((value) => ({
+          value,
+          label: CHECK_STATUS_LABELS[value],
+          icon: checkStatusIcons[value],
+        }))
+      ),
+      facets.lookup('portfolio', 'Cartera', Wallet),
       { columnId: 'deposit_deadline', title: 'Vence para depositar', type: 'dateRange' as const },
-      {
-        columnId: 'customer',
-        title: 'Cliente',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getCheckSingleFacet('customer', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: (result.resolvedOptions ?? []).map((o) => ({ value: o.id, label: o.name ?? '', icon: Users })),
-            counts: result.counts,
-          };
-        },
-      },
-      {
-        columnId: 'kind',
-        title: 'Tipo',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getCheckSingleFacet('kind', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: CHECK_KIND_VALUES.map((value) => ({ value, label: CHECK_KIND_LABELS[value], icon: checkKindIcons[value] })),
-            counts: result.counts,
-          };
-        },
-      },
-      {
-        columnId: 'destination',
-        title: 'Destino',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getCheckSingleFacet('destination', params);
-          if (!result) return EMPTY_FACET;
-          const options = (result.resolvedOptions ?? []).map((o) => ({ value: o.id, label: o.name ?? '', icon: Landmark }));
-          if ((result.counts.get(NULL_FILTER_VALUE) ?? 0) > 0) {
-            options.push({ value: NULL_FILTER_VALUE, label: 'Sin destino', icon: CircleOff });
-          }
-          return { options, counts: result.counts };
-        },
-      },
+      facets.lookup('customer', 'Cliente', Users),
+      facets.fixed(
+        'kind',
+        'Tipo',
+        CHECK_KIND_VALUES.map((value) => ({
+          value,
+          label: CHECK_KIND_LABELS[value],
+          icon: checkKindIcons[value],
+        }))
+      ),
+      facets.lookup('destination', 'Destino', Landmark, { label: 'Sin destino' }),
       { columnId: 'issue_date', title: 'Emisión', type: 'dateRange' as const },
       { columnId: 'payment_date', title: 'Fecha de pago', type: 'dateRange' as const },
       { columnId: 'number', title: 'Número', type: 'text' as const, placeholder: 'Número de cheque' },
@@ -143,10 +92,15 @@ export function _ChecksDataTable({
     []
   );
 
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) return initialFilterVisibility;
-    return Object.fromEntries(facetedFilters.map((f) => [f.columnId, DEFAULT_VISIBLE_FILTERS.includes(f.columnId)]));
-  }, [initialFilterVisibility, facetedFilters]);
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   const exportConfig: DataTableExportConfig<CheckListItem> = useMemo(
     () => ({
@@ -182,16 +136,9 @@ export function _ChecksDataTable({
         columns={columns}
         data={data}
         totalRows={totalRows}
-        searchParams={searchParams}
-        tableId={tableId}
-        paramNamespace={tableId}
-        facetedFilters={facetedFilters}
-        initialColumnVisibility={mergedColumnVisibility}
-        initialFilterVisibility={mergedFilterVisibility}
-        showFilterToggle
+        {...tableProps}
         queryFn={tableQueryFn}
         queryKey={[...TREASURY_QUERY_KEYS.checks]}
-        onStateChange={handleStateChange}
         // Solo los cheques EN CARTERA se pueden depositar o descontar
         enableRowSelection={canOperate ? (row) => row.original.status === 'IN_PORTFOLIO' : false}
         showRowSelection

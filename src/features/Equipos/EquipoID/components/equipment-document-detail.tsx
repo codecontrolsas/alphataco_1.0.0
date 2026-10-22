@@ -2,8 +2,8 @@ import { MonthlyEquipmentDocumentsList } from '@/features/Documentacion/Document
 import { MonthlyEquipmentDocumentsSkeleton } from '@/features/Documentacion/DocumentosEquipos/Mensuales/fallback/MonthlyEquipmentDocumentsSkeleton';
 import { EquipmentPermanentDocumentsList } from '@/features/Documentacion/DocumentosEquipos/Permanentes/EquipmentPermanentDocumentsList';
 import { EquipmentPermanentDocumentsSkeleton } from '@/features/Documentacion/DocumentosEquipos/Permanentes/fallback/EquipmentPermanentDocumentsSkeleton';
-import { getUserPermissionsMapServer } from '@/features/Permissions';
-import { ViewManagerServer } from '@/features/TabsManager';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
+import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
 import { Suspense } from 'react';
 
 interface EquipmentDocumentDetailProps {

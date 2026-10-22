@@ -1,22 +1,26 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
-import { checkPermissionServer } from '@/features/Permissions';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { toActionError } from '../lib/action-errors';
-import { registerReturn, writeOffLoanedUnit } from '../lib/stock-engine';
+import { revalidatePath } from 'next/cache';
+import { WAREHOUSE_PATH, toActionError } from '../lib/action-errors';
 import { StockError } from '../lib/stock-errors';
+import { registerReturn, writeOffLoanedUnit } from '../lib/stock-loans';
 import { hasTireMaterials } from '../lib/tire-stock';
-import { returnLoanSchema, writeOffLoanSchema, type ReturnLoanFormValues, type WriteOffLoanFormValues } from '../schemas/loans';
+import {
+  returnLoanSchema,
+  writeOffLoanSchema,
+  type ReturnLoanFormValues,
+  type WriteOffLoanFormValues,
+} from '../schemas/loans';
 
 const logger = new Logger('features/Warehouses/loans');
 
-const WAREHOUSE_PATH = '/dashboard/warehouse';
 const TRANSACTION_OPTIONS = { timeout: 20_000, maxWait: 5_000 };
 
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
@@ -27,7 +31,12 @@ async function assertNotTireUnits(tx: Tx, companyId: string, unitIds: string[]) 
     where: { id: { in: unitIds }, company_id: companyId },
     select: { material_id: true },
   });
-  if (await hasTireMaterials(tx, units.map((u) => u.material_id))) {
+  if (
+    await hasTireMaterials(
+      tx,
+      units.map((u) => u.material_id)
+    )
+  ) {
     throw new StockError('MANAGED_ELSEWHERE', 'Las cubiertas montadas se desmontan desde Gomería');
   }
 }

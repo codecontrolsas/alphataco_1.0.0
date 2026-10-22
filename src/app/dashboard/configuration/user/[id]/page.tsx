@@ -1,12 +1,5 @@
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
-import {
-  getAllRolePermissions,
-  getAllRolesWithCounts,
-  getModulesWithTabsServer,
-  getUserDetailById,
-  getUserPermissionsForUserServer,
-  getUserRolesServer,
-} from '@/features/UserPermissionsManager/actions.server';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { getAllRolePermissions, getAllRolesWithCounts, getModulesWithTabsServer, getUserDetailById, getUserPermissionsForUserServer, getUserRolesServer } from '@/features/Permissions/actions/roles.server';
 import { UserRecordHeader } from '@/features/UserPermissionsManager/components/user-permissions/UserRecordHeader';
 import { UserPermissionsManager } from '@/features/UserPermissionsManager/UserPermissionsManager';
 import { StateBlock } from '@/shared/components/common/StateBlock';

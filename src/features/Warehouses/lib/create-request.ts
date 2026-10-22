@@ -1,13 +1,13 @@
 import 'server-only';
 
-import type { Prisma } from '@/generated/prisma/client';
 import { ACTIVITY_LOG } from '@/features/Mantenimiento/shared/activity-log/action-types';
 import { logActivity } from '@/features/Mantenimiento/shared/activity-log/log-activity';
 import { lockMaintenanceOrder } from '@/features/Mantenimiento/shared/order-lock';
 import { findMaintenanceOrderIdByWorkOrder } from '@/features/Mantenimiento/shared/work-order-order';
+import type { Prisma } from '@/generated/prisma/client';
 import { normalizeDecimal, type DestinationInput } from '../schemas/stock-movement';
 import { nextMaterialRequestNumber } from './request-numbering';
-import { validateExitDestination } from './stock-engine';
+import { validateExitDestination } from './stock-destination';
 import { StockError } from './stock-errors';
 
 type Tx = Prisma.TransactionClient;
@@ -67,7 +67,10 @@ export async function createMaterialRequest(
 
   if (input.workOrderId) {
     if (destination.destinationType !== 'MAINTENANCE_ORDER' || !destination.maintenanceOrderId) {
-      throw new StockError('INVALID_DESTINATION', 'Una OT solo se puede indicar en un pedido a una orden de mantenimiento');
+      throw new StockError(
+        'INVALID_DESTINATION',
+        'Una OT solo se puede indicar en un pedido a una orden de mantenimiento'
+      );
     }
     const workOrder = await tx.work_orders.findFirst({
       where: { id: input.workOrderId, company_id: companyId },

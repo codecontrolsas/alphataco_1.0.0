@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/shared/components/skeletons/TableSkeleton';
 import { Skeleton } from '@/components/ui/skeleton';
 import CertificacionesTabContent from '@/features/Comercial/Certificaciones/CertificacionesTabContent';
 import { CertificationsTableSkeleton } from '@/features/Comercial/Certificaciones/fallback/CertificationsTableSkeleton';
@@ -7,10 +8,10 @@ import MensureUnitsWrapper from '@/features/Comercial/Comerce/components/Mensure
 import ServiceComponentWrapper from '@/features/Comercial/Comerce/components/ServiceComponentWrapper';
 import { DailyReportsSkeleton } from '@/features/Comercial/Comerce/fallback/DailyReportsSkeleton';
 import FacturacionTabContent from '@/features/Comercial/Facturacion/FacturacionTabContent';
-import { InvoicesTableSkeleton } from '@/features/Comercial/Facturacion/fallback/InvoicesTableSkeleton';
+
 import ReglasPrecioTabContent from '@/features/Comercial/ReglasPrecio/ReglasPrecioTabContent';
 import { MensureUnitsTableSkeleton } from '@/features/Empresa/Clientes/components/meansure_units/fallback/MensureUnitsTableSkeleton';
-import { SectionManagerServer } from '@/features/TabsManager';
+import { SectionManagerServer } from '@/features/TabsManager/SectionManagerServer';
 import { ClipboardList, FileSpreadsheet, FileText, Receipt, Ruler, TrendingUp, Users } from 'lucide-react';
 import { Suspense } from 'react';
 
@@ -119,7 +120,7 @@ export default function ComerceTabContent({
           moduleSlug: 'comercial',
           tabSlug: 'facturacion',
           content: (
-            <Suspense fallback={<InvoicesTableSkeleton />}>
+            <Suspense fallback={<TableSkeleton inCard columnCount={7} rowCount={10} />}>
               <FacturacionTabContent searchParams={searchParams} permissions={permissions} />
             </Suspense>
           ),

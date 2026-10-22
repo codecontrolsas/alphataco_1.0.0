@@ -11,6 +11,7 @@ import type { DataTableSearchParams } from '@/shared/components/common/DataTable
 import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
+import type { SingleFacetResult } from '@/shared/lib/table-list-query';
 
 /**
  * Armado de consultas compartido por los listados de vehículos (activos y dados de baja).
@@ -28,11 +29,6 @@ import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 
 /** Tope de filas de un export: más que esto no se descarga entero (se pide acotar con filtros). */
 export const VEHICLE_EXPORT_MAX_ROWS = 10_000;
-
-/** Mensaje cuando un export supera el tope. */
-export function vehicleExportTooLargeMessage(label: string) {
-  return `La exportación de ${label} supera el máximo de ${VEHICLE_EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`;
-}
 
 /**
  * Mapping de columnId (URL) → campo real en Prisma.
@@ -182,13 +178,10 @@ async function buildChecklistCountCondition(
 // FACETAS
 // ============================================================================
 
-type FacetOutput = {
-  counts: Map<string, number>;
-  resolvedOptions?: { value: string; label: string }[];
-};
+type FacetOutput = NonNullable<SingleFacetResult>;
 
 function nameOptions(rows: { id: string | number; name: string | null }[]) {
-  return rows.map((o) => ({ value: String(o.id), label: o.name ?? '' }));
+  return rows.map((o) => ({ id: String(o.id), name: o.name }));
 }
 
 /** Facetas de las columnas que existen en los listados de vehículos. Devuelve `null` si la columna no es facetable. */

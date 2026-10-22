@@ -1,19 +1,20 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildDateRangeFiltersWhere,
   buildTextFiltersWhere,
   parseSearchParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { exportRowLimitMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isConfirmedAttentionKey } from '../constants';
 import {
   CONFIRMED_LIST_STATUS,
@@ -24,7 +25,6 @@ import {
   effectiveSourceCondition,
   getResourceConditionFacet,
   getResourceFacet,
-  orderListExportTooLargeMessage,
   resolveOrderListScope,
   resourceConditionCondition,
   resourceIdsCondition,
@@ -275,7 +275,7 @@ export async function getAllConfirmedOrdersForExport(
     });
 
     if (data.length > ORDER_LIST_EXPORT_MAX_ROWS) {
-      return { ok: false, message: orderListExportTooLargeMessage('pedidos confirmados') };
+      return { ok: false, message: exportRowLimitMessage(ORDER_LIST_EXPORT_MAX_ROWS, 'pedidos confirmados') };
     }
 
     return { ok: true, data };

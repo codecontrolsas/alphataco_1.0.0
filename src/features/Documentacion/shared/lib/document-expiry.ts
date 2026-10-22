@@ -1,4 +1,4 @@
-import { argentinaDate, formatDateAr } from '@/features/Jobs/lib/dates';
+import { argentinaDate, formatDateAr } from '@/shared/lib/argentina-time';
 
 const DAY_MS = 86_400_000;
 /** Un documento "por vencer" es el que vence dentro de este margen. */

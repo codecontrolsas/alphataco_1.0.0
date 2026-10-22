@@ -172,7 +172,7 @@ export function VehicleAssignmentDataForm({
                           <Checkbox
                             id={contractor.id}
                             checked={allocatedTo.includes(contractor.id)}
-                            onCheckedChange={(checked) =>
+                            onCheckedChange={() =>
                               handleContractorChange(contractor.id, !allocatedTo.includes(contractor.id))
                             }
                           />

@@ -1,6 +1,6 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -8,15 +8,28 @@ import {
   buildFiltersWhere,
   buildTextFiltersWhere,
   NULL_FILTER_VALUE,
-  parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
-import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { profileFacetOptions } from '@/shared/lib/table-facet-lookups';
+import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
+import { dateRangeKeys } from '@/shared/lib/table-filters';
+import {
+  containsInsensitive as contains,
+  countDistinctRelations,
+  isUuidOrNull,
+  parseValidatedListState,
+  profileDisplayName,
+  resolveSorts,
+  uniqueSortedByNumber,
+  type SingleFacetResult,
+} from '@/shared/lib/table-list-query';
+import { isUuid } from '@/shared/lib/uuid';
+import { companyIdIfCanView } from '../../lib/list-access';
+import { supplierFacetOptions } from '../../lib/list-facet-lookups';
 import { getReceiptsSectionCount } from '../../lib/section-counts';
 import { RECEIPT_STATUS_ACTIVE as STATUS_ACTIVE, RECEIPT_STATUS_CANCELLED as STATUS_CANCELLED } from './constants';
 
@@ -39,7 +52,9 @@ const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => ReceiptOrderBy> = {
   warehouse: (dir) => ({ warehouse: { name: dir } }),
   creator: (dir) => ({ creator: { fullname: dir } }),
   // Estado derivado de cancelled_at: "Vigente" (null) primero en asc
-  status: (dir) => ({ cancelled_at: { sort: dir === 'asc' ? 'desc' : 'asc', nulls: dir === 'asc' ? 'first' : 'last' } }),
+  status: (dir) => ({
+    cancelled_at: { sort: dir === 'asc' ? 'desc' : 'asc', nulls: dir === 'asc' ? 'first' : 'last' },
+  }),
 };
 
 const TEXT_FILTER_COLUMNS = ['number', 'delivery_note'];
@@ -73,43 +88,26 @@ const MANUAL_FILTERS = [...TEXT_FILTER_COLUMNS, 'status', REQUESTS_FILTER];
 /** Tope de filas del export. */
 const EXPORT_MAX_ROWS = 10_000;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const isUuid = (v: string) => UUID_RE.test(v);
-
 /** Valores validos por columna con lista cerrada (un valor ajeno haria fallar a Prisma y tumbaria la lista). */
 const VALID_VALUES: Record<string, (value: string) => boolean> = {
   status: (v) => v === STATUS_ACTIVE || v === STATUS_CANCELLED,
   order: isUuid,
   supplier: isUuid,
-  warehouse: (v) => v === NULL_FILTER_VALUE || isUuid(v),
+  warehouse: isUuidOrNull,
   creator: isUuid,
-  [REQUESTS_FILTER]: (v) => v === NULL_FILTER_VALUE || isUuid(v),
+  [REQUESTS_FILTER]: isUuidOrNull,
 };
-
-const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
 
 // ============================================================================
 // HELPERS INTERNOS
 // ============================================================================
 
 /** Empresa si el usuario puede ver la tabla; `null` = sin acceso -> lista vacia. */
-async function resolveCompanyId(): Promise<string | null> {
-  const canView = await checkPermissionServer('compras', 'recepciones', 'view');
-  if (!canView) return null;
-  return getActiveCompanyId();
-}
+const resolveCompanyId = () => companyIdIfCanView('recepciones');
 
 /** Estado de la tabla ya parseado, con solo los filtros permitidos y sus valores validos. */
 function parseListState(searchParams: DataTableSearchParams) {
-  const state = sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
-  for (const [column, isValid] of Object.entries(VALID_VALUES)) {
-    const values = state.filters[column];
-    if (!values) continue;
-    const valid = values.filter(isValid);
-    if (valid.length > 0) state.filters[column] = valid;
-    else delete state.filters[column];
-  }
-  return state;
+  return parseValidatedListState(searchParams, ALLOWED_FILTER_KEYS, VALID_VALUES);
 }
 
 /** WHERE compartido entre paginated, export y facets. */
@@ -159,16 +157,15 @@ const RECEIPT_SELECT = {
   supplier: { select: { id: true, name: true } },
   warehouse: { select: { id: true, name: true } },
   creator: { select: { id: true, fullname: true, email: true } },
-  lines: { select: { order_line: { select: { request_line: { select: { request: { select: { id: true, number: true } } } } } } } },
+  lines: {
+    select: {
+      order_line: { select: { request_line: { select: { request: { select: { id: true, number: true } } } } } },
+    },
+  },
 } as const;
-
-const profileName = (p: { fullname: string | null; email: string | null }) => p.fullname ?? p.email ?? '-';
 
 function shape(rows: Prisma.purchase_receiptsGetPayload<{ select: typeof RECEIPT_SELECT }>[]) {
   return rows.map((r) => {
-    const requests = new Map<string, { id: string; number: string }>();
-    for (const l of r.lines) requests.set(l.order_line.request_line.request.id, l.order_line.request_line.request);
-
     return {
       id: r.id,
       number: r.number,
@@ -179,8 +176,8 @@ function shape(rows: Prisma.purchase_receiptsGetPayload<{ select: typeof RECEIPT
       order: r.order,
       supplier: r.supplier,
       warehouse: r.warehouse,
-      creator: { id: r.creator.id, name: profileName(r.creator) },
-      requests: [...requests.values()].sort((a, b) => a.number.localeCompare(b.number)),
+      creator: { id: r.creator.id, name: profileDisplayName(r.creator) },
+      requests: uniqueSortedByNumber(r.lines.map((l) => l.order_line.request_line.request)),
     };
   });
 }
@@ -198,14 +195,11 @@ export async function getPurchaseReceiptsPaginated(searchParams: DataTableSearch
     const { skip, take } = stateToPrismaParams(state);
     const where = buildWhereClause(companyId, state);
 
-    const resolvedSorts: ReceiptOrderBy[] = [];
-    for (const s of state.sorting) {
-      const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-      const fkMapper = FK_SORT_MAP[s.id];
-      if (fkMapper) resolvedSorts.push(fkMapper(dir));
-      else if (VALID_SORT_FIELDS.has(s.id)) resolvedSorts.push({ [s.id]: dir });
-    }
-    const orderBy: ReceiptOrderBy[] = [...resolvedSorts, { received_on: 'desc' }, { number: 'desc' }];
+    const orderBy: ReceiptOrderBy[] = [
+      ...resolveSorts<ReceiptOrderBy>(state.sorting, VALID_SORT_FIELDS, FK_SORT_MAP),
+      { received_on: 'desc' },
+      { number: 'desc' },
+    ];
 
     const [rows, total] = await Promise.all([
       prisma.purchase_receipts.findMany({ where, orderBy, skip, take, select: RECEIPT_SELECT }),
@@ -241,20 +235,12 @@ export async function getAllPurchaseReceiptsForExport(
           where: { id: { in: ids }, company_id: companyId },
           select: RECEIPT_SELECT,
         }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} recepciones con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('recepciones'),
     });
     return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar recepciones', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError
-          ? error.message
-          : 'No se pudo exportar la lista de recepciones. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de recepciones. Intente nuevamente.');
   }
 }
 
@@ -265,7 +251,7 @@ export async function getAllPurchaseReceiptsForExport(
 export async function getPurchaseReceiptSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
-): Promise<{ counts: Map<string, number>; resolvedOptions?: Array<{ id: string; name: string | null }> } | null> {
+): Promise<SingleFacetResult> {
   const companyId = await resolveCompanyId();
   if (!companyId) return null;
 
@@ -273,19 +259,7 @@ export async function getPurchaseReceiptSingleFacet(
 
   /** WHERE con todos los filtros activos MENOS el de la columna que se esta abriendo. */
   function crossWhere(excludeColumn: string): ReceiptWhere {
-    const base: FilterState = parsed ?? parseListState({});
-    const filters = { ...base.filters };
-    delete filters[excludeColumn];
-    return buildWhereClause(companyId as string, { ...base, filters });
-  }
-
-  function toFacetMap(rows: { key: string | null; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      const k = key == null ? NULL_FILTER_VALUE : key;
-      map.set(k, (map.get(k) ?? 0) + count);
-    }
-    return map;
+    return buildWhereClause(companyId as string, withoutOwnFilter(parsed ?? parseListState({}), excludeColumn));
   }
 
   try {
@@ -322,17 +296,9 @@ export async function getPurchaseReceiptSingleFacet(
 
     if (columnId === 'supplier') {
       const rows = await prisma.purchase_receipts.groupBy({ by: ['supplier_id'], where, _count: true });
-      const ids = rows.map((r) => r.supplier_id);
-      const suppliers = ids.length
-        ? await prisma.suppliers.findMany({
-            where: { id: { in: ids } },
-            select: { id: true, name: true },
-            orderBy: { name: 'asc' },
-          })
-        : [];
       return {
         counts: toFacetMap(rows.map((r) => ({ key: r.supplier_id, count: r._count }))),
-        resolvedOptions: suppliers,
+        resolvedOptions: await supplierFacetOptions(rows.map((r) => r.supplier_id)),
       };
     }
 
@@ -354,17 +320,9 @@ export async function getPurchaseReceiptSingleFacet(
 
     if (columnId === 'creator') {
       const rows = await prisma.purchase_receipts.groupBy({ by: ['created_by'], where, _count: true });
-      const ids = rows.map((r) => r.created_by);
-      const profiles = ids.length
-        ? await prisma.profile.findMany({
-            where: { id: { in: ids } },
-            select: { id: true, fullname: true, email: true },
-            orderBy: { fullname: 'asc' },
-          })
-        : [];
       return {
         counts: toFacetMap(rows.map((r) => ({ key: r.created_by, count: r._count }))),
-        resolvedOptions: profiles.map((p) => ({ id: p.id, name: profileName(p) })),
+        resolvedOptions: await profileFacetOptions(rows.map((r) => r.created_by)),
       };
     }
 
@@ -372,25 +330,15 @@ export async function getPurchaseReceiptSingleFacet(
       // M:M: cuantas recepciones (distintas) tiene cada solicitud de origen
       const receipts = await prisma.purchase_receipts.findMany({
         where,
-        select: { lines: { select: { order_line: { select: { request_line: { select: { request: { select: { id: true, number: true } } } } } } } } },
+        select: {
+          lines: {
+            select: {
+              order_line: { select: { request_line: { select: { request: { select: { id: true, number: true } } } } } },
+            },
+          },
+        },
       });
-      const counts = new Map<string, number>();
-      const names = new Map<string, string>();
-      for (const r of receipts) {
-        const seen = new Set<string>();
-        for (const l of r.lines) {
-          const req = l.order_line.request_line.request;
-          names.set(req.id, req.number);
-          if (!seen.has(req.id)) {
-            seen.add(req.id);
-            counts.set(req.id, (counts.get(req.id) ?? 0) + 1);
-          }
-        }
-      }
-      const resolvedOptions = [...names.entries()]
-        .map(([id, name]) => ({ id, name }))
-        .sort((a, b) => a.name.localeCompare(b.name));
-      return { counts, resolvedOptions };
+      return countDistinctRelations(receipts.map((r) => r.lines.map((l) => l.order_line.request_line.request)));
     }
 
     logger.warn('Facet no reconocido', { data: { columnId } });
@@ -410,7 +358,10 @@ export async function getPurchaseReceiptSingleFacet(
  * recepciones. Usa el mismo conteo que el contador de la sub-navegacion (`getReceiptsSectionCount`), asi
  * ambos numeros coinciden. Nunca rechaza: `null` si no corresponde o no se pudo contar.
  */
-export async function getPurchaseReceiptsAttention(): Promise<{ pendingToReceive: number; canViewOrders: boolean } | null> {
+export async function getPurchaseReceiptsAttention(): Promise<{
+  pendingToReceive: number;
+  canViewOrders: boolean;
+} | null> {
   try {
     const pendingToReceive = await getReceiptsSectionCount();
     if (pendingToReceive == null) return null;

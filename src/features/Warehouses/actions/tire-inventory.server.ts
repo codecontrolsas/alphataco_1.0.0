@@ -1,25 +1,20 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { toActionError } from '../lib/action-errors';
-import {
-  getTiresWithoutStock,
-  registerInitialTireInventory,
-  type InitialInventoryResult,
-} from '../lib/tire-stock';
+import { revalidatePath } from 'next/cache';
+import { WAREHOUSE_PATH, toActionError } from '../lib/action-errors';
+import { getTiresWithoutStock, registerInitialTireInventory, type InitialInventoryResult } from '../lib/tire-stock';
 import { normalizeDecimal } from '../schemas/stock-movement';
 import { tireInventorySchema, type TireInventoryFormValues } from '../schemas/tire-inventory';
 
 const logger = new Logger('features/Warehouses/tire-inventory');
 
-const WAREHOUSE_PATH = '/dashboard/warehouse';
 /** Puede cargar cientos de cubiertas con sus salidas: mas margen que los 5 s por defecto. */
 const TRANSACTION_OPTIONS = { timeout: 60_000, maxWait: 5_000 };
 
@@ -60,7 +55,9 @@ export async function registerInitialTireInventoryAction(
       prisma,
       TRANSACTION_OPTIONS
     );
-    logger.info('Inventario inicial de cubiertas cargado', { data: { entry: result.entryNumber, tires: result.tires } });
+    logger.info('Inventario inicial de cubiertas cargado', {
+      data: { entry: result.entryNumber, tires: result.tires },
+    });
     revalidatePath(WAREHOUSE_PATH);
     return ok(result);
   } catch (error) {

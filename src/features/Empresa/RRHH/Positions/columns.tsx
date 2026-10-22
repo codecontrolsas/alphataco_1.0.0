@@ -1,13 +1,16 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import {
+  activeStatusColumn,
+  createdAtColumn,
+  editActionColumn,
+  nameColumn,
+} from '@/features/Empresa/components/catalog-columns';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ActiveStatusBadge } from '../../components/ActiveStatusBadge';
 import type { PositionListItem } from './actions.server';
 
 // ============================================================================
@@ -36,25 +39,10 @@ export function getColumns(
 
   return [
     // ── Nombre ──────────────────────────────────────────────────────────────
-    {
-      accessorKey: 'name',
-      meta: { title: 'Nombre' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
-      cell: ({ row }) => <span className="font-medium">{row.original.name ?? '-'}</span>,
-    },
+    nameColumn<PositionListItem>('-'),
 
     // ── Estado (is_active — booleano nullable) ───────────────────────────────
-    {
-      accessorKey: 'is_active',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-      cell: ({ row }) => <ActiveStatusBadge value={row.original.is_active} />,
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id);
-        if (val === null || val === undefined) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(String(val));
-      },
-    },
+    activeStatusColumn<PositionListItem>(),
 
     // ── Sector/Departamento (hierarchical_position_id — array de UUIDs) ─────
     {
@@ -143,38 +131,9 @@ export function getColumns(
     },
 
     // ── Fecha de creación (oculta por defecto) ───────────────────────────────
-    {
-      accessorKey: 'created_at',
-      meta: { title: 'Fecha de creación' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de creación" />,
-      cell: ({ row }) => {
-        const val = row.original.created_at;
-        return <span>{val ? formatArgentinaDay(val) : '-'}</span>;
-      },
-    },
+    createdAtColumn<PositionListItem>(),
 
     // ── Acciones ─────────────────────────────────────────────────────────────
-    ...(canUpdate
-      ? ([
-          {
-            id: 'actions',
-            meta: { title: '', excludeFromExport: true },
-            enableSorting: false,
-            enableHiding: false,
-            cell: ({ row }) => (
-              <Button
-                size="sm"
-                variant="link"
-                type="button"
-                className="h-auto p-0"
-                aria-label={`Editar ${row.original.name}`}
-                onClick={() => onEdit(row.original)}
-              >
-                Editar
-              </Button>
-            ),
-          },
-        ] as ColumnDef<PositionListItem>[])
-      : []),
+    ...editActionColumn<PositionListItem>({ canEdit: canUpdate, onEdit, getName: (item) => String(item.name) }),
   ];
 }

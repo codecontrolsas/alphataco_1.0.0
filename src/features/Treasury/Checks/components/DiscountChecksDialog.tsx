@@ -2,27 +2,23 @@
 
 import { Button } from '@/components/ui/button';
 import { DialogFooter } from '@/components/ui/dialog';
-import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AMOUNT_SCALE, formatScaled, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { DateFormField, InputFormField } from '@/shared/components/common/form-fields';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import moment from 'moment';
-import { useRouter } from 'next/navigation';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { discountChecks } from '../../actions/checks.server';
-import type { CheckOperationFormData } from '../../lib/check-types';
 import { discountError, discountNet } from '../../lib/check-discount';
+import type { CheckOperationFormData } from '../../lib/check-types';
 import { formatInCurrency } from '../../lib/currency-format';
-import { invalidateTreasury } from '../../lib/invalidate';
+import { formatDay } from '../../lib/dates';
+import { useTreasuryMutation } from '../../lib/use-treasury-mutation';
 import { discountSchema, type DiscountValues } from '../../schemas/checks';
 import { CheckOperationShell } from './CheckOperationShell';
-import { formatDay } from '../../lib/dates';
 
 const logger = new Logger('Treasury/DiscountChecksDialog');
 
@@ -47,14 +43,27 @@ export function DiscountChecksDialog({ open, onOpenChange, checkIds, onDone }: D
       title="Descontar cheques"
       description="Salen de la cartera por su nominal y entra al banco el neto de intereses y comisión."
     >
-      {(data) => <DiscountForm key={data.checks.map((c) => c.id).join(',')} data={data} onClose={() => onOpenChange(false)} onDone={onDone} />}
+      {(data) => (
+        <DiscountForm
+          key={data.checks.map((c) => c.id).join(',')}
+          data={data}
+          onClose={() => onOpenChange(false)}
+          onDone={onDone}
+        />
+      )}
     </CheckOperationShell>
   );
 }
 
-function DiscountForm({ data, onClose, onDone }: { data: CheckOperationFormData; onClose: () => void; onDone?: () => void }) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
+function DiscountForm({
+  data,
+  onClose,
+  onDone,
+}: {
+  data: CheckOperationFormData;
+  onClose: () => void;
+  onDone?: () => void;
+}) {
   const form = useForm<DiscountValues>({
     resolver: zodResolver(discountSchema),
     defaultValues: {
@@ -76,19 +85,16 @@ function DiscountForm({ data, onClose, onDone }: { data: CheckOperationFormData;
   });
   const netProblem = interestCents !== null && feeCents !== null ? discountError(net) : null;
 
-  const save = useMutation({
-    mutationFn: async (values: DiscountValues) => unwrapAction(await discountChecks(values)),
+  const save = useTreasuryMutation({
+    action: (values: DiscountValues) => discountChecks(values),
     onSuccess: (result) => {
       toast.success(`Descuento ${result.number} registrado: neto ${formatInCurrency(result.net, 'ARS')}`);
-      invalidateTreasury(queryClient);
-      router.refresh();
       onDone?.();
       onClose();
     },
-    onError: (error) => {
-      logger.error('Error al descontar cheques', { data: { error } });
-      toast.error(error instanceof Error ? error.message : 'No se pudo registrar el descuento');
-    },
+    logger,
+    logError: 'Error al descontar cheques',
+    errorFallback: 'No se pudo registrar el descuento',
   });
 
   const amountField = (name: 'interest' | 'fee', label: string) => (
@@ -135,37 +141,14 @@ function DiscountForm({ data, onClose, onDone }: { data: CheckOperationFormData;
               </FormItem>
             )}
           />
-          <FormField
-            control={form.control}
-            name="date"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Fecha de la liquidación</FormLabel>
-                <FormControl>
-                  <EnhancedDatePicker
-                    date={field.value ? moment(field.value, 'YYYY-MM-DD').toDate() : undefined}
-                    setDate={(d) => field.onChange(d ? moment(d).format('YYYY-MM-DD') : '')}
-                    placeholder="DD/MM/AAAA"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <DateFormField control={form.control} name="date" label="Fecha de la liquidación" />
           {amountField('interest', 'Intereses')}
           {amountField('fee', 'Comisión')}
-          <FormField
+          <InputFormField
             control={form.control}
             name="reference"
-            render={({ field }) => (
-              <FormItem className="sm:col-span-2">
-                <FormLabel>Referencia de la liquidación (opcional)</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+            label="Referencia de la liquidación (opcional)"
+            itemClassName="sm:col-span-2"
           />
         </div>
 
@@ -173,7 +156,8 @@ function DiscountForm({ data, onClose, onDone }: { data: CheckOperationFormData;
           {data.checks.map((c) => (
             <li key={c.id} className="flex items-center justify-between gap-2 px-3 py-2">
               <span className="min-w-0">
-                Nº {c.number} · {c.bank} <span className="text-xs text-muted-foreground">· pago {formatDay(c.paymentDate)}</span>
+                Nº {c.number} · {c.bank}{' '}
+                <span className="text-xs text-muted-foreground">· pago {formatDay(c.paymentDate)}</span>
               </span>
               <span className="tabular-nums">{formatInCurrency(c.amount, 'ARS')}</span>
             </li>

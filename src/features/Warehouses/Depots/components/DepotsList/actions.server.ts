@@ -1,7 +1,6 @@
 'use server';
 
-import { employeeLabel } from '../../../lib/labels';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -9,16 +8,17 @@ import {
   buildFiltersWhere,
   buildSearchWhere,
   buildTextFiltersWhere,
-  NULL_FILTER_VALUE,
   parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import { prisma } from '@/shared/lib/prisma';
+import { toFacetMap } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { employeeLabel } from '../../../lib/labels';
 
 const logger = new Logger('features/Warehouses/Depots/DepotsList');
 
@@ -76,7 +76,10 @@ function buildWhereClause(companyId: string, state: ReturnType<typeof parseListS
 
   and.push(buildSearchWhere(state.search, ['code', 'name', 'address']) as Prisma.warehousesWhereInput);
   and.push(
-    buildFiltersWhere(state.filters.manager ? { manager: state.filters.manager } : {}, COLUMN_MAP) as Prisma.warehousesWhereInput
+    buildFiltersWhere(
+      state.filters.manager ? { manager: state.filters.manager } : {},
+      COLUMN_MAP
+    ) as Prisma.warehousesWhereInput
   );
   and.push(buildTextFiltersWhere(state.filters, TEXT_FILTER_COLUMNS) as Prisma.warehousesWhereInput);
 
@@ -142,7 +145,9 @@ export async function getDepotsPaginated(searchParams: DataTableSearchParams) {
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllDepotsForExport(searchParams: DataTableSearchParams): Promise<ExportResult<DepotListItem[]>> {
+export async function getAllDepotsForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<DepotListItem[]>> {
   if (!(await checkPermissionServer('almacenes', 'depositos', 'view'))) {
     return { ok: false, message: 'No tenés permiso para exportar los depósitos.' };
   }
@@ -151,25 +156,23 @@ export async function getAllDepotsForExport(searchParams: DataTableSearchParams)
     const companyId = await getActiveCompanyId();
     const state = parseListState(searchParams);
     const where = buildWhereClause(companyId, state);
-    const orderBy: Prisma.warehousesOrderByWithRelationInput[] = [{ is_active: 'desc' }, { name: 'asc' }, { id: 'asc' }];
+    const orderBy: Prisma.warehousesOrderByWithRelationInput[] = [
+      { is_active: 'desc' },
+      { name: 'asc' },
+      { id: 'asc' },
+    ];
 
     const rows = await fetchExportRowsInBatches({
       maxRows: EXPORT_MAX,
       listIds: (take) => prisma.warehouses.findMany({ where, orderBy, select: { id: true }, take }),
       fetchByIds: (ids) =>
         prisma.warehouses.findMany({ where: { id: { in: ids }, company_id: companyId }, select: DEPOT_SELECT }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} depósitos con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('depósitos'),
     });
     return { ok: true, data: rows };
   } catch (error) {
     logger.error('Error al exportar depositos', { data: { error } });
-    // Next enmascara el mensaje de un error lanzado desde una action: se devuelve como resultado.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar la lista de depósitos. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de depósitos. Intente nuevamente.');
   }
 }
 
@@ -192,15 +195,6 @@ export async function getDepotSingleFacet(
     const filters = { ...parsed.filters };
     delete filters[excludeColumn];
     return buildWhereClause(companyId, { ...parsed, filters });
-  }
-
-  function toFacetMap(rows: { key: string | boolean | null; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      const k = key == null ? NULL_FILTER_VALUE : String(key);
-      map.set(k, (map.get(k) ?? 0) + count);
-    }
-    return map;
   }
 
   try {

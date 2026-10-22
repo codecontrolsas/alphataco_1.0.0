@@ -1,7 +1,7 @@
 'use client';
 
 import { Card } from '@/components/ui/card';
-import { usePermissions } from '@/features/Permissions';
+import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import type { MeasureUnitRow } from '../../actions/measure-units.server';

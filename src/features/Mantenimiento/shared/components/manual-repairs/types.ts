@@ -8,9 +8,6 @@
 /** Máximo de fotos por reparación — mismo límite que el formulario anterior del sistema */
 export const MAX_IMAGES_PER_REPAIR = 3;
 
-/** Anillo de foco compartido por los botones custom (no usan el primitivo Button) */
-const FOCUS_RING = 'outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:border-ring';
-
 export type RepairTypeOption = {
   id: string;
   name: string | null;

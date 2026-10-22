@@ -1,6 +1,7 @@
 'use client';
 
 import { Skeleton } from '@/components/ui/skeleton';
+import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
 import {
   CatalogCreateButton,
   CatalogFormSheet,
@@ -8,19 +9,20 @@ import {
   useCatalogSheet,
   useCatalogSheetClose,
 } from '@/shared/components/common/CatalogFormSheet';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import {
-  DataTable,
-  useDataTableFilter,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
   type FacetResult,
-} from '@/shared/components/common/DataTable';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+} from '@/shared/components/common/DataTable/types';
+import { useDataTableFilter } from '@/shared/components/common/DataTable/useDataTableFilter';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useQuery } from '@tanstack/react-query';
 import { Check, CircleOff, Truck, X } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import EquipmentTypesForm from './EquipmentTypeForm';
 import {
@@ -57,6 +59,9 @@ interface EquipmentTypeDataTableProps {
   allActiveTypes: { id: string; name: string; is_tractor_unit: boolean | null }[];
 }
 
+/** Filtros visibles hasta que el usuario elija otros (las preferencias guardadas tienen prioridad). */
+const DEFAULT_VISIBLE_FILTERS = ['is_active', 'applies_to', 'name'];
+
 // ============================================================================
 // COMPONENT
 // ============================================================================
@@ -71,14 +76,8 @@ export default function _EquipmentTypeDataTable({
   initialFilterVisibility,
   allActiveTypes,
 }: EquipmentTypeDataTableProps) {
-  // ── Permisos ──────────────────────────────────────────────────────────────
-  const permissions = useMemo(
-    () => ({
-      hasPermission: (module: string, tab: string, action: string) =>
-        permissionsMap[`${module}:${tab}:${action}`] === true,
-    }),
-    [permissionsMap]
-  );
+  // ── Permisos: helper armado desde el mapa serializable del servidor ───────────
+  const permissions = usePermissionChecker(permissionsMap);
 
   const canCreate = permissions.hasPermission('configuracion', 'tipos', 'create');
   const canUpdate = permissions.hasPermission('configuracion', 'tipos', 'update');
@@ -111,13 +110,6 @@ export default function _EquipmentTypeDataTable({
     [setSubTypeTypeFilter]
   );
 
-  // ── Client-side navigation mode ───────────────────────────────────────────
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-
-  const handleStateChange = useCallback((params: DataTableSearchParams) => {
-    setCurrentParams(params);
-  }, []);
-
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getEquipmentTypesPaginated(params), []);
 
   // ── Columns ───────────────────────────────────────────────────────────────
@@ -125,25 +117,6 @@ export default function _EquipmentTypeDataTable({
     () => getColumns(permissions, handleEdit, canViewSubTypes ? handleViewSubTypes : undefined),
     [permissions, handleEdit, canViewSubTypes, handleViewSubTypes]
   );
-
-  // ── Column visibility ─────────────────────────────────────────────────────
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults: Record<string, boolean> = {};
-    for (const col of HIDDEN_COLUMNS_BY_DEFAULT) {
-      defaults[col] = false;
-    }
-    return { ...defaults, ...(initialColumnVisibility ?? {}) };
-  }, [initialColumnVisibility]);
-
-  // ── Filter visibility — 3 visibles por defecto ─────────────────────────────
-  const DEFAULT_VISIBLE_FILTERS = ['is_active', 'applies_to', 'name'];
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    const allFilterIds = ['name', 'is_active', 'applies_to', 'is_tractor_unit', 'created_at'];
-    return Object.fromEntries(allFilterIds.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
-  }, [initialFilterVisibility]);
 
   // ── Lazy-load facets ───────────────────────────────────────────────────────
 
@@ -216,23 +189,27 @@ export default function _EquipmentTypeDataTable({
     [fetchIsActiveFacet, fetchAppliesToFacet, fetchIsTractorUnitFacet]
   );
 
+  // ── Estado de vista: params vigentes (para exportar) y visibilidad inicial ─────
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
+
   // ── DataTable ─────────────────────────────────────────────────────────────
   const table = (
     <DataTable
+      {...tableProps}
       columns={columns}
       data={data}
       totalRows={totalRows}
-      searchParams={searchParams}
       queryFn={tableQueryFn}
       queryKey={['equipment-types']}
-      onStateChange={handleStateChange}
       toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo tipo" />}
-      tableId={tableId}
-      paramNamespace={tableId}
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      showFilterToggle
       searchPlaceholder="Buscar por nombre..."
       emptyMessage="No se encontraron tipos de equipo"
       exportConfig={{

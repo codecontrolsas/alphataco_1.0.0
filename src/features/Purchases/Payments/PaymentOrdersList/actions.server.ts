@@ -1,6 +1,6 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { payment_method } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
@@ -12,15 +12,28 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
-import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { formatCuit } from '../../lib/supplier-ids';
-import { getPaymentOrdersToApproveCount, getPaymentOrdersToPayCount } from '../../lib/section-counts';
-import { PAYMENT_METHOD_LABELS, PAYMENT_ORDERS_EXPORT_MAX_ROWS } from './constants';
+import { profileFacetOptions } from '@/shared/lib/table-facet-lookups';
+import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
+import { dateRangeKeys } from '@/shared/lib/table-filters';
+import {
+  containsInsensitive as contains,
+  parseValidatedListState,
+  profileDisplayName,
+  resolveSorts,
+  type SingleFacetResult,
+} from '@/shared/lib/table-list-query';
+import { isUuid } from '@/shared/lib/uuid';
+import { companyIdIfCanView } from '../../lib/list-access';
+import { supplierFacetOptions } from '../../lib/list-facet-lookups';
+import { parseAmountFilter } from '../../lib/list-filters';
 import { PAYMENT_ORDER_STATUS_LABELS } from '../../lib/payment-order-state-machine';
+import { getPaymentOrdersToApproveCount, getPaymentOrdersToPayCount } from '../../lib/section-counts';
+
+import { formatCuitText } from '@/shared/utils/cuit-text';
+import { PAYMENT_METHOD_LABELS, PAYMENT_ORDERS_EXPORT_MAX_ROWS } from './constants';
 
 const logger = new Logger('features/Purchases/Payments/PaymentOrdersList');
 
@@ -49,6 +62,8 @@ const VALID_SORT_FIELDS = new Set([
 const SORT_MAP: Record<string, (dir: 'asc' | 'desc') => OrderOrderBy[]> = {
   supplier: (dir) => [{ supplier: { name: dir } }],
   creator: (dir) => [{ creator: { fullname: dir } }],
+  // Sin fecha de pago (null) al final en cualquiera de los dos sentidos
+  paid_on: (dir) => [{ paid_on: { sort: dir, nulls: 'last' } }],
 };
 
 const DATE_RANGE_COLUMNS = ['planned_on', 'paid_on', 'created_at'];
@@ -76,17 +91,13 @@ const ALLOWED_FILTER_KEYS: ReadonlySet<string> = new Set([
   ...dateRangeKeys(DATE_RANGE_COLUMNS),
 ]);
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /** Valores validos por columna con lista cerrada (un valor ajeno haria fallar a Prisma y tumbaria la lista). */
 const VALID_VALUES: Record<string, (value: string) => boolean> = {
-  supplier: (v) => UUID_RE.test(v),
-  creator: (v) => UUID_RE.test(v),
+  supplier: isUuid,
+  creator: isUuid,
   status: (v) => v in PAYMENT_ORDER_STATUS_LABELS,
   methods: (v) => v === NULL_FILTER_VALUE || v in PAYMENT_METHOD_LABELS,
 };
-
-const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
 
 // ============================================================================
 // HELPERS INTERNOS
@@ -94,30 +105,11 @@ const contains = (value: string) => ({ contains: value, mode: 'insensitive' as c
 
 /** Estado de la tabla ya parseado, con solo los filtros permitidos y sus valores validos. */
 function parseListState(searchParams: DataTableSearchParams): FilterState {
-  const state = sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
-  for (const [column, isValid] of Object.entries(VALID_VALUES)) {
-    const values = state.filters[column];
-    if (!values) continue;
-    const valid = values.filter(isValid);
-    if (valid.length > 0) state.filters[column] = valid;
-    else delete state.filters[column];
-  }
-  return state;
+  return parseValidatedListState(searchParams, ALLOWED_FILTER_KEYS, VALID_VALUES);
 }
 
 /** Empresa si el usuario puede ver la tabla; `null` = sin acceso -> lista vacia. */
-async function resolveCompanyId(): Promise<string | null> {
-  const canView = await checkPermissionServer('compras', 'pagos', 'view');
-  if (!canView) return null;
-  return getActiveCompanyId();
-}
-
-/** Importe tipeado ("1234,56" o "1234.56") -> Decimal exacto; `null` si no es un numero. */
-function parseAmount(text: string): Prisma.Decimal | null {
-  const normalized = text.trim().replace(/\./g, (m, _offset, s: string) => (s.includes(',') ? '' : m)).replace(',', '.');
-  if (!/^\d+(\.\d+)?$/.test(normalized)) return null;
-  return new Prisma.Decimal(normalized);
-}
+const resolveCompanyId = () => companyIdIfCanView('pagos');
 
 /** WHERE compartido entre paginated, export y facets. */
 function buildWhereClause(companyId: string, state: FilterState): OrderWhere {
@@ -144,7 +136,7 @@ function buildWhereClause(companyId: string, state: FilterState): OrderWhere {
   for (const column of AMOUNT_COLUMNS) {
     const text = f[column]?.[0]?.trim();
     if (!text) continue;
-    const amount = parseAmount(text);
+    const amount = parseAmountFilter(text);
     and.push(amount ? { [column]: amount } : { id: { in: [] } });
   }
 
@@ -181,8 +173,6 @@ const ORDER_SELECT = {
   payments: { select: { method: true } },
 } as const;
 
-const profileName = (p: { fullname: string | null; email: string | null }) => p.fullname ?? p.email ?? '-';
-
 function shape(rows: Prisma.payment_ordersGetPayload<{ select: typeof ORDER_SELECT }>[]) {
   return rows.map((r) => ({
     id: r.id,
@@ -196,8 +186,8 @@ function shape(rows: Prisma.payment_ordersGetPayload<{ select: typeof ORDER_SELE
     withholdings_total: r.withholdings_total.toString(),
     net_total: r.net_total.toString(),
     created_at: r.created_at,
-    supplier: { id: r.supplier.id, name: r.supplier.name, cuit: formatCuit(r.supplier.cuit) },
-    creator: { id: r.creator.id, name: profileName(r.creator) },
+    supplier: { id: r.supplier.id, name: r.supplier.name, cuit: formatCuitText(r.supplier.cuit) },
+    creator: { id: r.creator.id, name: profileDisplayName(r.creator) },
     methods: [...new Set(r.payments.map((p) => p.method))],
   }));
 }
@@ -215,15 +205,11 @@ export async function getPaymentOrdersPaginated(searchParams: DataTableSearchPar
     const { skip, take } = stateToPrismaParams(state);
     const where = buildWhereClause(companyId, state);
 
-    const resolvedSorts: OrderOrderBy[] = [];
-    for (const s of state.sorting) {
-      const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-      const mapper = SORT_MAP[s.id];
-      if (mapper) resolvedSorts.push(...mapper(dir));
-      else if (s.id === 'paid_on') resolvedSorts.push({ paid_on: { sort: dir, nulls: 'last' } });
-      else if (VALID_SORT_FIELDS.has(s.id)) resolvedSorts.push({ [s.id]: dir });
-    }
-    const orderBy: OrderOrderBy[] = [...resolvedSorts, { planned_on: 'desc' }, { created_at: 'desc' }];
+    const orderBy: OrderOrderBy[] = [
+      ...resolveSorts<OrderOrderBy>(state.sorting, VALID_SORT_FIELDS, SORT_MAP),
+      { planned_on: 'desc' },
+      { created_at: 'desc' },
+    ];
 
     const [rows, total] = await Promise.all([
       prisma.payment_orders.findMany({ where, orderBy, skip, take, select: ORDER_SELECT }),
@@ -240,7 +226,9 @@ export async function getPaymentOrdersPaginated(searchParams: DataTableSearchPar
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllPaymentOrdersForExport(searchParams: DataTableSearchParams): Promise<ExportResult<PaymentOrderListItem[]>> {
+export async function getAllPaymentOrdersForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<PaymentOrderListItem[]>> {
   const companyId = await resolveCompanyId();
   if (!companyId) return { ok: true, data: [] };
 
@@ -252,18 +240,14 @@ export async function getAllPaymentOrdersForExport(searchParams: DataTableSearch
     const rows = await fetchExportRowsInBatches({
       maxRows: PAYMENT_ORDERS_EXPORT_MAX_ROWS,
       listIds: (take) => prisma.payment_orders.findMany({ where, orderBy, select: { id: true }, take }),
-      fetchByIds: (ids) => prisma.payment_orders.findMany({ where: { id: { in: ids }, company_id: companyId }, select: ORDER_SELECT }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} órdenes de pago con los filtros actuales. Acote la exportación con filtros.`,
+      fetchByIds: (ids) =>
+        prisma.payment_orders.findMany({ where: { id: { in: ids }, company_id: companyId }, select: ORDER_SELECT }),
+      tooLargeMessage: tooManyRowsMessage('órdenes de pago'),
     });
     return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar ordenes de pago', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
-    return {
-      ok: false,
-      message: error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar la lista de órdenes de pago. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de órdenes de pago. Intente nuevamente.');
   }
 }
 
@@ -294,7 +278,7 @@ export async function getPaymentOrdersAttention(): Promise<{ toApprove: number |
 export async function getPaymentOrderSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
-): Promise<{ counts: Map<string, number>; resolvedOptions?: Array<{ id: string; name: string | null }> } | null> {
+): Promise<SingleFacetResult> {
   const companyId = await resolveCompanyId();
   if (!companyId) return null;
 
@@ -302,19 +286,7 @@ export async function getPaymentOrderSingleFacet(
 
   /** WHERE con todos los filtros activos MENOS el de la columna que se esta abriendo. */
   function crossWhere(excludeColumn: string): OrderWhere {
-    const base: FilterState = parsed ?? parseListState({});
-    const filters = { ...base.filters };
-    delete filters[excludeColumn];
-    return buildWhereClause(companyId as string, { ...base, filters });
-  }
-
-  function toFacetMap(rows: { key: string | null; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      const k = key == null ? NULL_FILTER_VALUE : key;
-      map.set(k, (map.get(k) ?? 0) + count);
-    }
-    return map;
+    return buildWhereClause(companyId as string, withoutOwnFilter(parsed ?? parseListState({}), excludeColumn));
   }
 
   try {
@@ -327,39 +299,26 @@ export async function getPaymentOrderSingleFacet(
 
     if (columnId === 'supplier') {
       const rows = await prisma.payment_orders.groupBy({ by: ['supplier_id'], where, _count: true });
-      const ids = rows.map((r) => r.supplier_id);
-      const suppliers = ids.length
-        ? await prisma.suppliers.findMany({
-            where: { id: { in: ids } },
-            select: { id: true, name: true },
-            orderBy: { name: 'asc' },
-          })
-        : [];
       return {
         counts: toFacetMap(rows.map((r) => ({ key: r.supplier_id, count: r._count }))),
-        resolvedOptions: suppliers,
+        resolvedOptions: await supplierFacetOptions(rows.map((r) => r.supplier_id)),
       };
     }
 
     if (columnId === 'creator') {
       const rows = await prisma.payment_orders.groupBy({ by: ['created_by'], where, _count: true });
-      const ids = rows.map((r) => r.created_by);
-      const profiles = ids.length
-        ? await prisma.profile.findMany({
-            where: { id: { in: ids } },
-            select: { id: true, fullname: true, email: true },
-            orderBy: { fullname: 'asc' },
-          })
-        : [];
       return {
         counts: toFacetMap(rows.map((r) => ({ key: r.created_by, count: r._count }))),
-        resolvedOptions: profiles.map((p) => ({ id: p.id, name: profileName(p) })),
+        resolvedOptions: await profileFacetOptions(rows.map((r) => r.created_by)),
       };
     }
 
     if (columnId === 'methods') {
       // M:M: cuantas ordenes (distintas) usan cada medio; sin pagos = "Sin pagar"
-      const orders = await prisma.payment_orders.findMany({ where, select: { payments: { select: { method: true } } } });
+      const orders = await prisma.payment_orders.findMany({
+        where,
+        select: { payments: { select: { method: true } } },
+      });
       const counts = new Map<string, number>();
       for (const order of orders) {
         const methods = new Set(order.payments.map((p) => p.method));

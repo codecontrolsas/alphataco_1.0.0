@@ -2,24 +2,32 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
 import { SectionCard } from '@/shared/components/common/SectionCard';
 import { argentinaDate, formatArgentinaDay, formatDateAr } from '@/shared/lib/argentina-time';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import moment from 'moment';
 import { ExternalLink, FileUp, History, RefreshCw } from 'lucide-react';
+import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { uploadSupplierDocument, type SupplierDetail } from '../../actions/suppliers.server';
+import { type SupplierDetail } from '../../actions/supplier-queries.server';
+import { uploadSupplierDocument } from '../../actions/suppliers.server';
 import { PURCHASES_QUERY_KEYS } from '../../lib/query-keys';
 import { SUPPLIER_DOCUMENT_MAX_BYTES, SUPPLIER_DOCUMENT_TYPES } from '../../schemas/suppliers';
 
@@ -154,7 +162,14 @@ export function SupplierDocuments({ supplierId, documents, nameSuggestions, canU
       )}
       {replaced.length > 0 && (
         <div className="mt-3">
-          <Button type="button" size="sm" variant="ghost" className="-ml-2" onClick={() => setShowHistory((v) => !v)} aria-expanded={showHistory}>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="-ml-2"
+            onClick={() => setShowHistory((v) => !v)}
+            aria-expanded={showHistory}
+          >
             <History className="mr-1 h-4 w-4" aria-hidden="true" />
             {showHistory ? 'Ocultar reemplazados' : `Ver reemplazados (${replaced.length})`}
           </Button>

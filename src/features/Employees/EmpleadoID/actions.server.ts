@@ -1,6 +1,6 @@
 'use server';
 
-import { canViewServer } from '@/features/Permissions/actionsServer';
+import { canViewServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
@@ -173,7 +173,6 @@ export async function getAllCostCenterOptions() {
     return [];
   }
 }
-export type CostCenterOption = Awaited<ReturnType<typeof getAllCostCenterOptions>>[number];
 
 export async function getAllHierarchyOptions() {
   logger.debug('Obteniendo opciones de jerarquías');
@@ -206,7 +205,6 @@ export async function getAllCompanyPositionOptions() {
     return [];
   }
 }
-export type CompanyPositionOption = Awaited<ReturnType<typeof getAllCompanyPositionOptions>>[number];
 
 export async function getAllWorkDiagramOptions() {
   logger.debug('Obteniendo opciones de diagramas de trabajo');
@@ -291,7 +289,6 @@ export async function getAllProvinceOptions() {
     return [];
   }
 }
-export type ProvinceOption = Awaited<ReturnType<typeof getAllProvinceOptions>>[number];
 
 export async function getCitiesByProvince(provinceId: bigint | null | undefined) {
   if (!provinceId) return [];
@@ -382,7 +379,6 @@ export async function getDiagramTypes() {
     return [];
   }
 }
-export type DiagramTypeOption = Awaited<ReturnType<typeof getDiagramTypes>>[number];
 
 // ─── Diagramas del empleado ───────────────────────────────────────────────────
 // La lógica vive en `lib/employee-diagram-queries.ts` (sin `'use server'`); estas son las
@@ -397,8 +393,6 @@ export async function getEmployeeDiagramHistory(employeeId: string) {
 export async function getEmployeeDiagrams(employeeId: string) {
   return readEmployeeDiagrams(employeeId);
 }
-export type EmployeeDiagramsData = Awaited<ReturnType<typeof getEmployeeDiagrams>>;
-export type EmployeeDiagramEntry = EmployeeDiagramsData[number];
 
 // ─── Funciones de mutación ────────────────────────────────────────────────────
 // La lógica vive en `lib/employee-mutations.ts`. Ver ahí el contrato de edición por deltas.

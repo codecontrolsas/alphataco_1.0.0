@@ -1,6 +1,6 @@
 'use client';
 
-import { useDataTableFilter } from '@/shared/components/common/DataTable';
+import { useDataTableFilter } from '@/shared/components/common/DataTable/useDataTableFilter';
 import { MetricCard } from '@/shared/components/common/MetricCard';
 
 interface DailyReportMetricsProps {

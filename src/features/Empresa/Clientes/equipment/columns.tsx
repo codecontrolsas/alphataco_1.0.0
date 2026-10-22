@@ -1,7 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { conditionLabels, employeeStatusBadges, otherEquipmentStatusLabels } from '@/shared/utils/mappers';
@@ -27,8 +27,7 @@ function relationFilter(pick: (row: CustomerEquipmentItem) => string | number | 
 export const columns: ColumnDef<CustomerEquipmentItem>[] = [
   {
     accessorKey: 'intern_number',
-    meta: { title: 'Número interno' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Número interno" />,
+    ...titled('Número interno'),
     cell: ({ row }) => {
       const { id, intern_number } = row.original;
       if (!intern_number) return EMPTY;
@@ -44,8 +43,7 @@ export const columns: ColumnDef<CustomerEquipmentItem>[] = [
   },
   {
     accessorKey: 'domain',
-    meta: { title: 'Dominio' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Dominio" />,
+    ...titled('Dominio'),
     cell: ({ row }) => {
       const { id, domain } = row.original;
       if (!domain) return EMPTY;
@@ -62,37 +60,32 @@ export const columns: ColumnDef<CustomerEquipmentItem>[] = [
   {
     id: 'type',
     accessorFn: (row) => row.type_vehicles_typeTotype?.name ?? '',
-    meta: { title: 'Tipo' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
+    ...titled('Tipo'),
     cell: ({ row }) => row.original.type_vehicles_typeTotype?.name || EMPTY,
     filterFn: relationFilter((row) => row.type_vehicles_typeTotype?.id),
   },
   {
     id: 'brand',
     accessorFn: (row) => row.brand_vehicles?.name ?? '',
-    meta: { title: 'Marca' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Marca" />,
+    ...titled('Marca'),
     cell: ({ row }) => row.original.brand_vehicles?.name || EMPTY,
     filterFn: relationFilter((row) => row.brand_vehicles?.id),
   },
   {
     id: 'model',
     accessorFn: (row) => row.model_vehicles?.name ?? '',
-    meta: { title: 'Modelo' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Modelo" />,
+    ...titled('Modelo'),
     cell: ({ row }) => row.original.model_vehicles?.name || EMPTY,
     filterFn: relationFilter((row) => row.model_vehicles?.id),
   },
   {
     accessorKey: 'year',
-    meta: { title: 'Año' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Año" />,
+    ...titled('Año'),
     cell: ({ row }) => <span className="tabular-nums">{row.original.year}</span>,
   },
   {
     accessorKey: 'condition',
-    meta: { title: 'Condición' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Condición" />,
+    ...titled('Condición'),
     cell: ({ row }) => {
       const condition = row.original.condition;
       if (!condition) return EMPTY;
@@ -112,8 +105,7 @@ export const columns: ColumnDef<CustomerEquipmentItem>[] = [
   },
   {
     accessorKey: 'status',
-    meta: { title: 'Estado documental' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Estado documental" />,
+    ...titled('Estado documental'),
     cell: ({ row }) => {
       const status = row.original.status;
       if (!status) return EMPTY;
@@ -133,8 +125,7 @@ export const columns: ColumnDef<CustomerEquipmentItem>[] = [
   },
   {
     accessorKey: 'is_active',
-    meta: { title: 'Situación' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Situación" />,
+    ...titled('Situación'),
     enableSorting: false,
     cell: ({ row }) =>
       row.original.is_active === false ? (
@@ -157,8 +148,7 @@ export const columns: ColumnDef<CustomerEquipmentItem>[] = [
   {
     // Fecha de la afectación a este cliente (no se ordena: está en la pivote, una relación 1:N).
     accessorKey: 'affected_since',
-    meta: { title: 'Afectado desde' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Afectado desde" />,
+    ...titled('Afectado desde'),
     enableSorting: false,
     cell: ({ row }) => (row.original.affected_since ? formatArgentinaDay(row.original.affected_since) : EMPTY),
   },

@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { getUserPermissionsMapServer } from '@/features/Permissions';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';

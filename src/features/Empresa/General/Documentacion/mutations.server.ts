@@ -3,7 +3,7 @@
 import { documentTypeReadScope } from '@/features/Documentacion/TiposDocumentos/lib/document-type-scope';
 import { normalizePeriod } from '@/features/Documentacion/shared/compliance/dates';
 import { assertDocumentUploadPermission } from '@/features/Documentacion/shared/lib/document-permissions';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';

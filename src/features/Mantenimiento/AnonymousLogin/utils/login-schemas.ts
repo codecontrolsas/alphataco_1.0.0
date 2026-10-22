@@ -1,4 +1,4 @@
-import { validarCUIL } from '@/lib/utils';
+import { isValidCuit } from '@/shared/utils/cuit-text';
 import { z } from 'zod';
 
 /** Tipo de acceso elegido en el paso 2 del login del QR. */
@@ -58,7 +58,7 @@ export function buildCredentialsSchema(loginType: MaintenanceLoginType) {
     if (loginType === 'empleado') {
       if (!values.cuil) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['cuil'], message: 'El CUIL es requerido.' });
-      } else if (!validarCUIL(values.cuil)) {
+      } else if (!isValidCuit(values.cuil)) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['cuil'], message: 'El CUIL es inválido' });
       }
     }

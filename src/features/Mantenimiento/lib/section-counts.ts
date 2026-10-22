@@ -1,4 +1,4 @@
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { cache } from 'react';
 import { getEquipmentsWithDeviationsMetrics } from '../EquiposConDesvios/actions.server';
 import { getOperacionesPipelineSummary } from '../Pipeline/OperacionesPipeline/actions/pipeline-summary.server';

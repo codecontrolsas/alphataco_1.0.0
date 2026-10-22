@@ -2,19 +2,19 @@
 
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
   parseSearchParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { prisma } from '@/shared/lib/prisma';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { ExportTooLargeError, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
+import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('PartesDiarios/list/actions.server');
 
@@ -105,7 +105,9 @@ type StatusCounts = Record<string, number>;
  * Agrega a cada parte el conteo de sus líneas por estado con UN `groupBy` (en vez de traer todas
  * las filas con solo su `status`). Los partes sin líneas quedan con `{}`.
  */
-async function withStatusCounts<T extends { id: string }>(reports: T[]): Promise<(T & { statusCounts: StatusCounts })[]> {
+async function withStatusCounts<T extends { id: string }>(
+  reports: T[]
+): Promise<(T & { statusCounts: StatusCounts })[]> {
   if (reports.length === 0) return [];
 
   const grouped = await prisma.dailyreportrows.groupBy({
@@ -191,8 +193,7 @@ export async function getAllDailyReportsForExport(searchParams: DataTableSearchP
     const reports = await fetchExportRowsInBatches({
       listIds: (take) => prisma.dailyreport.findMany({ where, orderBy, select: { id: true }, take }),
       fetchByIds: (ids) => prisma.dailyreport.findMany({ where: { id: { in: ids } }, select: DAILY_REPORT_SELECT }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} partes con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('partes'),
     });
 
     const data = await withStatusCounts(reports);

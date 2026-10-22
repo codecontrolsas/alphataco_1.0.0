@@ -8,10 +8,9 @@ interface State {
 /**
  * Creates a custom store for managing the logged-in user's data.
  * @param set - A function used to update the store's state.
- * @param get - A function used to access the store's state.
  * @returns An object containing the store's state properties.
  */
-export const useEditButton = create<State>((set, get) => {
+export const useEditButton = create<State>((set) => {
   //set({ readonly: true });
 
   const setReadOnly = (readonly: boolean) => {

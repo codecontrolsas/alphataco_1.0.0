@@ -1,22 +1,29 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
   buildDateRangeFiltersWhere,
   NULL_FILTER_VALUE,
-  parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { isReceiverVatConditionId, RECEIVER_VAT_CONDITIONS } from '@/shared/lib/arca/catalogs';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
-import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { formatCuit } from '../../lib/supplier-ids';
+import { withoutOwnFilter } from '@/shared/lib/table-facets';
+import { dateRangeKeys } from '@/shared/lib/table-filters';
+import {
+  containsInsensitive as contains,
+  isOneOf,
+  isUuidOrNull,
+  parseValidatedListState,
+  type SingleFacetResult,
+} from '@/shared/lib/table-list-query';
+import { companyIdIfCanView } from '../../lib/list-access';
+
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import { CUIT_LENGTH, SUPPLIERS_EXPORT_MAX_ROWS } from './constants';
 import {
   deriveSupplierDocumentState,
@@ -56,17 +63,13 @@ const ALLOWED_FILTER_KEYS: ReadonlySet<string> = new Set([
   ...dateRangeKeys(DATE_RANGE_COLUMNS),
 ]);
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /** Valores validos por columna con lista cerrada (un valor ajeno haria fallar a Prisma y tumbaria la lista). */
 const VALID_VALUES: Record<string, (value: string) => boolean> = {
   vat_condition: (v) => /^\d{1,4}$/.test(v),
-  categories: (v) => v === NULL_FILTER_VALUE || UUID_RE.test(v),
-  documents: (v) => (SUPPLIER_DOCUMENT_STATES as readonly string[]).includes(v),
+  categories: isUuidOrNull,
+  documents: isOneOf(SUPPLIER_DOCUMENT_STATES),
   is_active: (v) => v === 'true' || v === 'false',
 };
-
-const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
 
 // ============================================================================
 // HELPERS INTERNOS
@@ -74,22 +77,11 @@ const contains = (value: string) => ({ contains: value, mode: 'insensitive' as c
 
 /** Estado de la tabla ya parseado, con solo los filtros permitidos y sus valores validos. */
 function parseListState(searchParams: DataTableSearchParams) {
-  const state = sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
-  for (const [column, isValid] of Object.entries(VALID_VALUES)) {
-    const values = state.filters[column];
-    if (!values) continue;
-    const valid = values.filter(isValid);
-    if (valid.length > 0) state.filters[column] = valid;
-    else delete state.filters[column];
-  }
-  return state;
+  return parseValidatedListState(searchParams, ALLOWED_FILTER_KEYS, VALID_VALUES);
 }
 
 /** Empresa si el usuario puede ver proveedores; `null` = sin acceso -> lista vacia. */
-async function resolveCompanyId(): Promise<string | null> {
-  if (!(await checkPermissionServer('compras', 'proveedores', 'view'))) return null;
-  return getActiveCompanyId();
-}
+const resolveCompanyId = () => companyIdIfCanView('proveedores');
 
 /**
  * Digitos del texto buscado (acepta "30-71234567-8", "30 7123" o "30.71"). `null` si trae letras u
@@ -235,7 +227,7 @@ function shape(rows: Prisma.suppliersGetPayload<{ select: typeof SUPPLIER_SELECT
     name: r.name,
     trade_name: r.trade_name,
     // BigInt no se serializa hacia el cliente
-    cuit: formatCuit(r.cuit.toString()),
+    cuit: formatCuitText(r.cuit.toString()),
     vat_condition_id: r.vat_condition_id,
     vat_condition: isReceiverVatConditionId(r.vat_condition_id)
       ? RECEIVER_VAT_CONDITIONS[r.vat_condition_id].label
@@ -304,20 +296,12 @@ export async function getAllSuppliersForExport(
       listIds: (take) => prisma.suppliers.findMany({ where, orderBy, select: { id: true }, take }),
       fetchByIds: (ids) =>
         prisma.suppliers.findMany({ where: { id: { in: ids }, company_id: companyId }, select: SUPPLIER_SELECT }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} proveedores con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('proveedores'),
     });
     return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar proveedores', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError
-          ? error.message
-          : 'No se pudo exportar la lista de proveedores. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de proveedores. Intente nuevamente.');
   }
 }
 
@@ -328,7 +312,7 @@ export async function getAllSuppliersForExport(
 export async function getSupplierSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
-): Promise<{ counts: Map<string, number>; resolvedOptions?: Array<{ id: string; name: string | null }> } | null> {
+): Promise<SingleFacetResult> {
   const companyId = await resolveCompanyId();
   if (!companyId) return null;
 
@@ -336,10 +320,7 @@ export async function getSupplierSingleFacet(
 
   /** WHERE con todos los filtros activos MENOS el de la columna que se esta abriendo. */
   function crossWhere(excludeColumn: string): Promise<SupplierWhere> {
-    const base: FilterState = parsed ?? parseListState({});
-    const filters = { ...base.filters };
-    delete filters[excludeColumn];
-    return buildWhereClause(companyId as string, { ...base, filters });
+    return buildWhereClause(companyId as string, withoutOwnFilter(parsed ?? parseListState({}), excludeColumn));
   }
 
   try {

@@ -1,26 +1,39 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { formatVoucherNumber } from '@/features/Comercial/Facturacion/lib/invoice-type';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
   NULL_FILTER_VALUE,
-  parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
-import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { formatVoucherNumber } from '@/features/Comercial/Facturacion/lib/invoice-type';
+import { profileFacetOptions } from '@/shared/lib/table-facet-lookups';
+import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
+import { dateRangeKeys } from '@/shared/lib/table-filters';
+import {
+  containsInsensitive as contains,
+  isUuidOrNull,
+  parseValidatedListState,
+  profileDisplayName,
+  resolveSorts,
+  type SingleFacetResult,
+} from '@/shared/lib/table-list-query';
+import { isUuid } from '@/shared/lib/uuid';
 import { ARCA_CHECK_LABELS, SUPPLIER_INVOICE_STATUS_LABELS } from '../../lib/invoice-status';
 import { supplierInvoiceLabel } from '../../lib/invoices';
+import { companyIdIfCanView } from '../../lib/list-access';
+import { supplierFacetOptions } from '../../lib/list-facet-lookups';
+import { digitsOf, parseAmountFilter, voucherNumberWhere } from '../../lib/list-filters';
 import { getInvoicesSectionCount } from '../../lib/section-counts';
-import { formatCuit } from '../../lib/supplier-ids';
+
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import { INVOICE_CBTE_TYPE_IDS } from './constants';
 
 const logger = new Logger('features/Purchases/Invoices/InvoicesList');
@@ -34,7 +47,16 @@ type FilterState = ReturnType<typeof parseListState>;
 // ============================================================================
 
 /** Ordenables (campos directos). Las FK y los compuestos se resuelven en SORT_MAP. */
-const VALID_SORT_FIELDS = new Set(['cbte_type', 'issue_date', 'vat_period', 'total', 'due_date', 'status', 'arca_check_result', 'created_at']);
+const VALID_SORT_FIELDS = new Set([
+  'cbte_type',
+  'issue_date',
+  'vat_period',
+  'total',
+  'due_date',
+  'status',
+  'arca_check_result',
+  'created_at',
+]);
 
 const SORT_MAP: Record<string, (dir: 'asc' | 'desc') => InvoiceOrderBy[]> = {
   number: (dir) => [{ sales_point: dir }, { number: dir }],
@@ -70,54 +92,27 @@ const ALLOWED_FILTER_KEYS: ReadonlySet<string> = new Set([
 /** Tope de filas del export. */
 const EXPORT_MAX_ROWS = 10_000;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /** Valores validos por columna con lista cerrada (un valor ajeno haria fallar a Prisma y tumbaria la lista). */
 const VALID_VALUES: Record<string, (value: string) => boolean> = {
   status: (v) => v in SUPPLIER_INVOICE_STATUS_LABELS,
   arca_check_result: (v) => v === NULL_FILTER_VALUE || v in ARCA_CHECK_LABELS,
-  supplier: (v) => UUID_RE.test(v),
-  creator: (v) => UUID_RE.test(v),
+  supplier: isUuid,
+  creator: isUuid,
   vat_period: (v) => /^\d{4}-\d{2}$/.test(v),
   cbte_type: (v) => (INVOICE_CBTE_TYPE_IDS as readonly number[]).includes(Number(v)),
-  orders: (v) => v === NULL_FILTER_VALUE || UUID_RE.test(v),
+  orders: isUuidOrNull,
 };
-
-const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
-const digitsOf = (value: string) => value.replace(/\D/g, '');
 
 // ============================================================================
 // HELPERS INTERNOS
 // ============================================================================
 
 /** Empresa si el usuario puede ver la tabla; `null` = sin acceso -> lista vacia. */
-async function resolveCompanyId(): Promise<string | null> {
-  const canView = await checkPermissionServer('compras', 'facturas', 'view');
-  if (!canView) return null;
-  return getActiveCompanyId();
-}
+const resolveCompanyId = () => companyIdIfCanView('facturas');
 
 /** Estado de la tabla ya parseado, con solo los filtros permitidos y sus valores validos. */
 function parseListState(searchParams: DataTableSearchParams) {
-  const state = sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
-  for (const [column, isValid] of Object.entries(VALID_VALUES)) {
-    const values = state.filters[column];
-    if (!values) continue;
-    const valid = values.filter(isValid);
-    if (valid.length > 0) state.filters[column] = valid;
-    else delete state.filters[column];
-  }
-  return state;
-}
-
-/** Numero de comprobante: "00003-00012345" (punto de venta + numero) o solo el numero. Coincidencia exacta. */
-function voucherNumberWhere(text: string): InvoiceWhere | null {
-  const parts = text.split('-').map(digitsOf).filter(Boolean);
-  // Fuera de rango (punto de venta Int, numero bigint): ningun comprobante coincide
-  if (parts.some((p) => p.length > 18) || (parts.length === 2 && Number(parts[0]) > 99999)) return { id: { in: [] } };
-  if (parts.length === 2) return { sales_point: Number(parts[0]), number: BigInt(parts[1]) };
-  if (parts.length === 1) return { number: BigInt(parts[0]) };
-  return null;
+  return parseValidatedListState(searchParams, ALLOWED_FILTER_KEYS, VALID_VALUES);
 }
 
 /** Ids de proveedores de la empresa cuyo CUIT contiene los digitos (columna bigint: busqueda por texto en SQL). */
@@ -126,13 +121,6 @@ async function supplierIdsByCuit(companyId: string, digits: string): Promise<str
     SELECT id FROM suppliers WHERE company_id = ${companyId}::uuid AND cuit::text LIKE ${`%${digits}%`}
   `;
   return rows.map((r) => r.id);
-}
-
-/** Importe tipeado ("1234,56" o "1234.56") -> Decimal exacto; `null` si no es un numero. */
-function parseAmount(text: string): Prisma.Decimal | null {
-  const normalized = text.trim().replace(/\./g, (m, offset, s: string) => (s.includes(',') ? '' : m)).replace(',', '.');
-  if (!/^\d+(\.\d+)?$/.test(normalized)) return null;
-  return new Prisma.Decimal(normalized);
 }
 
 /** WHERE compartido entre paginated, export y facets. */
@@ -160,7 +148,7 @@ async function buildWhereClause(companyId: string, state: FilterState): Promise<
 
   const totalText = f.total?.[0]?.trim();
   if (totalText) {
-    const amount = parseAmount(totalText);
+    const amount = parseAmountFilter(totalText);
     and.push(amount ? { total: amount } : { id: { in: [] } });
   }
 
@@ -199,8 +187,6 @@ const INVOICE_SELECT = {
   lines: { select: { order_line: { select: { order: { select: { id: true, number: true } } } } } },
 } as const;
 
-const profileName = (p: { fullname: string | null; email: string | null }) => p.fullname ?? p.email ?? '-';
-
 function shape(rows: Prisma.supplier_invoicesGetPayload<{ select: typeof INVOICE_SELECT }>[]) {
   return rows.map((r) => {
     const orders = new Map<string, { id: string; number: string }>();
@@ -218,8 +204,8 @@ function shape(rows: Prisma.supplier_invoicesGetPayload<{ select: typeof INVOICE
       status: r.status,
       arca_check_result: r.arca_check_result,
       created_at: r.created_at,
-      supplier: { id: r.supplier.id, name: r.supplier.name, cuit: formatCuit(r.supplier.cuit) },
-      creator: { id: r.creator.id, name: profileName(r.creator) },
+      supplier: { id: r.supplier.id, name: r.supplier.name, cuit: formatCuitText(r.supplier.cuit) },
+      creator: { id: r.creator.id, name: profileDisplayName(r.creator) },
       orders: [...orders.values()].sort((a, b) => a.number.localeCompare(b.number)),
     };
   });
@@ -238,14 +224,11 @@ export async function getSupplierInvoicesPaginated(searchParams: DataTableSearch
     const { skip, take } = stateToPrismaParams(state);
     const where = await buildWhereClause(companyId, state);
 
-    const resolvedSorts: InvoiceOrderBy[] = [];
-    for (const s of state.sorting) {
-      const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-      const mapper = SORT_MAP[s.id];
-      if (mapper) resolvedSorts.push(...mapper(dir));
-      else if (VALID_SORT_FIELDS.has(s.id)) resolvedSorts.push({ [s.id]: dir });
-    }
-    const orderBy: InvoiceOrderBy[] = [...resolvedSorts, { issue_date: 'desc' }, { created_at: 'desc' }];
+    const orderBy: InvoiceOrderBy[] = [
+      ...resolveSorts<InvoiceOrderBy>(state.sorting, VALID_SORT_FIELDS, SORT_MAP),
+      { issue_date: 'desc' },
+      { created_at: 'desc' },
+    ];
 
     const [rows, total] = await Promise.all([
       prisma.supplier_invoices.findMany({ where, orderBy, skip, take, select: INVOICE_SELECT }),
@@ -277,21 +260,16 @@ export async function getAllSupplierInvoicesForExport(
       maxRows: EXPORT_MAX_ROWS,
       listIds: (take) => prisma.supplier_invoices.findMany({ where, orderBy, select: { id: true }, take }),
       fetchByIds: (ids) =>
-        prisma.supplier_invoices.findMany({ where: { id: { in: ids }, company_id: companyId }, select: INVOICE_SELECT }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} comprobantes con los filtros actuales. Acote la exportación con filtros.`,
+        prisma.supplier_invoices.findMany({
+          where: { id: { in: ids }, company_id: companyId },
+          select: INVOICE_SELECT,
+        }),
+      tooLargeMessage: tooManyRowsMessage('comprobantes'),
     });
     return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar comprobantes de proveedor', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError
-          ? error.message
-          : 'No se pudo exportar la lista de comprobantes. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de comprobantes. Intente nuevamente.');
   }
 }
 
@@ -302,7 +280,7 @@ export async function getAllSupplierInvoicesForExport(
 export async function getSupplierInvoiceSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
-): Promise<{ counts: Map<string, number>; resolvedOptions?: Array<{ id: string; name: string | null }> } | null> {
+): Promise<SingleFacetResult> {
   const companyId = await resolveCompanyId();
   if (!companyId) return null;
 
@@ -310,19 +288,7 @@ export async function getSupplierInvoiceSingleFacet(
 
   /** WHERE con todos los filtros activos MENOS el de la columna que se esta abriendo. */
   function crossWhere(excludeColumn: string): Promise<InvoiceWhere> {
-    const base: FilterState = parsed ?? parseListState({});
-    const filters = { ...base.filters };
-    delete filters[excludeColumn];
-    return buildWhereClause(companyId as string, { ...base, filters });
-  }
-
-  function toFacetMap(rows: { key: string | number | null; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      const k = key == null ? NULL_FILTER_VALUE : String(key);
-      map.set(k, (map.get(k) ?? 0) + count);
-    }
-    return map;
+    return buildWhereClause(companyId as string, withoutOwnFilter(parsed ?? parseListState({}), excludeColumn));
   }
 
   try {
@@ -355,33 +321,17 @@ export async function getSupplierInvoiceSingleFacet(
 
     if (columnId === 'supplier') {
       const rows = await prisma.supplier_invoices.groupBy({ by: ['supplier_id'], where, _count: true });
-      const ids = rows.map((r) => r.supplier_id);
-      const suppliers = ids.length
-        ? await prisma.suppliers.findMany({
-            where: { id: { in: ids } },
-            select: { id: true, name: true },
-            orderBy: { name: 'asc' },
-          })
-        : [];
       return {
         counts: toFacetMap(rows.map((r) => ({ key: r.supplier_id, count: r._count }))),
-        resolvedOptions: suppliers,
+        resolvedOptions: await supplierFacetOptions(rows.map((r) => r.supplier_id)),
       };
     }
 
     if (columnId === 'creator') {
       const rows = await prisma.supplier_invoices.groupBy({ by: ['created_by'], where, _count: true });
-      const ids = rows.map((r) => r.created_by);
-      const profiles = ids.length
-        ? await prisma.profile.findMany({
-            where: { id: { in: ids } },
-            select: { id: true, fullname: true, email: true },
-            orderBy: { fullname: 'asc' },
-          })
-        : [];
       return {
         counts: toFacetMap(rows.map((r) => ({ key: r.created_by, count: r._count }))),
-        resolvedOptions: profiles.map((p) => ({ id: p.id, name: profileName(p) })),
+        resolvedOptions: await profileFacetOptions(rows.map((r) => r.created_by)),
       };
     }
 

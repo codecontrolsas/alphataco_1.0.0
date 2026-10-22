@@ -13,7 +13,7 @@ import {
   tableHeaderRow,
   type MailTone,
 } from '@/shared/lib/mail/shell';
-import { formatDateAr, formatLongDateAr } from '../lib/dates';
+import { formatDateAr, formatLongDateAr } from '@/shared/lib/argentina-time';
 import type {
   ExpiringCompanyItem,
   ExpiringEmployeeItem,

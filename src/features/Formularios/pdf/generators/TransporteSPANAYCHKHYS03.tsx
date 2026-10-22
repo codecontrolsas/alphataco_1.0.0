@@ -1,14 +1,7 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
-import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { pdf } from '@react-pdf/renderer';
-import moment from 'moment';
-import dynamic from 'next/dynamic';
+import { PdfDocumentPreview } from '../components/PdfDocumentPreview';
 import { VehicleInspectionLayout } from '../layouts/VehicleInspectionLayout';
-
-// Importación dinámica del PDFViewer
-const PDFViewer = dynamic(() => import('@react-pdf/renderer').then((mod) => mod.PDFViewer), { ssr: false });
 
 interface VehicleInspectionPDFProps {
   data?: {
@@ -433,50 +426,13 @@ export const TransporteSPANAYCHKHYS03 = ({
   if (!preview) {
     return pdfContent;
   }
-  const handleDownload = async () => {
-    const blob = await pdf(pdfContent).toBlob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    // Generar nombre personalizado
-    const fileName =
-      `${title}_${data?.dominio || ''}-(${data?.fecha && moment(data.fecha).isValid() ? moment(data.fecha).format('DD-MM-YYYY') : ''}).pdf`.replace(
-        /\s+/g,
-        '_'
-      );
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
   return (
-    <div className="w-full h-full">
-      <div className=" pr-8 flex items-center justify-between">
-        <DialogHeader className="p-6 pb-3">
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-        <Button onClick={handleDownload} variant="outline" className="gap-2">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          Descargar PDF
-        </Button>
-      </div>
-      <PDFViewer style={{ width: '100%', height: '100%', border: 'none' }}>{pdfContent}</PDFViewer>
-    </div>
+    <PdfDocumentPreview
+      document={pdfContent}
+      title={title}
+      description={description}
+      dominio={data?.dominio}
+      fecha={data?.fecha}
+    />
   );
 };

@@ -1,30 +1,33 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { InputFormField } from '@/shared/components/common/form-fields';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { createCheckbook, getCheckbookFormData } from '../../actions/own-checks.server';
-import { invalidateTreasury } from '../../lib/invalidate';
 import { TREASURY_QUERY_KEYS } from '../../lib/query-keys';
+import { useTreasuryMutation } from '../../lib/use-treasury-mutation';
 import { checkbookSchema, type CheckbookValues } from '../../schemas/own-checks';
 
 const logger = new Logger('Treasury/NewCheckbookDialog');
 
 /** Alta de una chequera: cuenta bancaria y rango de números (spec Tesorería etapa 3b §2.1). */
 export function NewCheckbookDialog() {
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const { data, isLoading } = useQuery({
     queryKey: [...TREASURY_QUERY_KEYS.checkbooks, 'form'],
@@ -38,19 +41,16 @@ export function NewCheckbookDialog() {
     defaultValues: { accountId: '', firstNumber: '', lastNumber: '' },
   });
 
-  const save = useMutation({
-    mutationFn: async (values: CheckbookValues) => unwrapAction(await createCheckbook(values)),
+  const save = useTreasuryMutation({
+    action: (values: CheckbookValues) => createCheckbook(values),
     onSuccess: () => {
       toast.success('Chequera creada');
-      invalidateTreasury(queryClient);
-      router.refresh();
       form.reset({ accountId: '', firstNumber: '', lastNumber: '' });
       setOpen(false);
     },
-    onError: (error) => {
-      logger.error('Error al crear la chequera', { data: { error } });
-      toast.error(error instanceof Error ? error.message : 'No se pudo crear la chequera');
-    },
+    logger,
+    logError: 'Error al crear la chequera',
+    errorFallback: 'No se pudo crear la chequera',
   });
 
   return (
@@ -62,10 +62,14 @@ export function NewCheckbookDialog() {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Nueva chequera</DialogTitle>
-          <DialogDescription>Los números de los cheques físicos que te entregó el banco. Al pagar con cheque se propone el próximo libre.</DialogDescription>
+          <DialogDescription>
+            Los números de los cheques físicos que te entregó el banco. Al pagar con cheque se propone el próximo libre.
+          </DialogDescription>
         </DialogHeader>
         {!isLoading && accounts.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No hay cuentas bancarias activas: creala en Tesorería → Configuración.</p>
+          <p className="text-sm text-muted-foreground">
+            No hay cuentas bancarias activas: creala en Tesorería → Configuración.
+          </p>
         ) : (
           <Form {...form}>
             <form onSubmit={form.handleSubmit((values) => save.mutate(values))} className="space-y-4">
@@ -75,7 +79,12 @@ export function NewCheckbookDialog() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Cuenta bancaria</FormLabel>
-                    <Select key={accounts.length} value={field.value} onValueChange={field.onChange} disabled={isLoading}>
+                    <Select
+                      key={accounts.length}
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      disabled={isLoading}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder={isLoading ? 'Cargando cuentas…' : 'Elegí la cuenta'} />
@@ -94,31 +103,19 @@ export function NewCheckbookDialog() {
                 )}
               />
               <div className="grid grid-cols-2 gap-3">
-                <FormField
+                <InputFormField
                   control={form.control}
                   name="firstNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Desde el Nº</FormLabel>
-                      <FormControl>
-                        <Input inputMode="numeric" className="tabular-nums" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Desde el Nº"
+                  inputMode="numeric"
+                  className="tabular-nums"
                 />
-                <FormField
+                <InputFormField
                   control={form.control}
                   name="lastNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Hasta el Nº</FormLabel>
-                      <FormControl>
-                        <Input inputMode="numeric" className="tabular-nums" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Hasta el Nº"
+                  inputMode="numeric"
+                  className="tabular-nums"
                 />
               </div>
               <DialogFooter className="gap-2">

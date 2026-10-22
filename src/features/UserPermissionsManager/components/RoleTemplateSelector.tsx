@@ -3,7 +3,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Shield } from 'lucide-react';
-import type { RoleWithCount } from '../actions.server';
+import type { RoleWithCount } from '@/features/Permissions/actions/roles.server';
 
 interface RoleTemplateSelectorProps {
   roles: RoleWithCount[];

@@ -1,9 +1,10 @@
 'use client';
 
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { matchesId, titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import type { ColumnDef } from '@tanstack/react-table';
 import { argentinaDate, formatDateAr } from '@/shared/lib/argentina-time';
+import type { ColumnDef } from '@tanstack/react-table';
 import Link from 'next/link';
 import { WarehouseStatusBadge } from '../../../components/WarehouseStatusBadge';
 import { classifyBatch, dateColumnToYmd } from '../../../lib/batch-expiry';
@@ -35,15 +36,13 @@ export function getColumns({ canViewPrices }: StockColumnsOptions): ColumnDef<St
     {
       id: 'code',
       accessorFn: (row) => row.material.code,
-      meta: { title: 'Código' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Código" />,
+      ...titled('Código'),
       cell: ({ row }) => <span className="font-mono text-sm font-medium">{row.original.material.code}</span>,
     },
     {
       id: 'material',
       accessorFn: (row) => row.material.name,
-      meta: { title: 'Material' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Material" />,
+      ...titled('Material'),
       cell: ({ row }) => (
         <Link
           href={`/dashboard/warehouse/materials/${row.original.material.id}`}
@@ -56,8 +55,7 @@ export function getColumns({ canViewPrices }: StockColumnsOptions): ColumnDef<St
     {
       id: 'category',
       accessorFn: (row) => row.material.category?.name ?? '',
-      meta: { title: 'Categoría' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Categoría" />,
+      ...titled('Categoría'),
       cell: ({ row }) => <span>{row.original.material.category?.name ?? '-'}</span>,
       filterFn: (row, _id, value: string[]) => {
         const id = row.original.material.category?.id;
@@ -68,16 +66,14 @@ export function getColumns({ canViewPrices }: StockColumnsOptions): ColumnDef<St
     {
       id: 'warehouse',
       accessorFn: (row) => row.warehouse.name,
-      meta: { title: 'Depósito' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Depósito" />,
+      ...titled('Depósito'),
       cell: ({ row }) => <span>{row.original.warehouse.name}</span>,
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.warehouse.id),
+      filterFn: matchesId((r) => r.warehouse.id),
     },
     {
       id: 'batch',
       accessorFn: (row) => row.batch?.batch_number ?? '',
-      meta: { title: 'Lote' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Lote" />,
+      ...titled('Lote'),
       cell: ({ row }) => <span>{row.original.batch?.batch_number ?? '-'}</span>,
       filterFn: (row, _id, value: string[]) => {
         const id = row.original.batch?.id;
@@ -89,8 +85,7 @@ export function getColumns({ canViewPrices }: StockColumnsOptions): ColumnDef<St
       id: 'expires_at',
       // Date | null: el formatter de export lo pasa a DD/MM/YYYY
       accessorFn: (row) => row.batch?.expires_at ?? null,
-      meta: { title: 'Vencimiento' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Vencimiento" />,
+      ...titled('Vencimiento'),
       cell: ({ row }) => {
         const exp = row.original.batch?.expires_at;
         if (!exp) return <span>-</span>;
@@ -107,17 +102,15 @@ export function getColumns({ canViewPrices }: StockColumnsOptions): ColumnDef<St
     {
       id: 'quantity',
       accessorFn: (row) => Number(row.quantity),
-      meta: { title: 'Cantidad' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Cantidad" />,
+      ...titled('Cantidad'),
       cell: ({ row }) => <span className="font-medium tabular-nums">{formatQuantity(row.original.quantity)}</span>,
     },
     {
       id: 'unit',
       accessorFn: (row) => row.material.unit.name,
-      meta: { title: 'Unidad' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Unidad" />,
+      ...titled('Unidad'),
       cell: ({ row }) => <span>{row.original.material.unit.name}</span>,
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.material.unit.id),
+      filterFn: matchesId((r) => r.material.unit.id),
     },
     {
       id: 'below_min',
@@ -129,7 +122,7 @@ export function getColumns({ canViewPrices }: StockColumnsOptions): ColumnDef<St
       cell: ({ row }) => (
         <WarehouseStatusBadge entity="stockLevel" status={row.original.below_min ? 'BELOW_MIN' : 'OK'} size="sm" />
       ),
-      filterFn: (row, _id, value: string[]) => value.includes(String(row.original.below_min)),
+      filterFn: matchesId((r) => r.below_min),
     },
   ];
 
@@ -138,8 +131,7 @@ export function getColumns({ canViewPrices }: StockColumnsOptions): ColumnDef<St
       {
         id: 'average_cost',
         accessorFn: (row) => (row.average_cost != null ? Number(row.average_cost) : null),
-        meta: { title: 'Costo promedio' },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Costo promedio" />,
+        ...titled('Costo promedio'),
         cell: ({ row }) => (
           <span className="tabular-nums">
             {row.original.average_cost != null ? formatUnitCost(row.original.average_cost) : '-'}

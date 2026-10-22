@@ -1,6 +1,6 @@
 import { Card, CardContent } from '@/components/ui/card';
+import type { PurchaseReceiptDetail, ReceiptFormData } from '../actions/receipt-queries.server';
 import { PurchasesPageShell } from '../components/PurchasesPageShell';
-import type { PurchaseReceiptDetail, ReceiptFormData } from '../actions/receipts.server';
 import { PurchaseReceiptDetailView } from './components/PurchaseReceiptDetailView';
 import { PurchaseReceiptForm } from './components/PurchaseReceiptForm';
 

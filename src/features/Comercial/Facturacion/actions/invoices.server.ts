@@ -1,7 +1,7 @@
 'use server';
 
 import { getFiscalDataOverview } from '@/features/Empresa/General/FiscalData/lib/fiscal-data-overview.server';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import type { arca_environment } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import { toDateOnly } from '@/shared/lib/date-only';
