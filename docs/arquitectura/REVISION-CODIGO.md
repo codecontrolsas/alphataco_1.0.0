@@ -31,14 +31,14 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 | src/features/OperatorPanel          |       25 |   4673 | [x]    |
 | src/features/Formularios            |       21 |   3874 | [x]    |
 | src/features/Seleccion              |       32 |   3823 | [x]    |
-| src/features/Permissions            |       12 |   3456 | [ ]    |
+| src/features/Permissions            |       12 |   3456 | [x]    |
 | src/features/Auth                   |       18 |   2463 | [x]    |
 | src/features/Jobs                   |       17 |   2229 | [x]    |
-| src/features/Layout                 |       22 |   1882 | [ ]    |
-| src/features/ExternalApi            |       10 |   1152 | [ ]    |
-| src/features/Notifications          |        9 |    777 | [ ]    |
-| src/features/TabsManager            |        7 |    745 | [ ]    |
-| src/features/MobileApi              |        6 |    212 | [ ]    |
+| src/features/Layout                 |       22 |   1882 | [x]    |
+| src/features/ExternalApi            |       10 |   1152 | [x]    |
+| src/features/Notifications          |        9 |    777 | [x]    |
+| src/features/TabsManager            |        7 |    745 | [x]    |
+| src/features/MobileApi              |        6 |    212 | [x]    |
 | src/shared                          |      152 |  16124 | [ ]    |
 | src/components                      |       48 |   4930 | [ ]    |
 | src/lib                             |        6 |    580 | [ ]    |
@@ -158,6 +158,10 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
   - **Selección:** la tabla de candidatos pasa a `createFacetFilters`, `enumFilterOptions`, `textFilter`, `dateRangeFilter` y `useServerTableView`; las columnas a `titled`, `matchesNullableId` y `matchesColumnValue`; la acción de la lista a `resolveSorts`, `createCrossWhere` e `isUuid`.
   - **Panel del operario:** `TaskList` reutiliza el tipo `RepairData` exportado por `TaskCard`.
   - Verificación: `check-types` limpio, `npm test` (1494), `next build` compilando y, contra un Postgres descartable, las suites de integración de Jobs y Auth en serie (86 pruebas).
+- [x] **Permisos, Layout, API externa, Notificaciones, TabsManager y API móvil (`src/features/Permissions`, `Layout`, `ExternalApi`, `Notifications`, `TabsManager`, `MobileApi`):** jscpd sobre los seis módulos (sin pruebas): de 1 clon y 14 líneas duplicadas (0,19 %; 134 tokens) a 0 clones; 61.347 → 61.243 tokens. `knip` sin hallazgos en los módulos; `tsc --noUnusedLocals --noUnusedParameters` marcó dos cosas (el tipo `TabsByKey` de `permissions-map.ts`, borrado, y `companyId` de `assignRoleToUserServer`, ver pendientes). Los comentarios JSX de los módulos están balanceados (`{/*` y `*/}` iguales en todos los archivos). `MobileApi` y `ExternalApi` no se tocaron: sin código muerto ni duplicados.
+  - **Permisos:** las nueve tablas que armaban `{ hasPermission }` a mano con `useMemo` (Indicadores de KPIs, Gomería: tipos, órdenes, catálogo, plantillas y marcas, dueños de equipos, unidades de medida y usuarios de Empresa) usan `usePermissionChecker`. Lógica idéntica, sin cambio de comportamiento.
+  - **TabsManager:** `lib/resolve-active.ts` suma `buildEntryHref` (enlace que conserva solo `preserveParams`), copiado en `ViewManagerServer` y `RecordSectionsServer`. `types.ts`: se borraron `TabsManagerServerProps` y `TabsManagerVariant` (del componente `TabsManagerServer`, ya eliminado, con `variant` y `dependentParams`); `SectionManagerServerProps` quedó declarado directo con los mismos campos que antes.
+  - Verificación: `check-types` limpio y `npm test` (1494). No se tocó lógica de permisos ni de acciones, por eso no se corrieron las suites de integración.
 
 ## En curso / siguiente
 
@@ -252,3 +256,10 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 - `OperatorPanel/components/AddTaskDialog.tsx` (498 líneas) mezcla dos formularios (tarea propia y pedido a otro sector) en un solo componente; se partiría en dos con su estado propio.
 - Las acciones de `Seleccion` (`pre-employee-actions`, `pre-employee-documents`) y `OperatorPanel` conservan la cabecera permiso + try/catch sin envoltorio común (ver la nota de Compras).
 - `Jobs/lib/runs.ts` exporta `lastRun`, que solo usan las pruebas de integración; no se borró.
+
+## Pendiente detectado en Permisos, Layout, API externa, Notificaciones, TabsManager y API móvil
+
+- **Permisos, `companyId` sin uso:** `assignRoleToUserServer` (`Permissions/actions/roles.server.ts`) llama a `getActiveCompanyId()` y no usa el resultado (puede lanzar sin empresa activa). Se dejó la llamada porque es del perímetro de seguridad; se puede borrar si se confirma.
+- `Permissions/actions/roles.server.ts` (842 líneas) junta las lecturas y el ABM de roles con la asignación de roles a usuarios y los permisos por usuario (desde `assignRoleToUserServer`, ~330 líneas), todos con los mismos `assertCan*`. Hay una costura limpia (`user-permissions.server.ts`), pero toca ~15 importadores de `UserPermissionsManager`, `Empresa` y `app` y la prueba del perímetro; no se hizo por ser código de seguridad. `permissions-map.ts` (1.626) es una tabla de datos.
+- Varios archivos de otros módulos siguen leyendo `permissionsMap['modulo:tab:accion'] === true` suelto (Tesorería, Almacenes, Operaciones, Facturación): no arman un `hasPermission`, así que no entran en `usePermissionChecker`.
+- Los comentarios de `Layout` y `Permissions/lib/tab-visibility.ts` todavía nombran `TabsManagerServer`, un componente que ya no existe (hoy `SectionManagerServer` y `ViewManagerServer`).
