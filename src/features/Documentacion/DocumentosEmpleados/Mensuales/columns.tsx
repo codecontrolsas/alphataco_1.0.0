@@ -1,15 +1,20 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { DocumentNameCell, DocumentRowActions, DocumentStatePill } from '@/features/Documentacion/shared/components/DocumentCells';
+import {
+  actionsColumn,
+  contractorColumn,
+  denyReasonColumn,
+  documentStateColumn,
+  documentTypeColumn,
+  employeeIdentityColumns,
+  mandatoryColumn,
+  multiresourceColumn,
+  periodColumn,
+  uploadedAtColumn,
+} from '@/features/Documentacion/lists-shared/document-columns';
+import { DocumentRowActions } from '@/features/Documentacion/shared/components/DocumentCells';
 import { RequirementUpload } from '@/features/Documentacion/shared/components/RequirementUpload';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import { HelpCircle } from 'lucide-react';
-import Link from 'next/link';
 import type { MonthlyEmployeeDocumentListItem } from './actions.server';
 
 // ============================================================================
@@ -64,225 +69,20 @@ function ActionsCell({ row }: { row: MonthlyEmployeeDocumentListItem }) {
 // ============================================================================
 
 export const columns: ColumnDef<MonthlyEmployeeDocumentListItem>[] = [
-  // ─── Legajo (identidad: mono, negrita, antes del nombre) ──────────────────
-  {
-    id: 'fileNumber',
-    accessorFn: (row) => row.employees?.file ?? '',
-    meta: { title: 'Legajo' },
-    header: ({ column }) => (
-      <div className="flex items-center gap-1">
-        <DataTableColumnHeader column={column} title="Legajo" />
-        <TooltipProvider delayDuration={100}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="cursor-help" aria-label="Coincidencia exacta: ingrese el legajo completo">
-                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>Coincidencia exacta: ingrese el legajo completo</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
-    ),
-    cell: ({ row }) => {
-      const file = row.original.employees?.file;
-      if (!file) return <span className="text-muted-foreground">-</span>;
-      return <span className="font-mono font-semibold tabular-nums text-foreground">{file}</span>;
-    },
-    enableSorting: false,
-  },
-
-  // ─── Empleado (identidad) ─────────────────────────────────────────────────
-  {
-    id: 'employee',
-    accessorFn: (row) => (row.employees ? `${row.employees.lastname} ${row.employees.firstname}` : ''),
-    meta: { title: 'Empleado' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Empleado" />,
-    cell: ({ row }) => {
-      const employee = row.original.employees;
-      if (!employee) return <span className="text-muted-foreground">-</span>;
-      return (
-        <Link
-          href={`/dashboard/employee/action?action=view&employee_id=${employee.id}`}
-          className="font-semibold text-foreground hover:text-brand-ink hover:underline"
-          target="_blank"
-        >
-          {employee.lastname} {employee.firstname}
-        </Link>
-      );
-    },
-    enableSorting: true,
-  },
-
-  // ─── Documento (nombre + obligatorio/opcional + período + motivo de rechazo) ─
-  {
-    id: 'documentType',
-    accessorFn: (row) => row.document_types?.name ?? '',
-    meta: { title: 'Documento' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Documento" />,
-    cell: ({ row }) => (
-      <DocumentNameCell
-        name={row.original.document_types?.name}
-        mandatory={row.original.document_types?.mandatory}
-        period={row.original.period}
-        denyReason={row.original.deny_reason}
-        state={row.original.state}
-        requestedBy={row.original.requestedBy}
-        archived={row.original.notApplicable}
-      />
-    ),
-    filterFn: (row, _id, value: string[]) => {
-      const id = row.original.id_document_types;
-      if (id == null) return value.includes(NULL_FILTER_VALUE);
-      return value.includes(id);
-    },
-    enableSorting: true,
-  },
-
-  // ─── Estado ──────────────────────────────────────────────────────────────
-  {
-    id: 'state',
-    accessorKey: 'state',
-    meta: { title: 'Estado' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-    cell: ({ row }) => (
-      // "Ya no aplica": el tipo dejó de aplicarle al empleado (solo visible en su ficha)
-      <DocumentStatePill state={row.original.state} archived={row.original.notApplicable} />
-    ),
-    filterFn: (row, id, value: string[]) => {
-      const val = row.getValue(id) as string | null;
-      if (val == null) return value.includes(NULL_FILTER_VALUE);
-      return value.includes(val);
-    },
-    enableSorting: true,
-  },
-
-  // ─── Subido el ───────────────────────────────────────────────────────────
-  {
-    id: 'created_at',
-    accessorKey: 'created_at',
-    meta: { title: 'Subido el' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Subido el" />,
-    cell: ({ row }) => {
-      // Usar el log más reciente si existe, sino created_at
-      const latestLog = row.original.documents_employees_logs?.[0];
-      const date = latestLog?.updated_at ?? row.original.created_at;
-      if (row.original.isMissing || !date) return <span className="text-muted-foreground">No disponible</span>;
-      return <span className="font-mono tabular-nums">{formatArgentinaDay(date)}</span>;
-    },
-    enableSorting: true,
-  },
-
-  // ─── Afectado a ──────────────────────────────────────────────────────────
-  {
-    id: 'contractor',
-    accessorFn: (row) =>
-      row.employees?.contractor_employee
-        ?.map((ce) => ce.customers?.name ?? '')
-        .filter(Boolean)
-        .join(', ') ?? '',
-    meta: { title: 'Afectado a' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Afectado a" />,
-    cell: ({ row }) => {
-      const contractors =
-        row.original.employees?.contractor_employee?.map((ce) => ce.customers?.name ?? '').filter(Boolean) ?? [];
-
-      if (contractors.length === 0) return <Badge variant="outline">Sin afectar</Badge>;
-
-      const [first, ...rest] = contractors;
-      if (rest.length === 0) return <Badge>{first}</Badge>;
-
-      return (
-        <TooltipProvider delayDuration={100}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Badge className="cursor-pointer">
-                {first} +{rest.length}
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent className="bg-black text-white rounded-lg p-2">
-              <div className="flex flex-col gap-1">
-                {contractors.map((name) => (
-                  <span key={name}>{name}</span>
-                ))}
-              </div>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
-    },
-    filterFn: (row, _id, value: string[]) => {
-      const contractors = row.original.employees?.contractor_employee ?? [];
-      if (contractors.length === 0) return value.includes(NULL_FILTER_VALUE);
-      return contractors.some((ce) => ce.customers?.id && value.includes(ce.customers.id));
-    },
-    enableSorting: false,
-  },
-
-  // ─── Mandatorio ──────────────────────────────────────────────────────────
-  {
-    id: 'mandatory',
-    accessorFn: (row) => (row.document_types?.mandatory != null ? String(row.document_types.mandatory) : null),
-    meta: { title: 'Mandatorio' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Mandatorio" />,
-    cell: ({ row }) => {
-      const val = row.original.document_types?.mandatory;
-      if (val == null) return <span className="text-muted-foreground">-</span>;
-      return <span>{val ? 'Sí' : 'No'}</span>;
-    },
-    filterFn: (row, _id, value: string[]) => {
-      const val = row.original.document_types?.mandatory;
-      if (val == null) return value.includes(NULL_FILTER_VALUE);
-      return value.includes(String(val));
-    },
-    enableSorting: false,
-  },
-
-  // ─── Multirecurso ────────────────────────────────────────────────────────
-  {
-    id: 'multiresource',
-    accessorFn: (row) => (row.document_types?.multiresource != null ? String(row.document_types.multiresource) : null),
-    meta: { title: 'Multirecurso' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Multirecurso" />,
-    cell: ({ row }) => {
-      const val = row.original.document_types?.multiresource;
-      if (val == null) return <span className="text-muted-foreground">-</span>;
-      return <span>{val ? 'Sí' : 'No'}</span>;
-    },
-    filterFn: (row, _id, value: string[]) => {
-      const val = row.original.document_types?.multiresource;
-      if (val == null) return value.includes(NULL_FILTER_VALUE);
-      return value.includes(String(val));
-    },
-    enableSorting: false,
-  },
-
-  // ─── Período (oculta: ya se ve en la columna Documento) ───────────────────
-  {
-    id: 'period',
-    accessorKey: 'period',
-    meta: { title: 'Período' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Período" />,
-    cell: ({ row }) => <span>{row.original.period ?? '-'}</span>,
-    enableSorting: true,
-  },
-
-  // ─── Razón de rechazo (oculta: se ve en rojo en la columna Documento) ─────
-  {
-    id: 'deny_reason',
-    accessorKey: 'deny_reason',
-    meta: { title: 'Razón de rechazo' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Razón de rechazo" />,
-    cell: ({ row }) => <span className="text-sm text-muted-foreground">{row.original.deny_reason ?? '-'}</span>,
-    enableSorting: false,
-  },
-
-  // ─── Acciones ─────────────────────────────────────────────────────────────
-  {
-    id: 'actions',
-    meta: { title: '', excludeFromExport: true },
-    enableSorting: false,
-    enableHiding: false,
-    cell: ({ row }) => <ActionsCell row={row.original} />,
-  },
+  // Legajo (identidad: mono, negrita, antes del nombre) y Empleado
+  ...employeeIdentityColumns<MonthlyEmployeeDocumentListItem>((row) => row.employees),
+  // Documento (nombre + obligatorio/opcional + período + motivo de rechazo)
+  documentTypeColumn<MonthlyEmployeeDocumentListItem>('documentType', true),
+  // "Ya no aplica": el tipo dejó de aplicarle al empleado (solo visible en su ficha)
+  documentStateColumn<MonthlyEmployeeDocumentListItem>(),
+  // Usa el log más reciente si existe, sino created_at
+  uploadedAtColumn<MonthlyEmployeeDocumentListItem>((row) => row.documents_employees_logs?.[0]?.updated_at),
+  contractorColumn<MonthlyEmployeeDocumentListItem>((row) => row.employees?.contractor_employee),
+  mandatoryColumn<MonthlyEmployeeDocumentListItem>(),
+  multiresourceColumn<MonthlyEmployeeDocumentListItem>(),
+  // Período (oculta: ya se ve en la columna Documento)
+  periodColumn<MonthlyEmployeeDocumentListItem>(),
+  // Razón de rechazo (oculta: se ve en rojo en la columna Documento)
+  denyReasonColumn<MonthlyEmployeeDocumentListItem>('Razón de rechazo'),
+  actionsColumn<MonthlyEmployeeDocumentListItem>((row) => <ActionsCell row={row} />),
 ];
