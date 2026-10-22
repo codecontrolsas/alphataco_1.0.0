@@ -1,6 +1,7 @@
 'use server';
 
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { destinationSearchConditions } from '@/features/Warehouses/lib/destination-search';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -131,17 +132,7 @@ function buildWhereClause(companyId: string, state: FilterState): UnitWhere {
   if (holder) {
     and.push({
       last_movement: {
-        OR: [
-          {
-            employee: {
-              OR: [{ file: contains(holder) }, { lastname: contains(holder) }, { firstname: contains(holder) }],
-            },
-          },
-          { vehicle: { OR: [{ domain: contains(holder) }, { intern_number: contains(holder) }] } },
-          { other_equipment: { intern_number: contains(holder) } },
-          { maintenance_order: { order_number: contains(holder) } },
-          { customer: { name: contains(holder) } },
-        ],
+        OR: destinationSearchConditions(holder),
       },
     });
   }

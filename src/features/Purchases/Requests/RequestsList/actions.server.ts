@@ -1,6 +1,7 @@
 'use server';
 
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { destinationSearchConditions } from '@/features/Warehouses/lib/destination-search';
 import { DESTINATION_SELECT, destinationLabel } from '@/features/Warehouses/lib/labels';
 import { STOCK_DESTINATION_TYPES } from '@/features/Warehouses/schemas/stock-movement';
 import { Prisma } from '@/generated/prisma/client';
@@ -122,13 +123,7 @@ function buildWhereClause(scope: Scope, state: FilterState): RequestWhere {
   const dest = f[DESTINATION_FILTER]?.[0]?.trim();
   if (dest) {
     and.push({
-      OR: [
-        { employee: { OR: [{ file: contains(dest) }, { lastname: contains(dest) }, { firstname: contains(dest) }] } },
-        { vehicle: { OR: [{ domain: contains(dest) }, { intern_number: contains(dest) }] } },
-        { other_equipment: { intern_number: contains(dest) } },
-        { maintenance_order: { order_number: contains(dest) } },
-        { customer: { name: contains(dest) } },
-      ],
+      OR: destinationSearchConditions(dest),
     });
   }
 

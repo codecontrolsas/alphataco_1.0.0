@@ -1,16 +1,14 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
-import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatMoney } from '@/features/Warehouses/lib/format';
+import { DateRangeFields } from '@/shared/components/common/DateRangeFields';
 import { SectionCard } from '@/shared/components/common/SectionCard';
 import { formatDateAr } from '@/shared/lib/argentina-time';
 import { exportToExcel, type ExcelColumn } from '@/shared/lib/excel-export';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Banknote, FileSpreadsheet, TriangleAlert } from 'lucide-react';
-import moment from 'moment';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -144,22 +142,7 @@ export function SupplierAccountView({
         description="Comprobantes a pagar (conformes o aprobados), notas de crédito y órdenes de pago pagadas."
         action={
           <div className="flex flex-wrap items-end justify-end gap-2">
-            <div className="space-y-1">
-              <Label className="text-xs">Desde</Label>
-              <EnhancedDatePicker
-                date={range.from ? moment(range.from, 'YYYY-MM-DD').toDate() : undefined}
-                setDate={(d) => setRange((r) => ({ ...r, from: d ? moment(d).format('YYYY-MM-DD') : '' }))}
-                placeholder="DD/MM/AAAA"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Hasta</Label>
-              <EnhancedDatePicker
-                date={range.to ? moment(range.to, 'YYYY-MM-DD').toDate() : undefined}
-                setDate={(d) => setRange((r) => ({ ...r, to: d ? moment(d).format('YYYY-MM-DD') : '' }))}
-                placeholder="DD/MM/AAAA"
-              />
-            </div>
+            <DateRangeFields value={range} onChange={setRange} />
             <Button
               type="button"
               size="sm"

@@ -2,6 +2,7 @@
 
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { getPurchaseRequestsForMaterialRequest } from '@/features/Purchases/actions/request-queries.server';
+import { destinationSearchConditions } from '@/features/Warehouses/lib/destination-search';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -20,7 +21,6 @@ import { profileFacetOptions } from '@/shared/lib/table-facet-lookups';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { dateRangeKeys } from '@/shared/lib/table-filters';
 import {
-  containsInsensitive as contains,
   isOneOf,
   isUuidOrNull,
   parseValidatedListState,
@@ -119,13 +119,7 @@ function buildWhereClause(scope: Scope, state: FilterState): RequestWhere {
   const dest = f[DESTINATION_FILTER]?.[0]?.trim();
   if (dest) {
     and.push({
-      OR: [
-        { employee: { OR: [{ file: contains(dest) }, { lastname: contains(dest) }, { firstname: contains(dest) }] } },
-        { vehicle: { OR: [{ domain: contains(dest) }, { intern_number: contains(dest) }] } },
-        { other_equipment: { intern_number: contains(dest) } },
-        { maintenance_order: { order_number: contains(dest) } },
-        { customer: { name: contains(dest) } },
-      ],
+      OR: destinationSearchConditions(dest),
     });
   }
 
