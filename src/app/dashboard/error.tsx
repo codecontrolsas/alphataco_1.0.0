@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Logger } from '@/lib/logger';
-import { sendErrorReport } from '@/lib/utils/sendErrorReport';
+import { useSendErrorReport } from '@/shared/hooks/useSendErrorReport';
 import { AlertTriangle, Copy, Home, Loader2, Mail, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -12,7 +12,7 @@ const logger = new Logger('DashboardError');
 
 export default function DashboardError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   const [errorDetails, setErrorDetails] = useState<string>('');
-  const [sending, setSending] = useState(false);
+  const { sending, sendErrorByEmail } = useSendErrorReport(error, 'Dashboard');
 
   useEffect(() => {
     logger.error('Dashboard Error', { data: { message: error.message, digest: error.digest } });
@@ -40,30 +40,6 @@ ${error.stack || 'No stack trace available'}
       });
     } catch {
       toast.error('No se pudo copiar el error');
-    }
-  };
-
-  const sendErrorByEmail = async () => {
-    setSending(true);
-    try {
-      const result = await sendErrorReport({
-        message: error.message,
-        stack: error.stack,
-        digest: error.digest,
-        url: window.location.href,
-        userAgent: navigator.userAgent,
-        source: 'Dashboard',
-      });
-
-      if (result.success) {
-        toast.success('Reporte enviado al equipo de desarrollo');
-      } else {
-        toast.error('No se pudo enviar el reporte', { description: result.error });
-      }
-    } catch {
-      toast.error('Error al enviar el reporte');
-    } finally {
-      setSending(false);
     }
   };
 
