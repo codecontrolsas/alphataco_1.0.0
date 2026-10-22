@@ -15,26 +15,16 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { searchOrderableRequestLines } from '../../actions/order-queries.server';
 import { createPurchaseQuote, updatePurchaseQuoteDraft } from '../../actions/quotes.server';
 import { searchSupplierOptions } from '../../actions/suppliers.server';
 import { invalidatePurchases } from '../../lib/invalidate';
 import type { OrderableRequestLineOption } from '../../lib/order-query-types';
+import { lineOptionLabel, searchLineOptions } from '../../lib/orderable-line-options';
 import { purchaseQuoteFormSchema, type PurchaseQuoteFormValues } from '../../schemas/quotes';
 
 const logger = new Logger('Purchases/PurchaseQuoteForm');
 
 export type QuoteFormMode = { kind: 'create' } | { kind: 'edit'; quoteId: string; number: string };
-
-const optionLabel = (o: OrderableRequestLineOption) => `${o.requestNumber} · línea ${o.position} · ${o.itemLabel}`;
-
-async function searchLineOptions(query: string) {
-  const result = await searchOrderableRequestLines(query);
-  return {
-    items: result.items.map((item) => ({ ...item, id: item.requestLineId, label: optionLabel(item) })),
-    total: result.total,
-  };
-}
 
 interface PurchaseQuoteFormProps {
   mode: QuoteFormMode;
@@ -164,7 +154,7 @@ export function PurchaseQuoteForm({ mode, defaultValues, initialSupplierLabel, i
                       return (
                         <li key={id} className="flex items-center gap-2 p-2 text-sm">
                           <span className="min-w-0 flex-1">
-                            {line ? optionLabel(line) : 'Línea'}
+                            {line ? lineOptionLabel(line) : 'Línea'}
                             {line && (
                               <span className="ml-1 text-muted-foreground tabular-nums">
                                 · falta {formatQuantity(line.remaining)} {line.unitAbbr}

@@ -1,22 +1,18 @@
 'use client';
 
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchCombobox } from '@/features/Warehouses/components/SearchCombobox';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { Logger } from '@/lib/logger';
-import { InputFormField, TextareaFormField } from '@/shared/components/common/form-fields';
+import { DateFormField, InputFormField, TextareaFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Banknote, Loader2, Pencil, TriangleAlert, Undo2 } from 'lucide-react';
+import { Banknote } from 'lucide-react';
 import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useDeferredValue, useState } from 'react';
@@ -28,13 +24,15 @@ import { searchSupplierOptions } from '../../actions/suppliers.server';
 import { invalidatePurchases } from '../../lib/invalidate';
 import type { PaymentOrderFormData } from '../../lib/payment-query-types';
 import { paymentOrderFormSchema, type PaymentOrderFormValues } from '../../schemas/payment-orders';
-import { WITHHOLDING_TAX_LABELS, type WithholdingTax } from '../../schemas/payment-settings';
+import { type WithholdingTax } from '../../schemas/payment-settings';
+import { PaymentItemGroup, type PaymentLine } from './PaymentItemGroup';
+import { PaymentWithholdingsCard } from './PaymentWithholdingsCard';
 
 const logger = new Logger('Purchases/PaymentOrderForm');
 
 export type PaymentOrderFormMode = { kind: 'create' } | { kind: 'edit'; orderId: string; number: string };
 
-type Line = PaymentOrderFormValues['lines'][number];
+type Line = PaymentLine;
 
 const dmy = (value: string | null) => (value ? moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY') : 'Sin vencimiento');
 
@@ -162,7 +160,6 @@ export function PaymentOrderForm({
   const credits = data?.openItems.invoices.filter((i) => i.isCredit) ?? [];
   const advances = data?.openItems.advances ?? [];
   const checkDebts = data?.openItems.checkDebts ?? [];
-  const totals = preview.data?.totals;
 
   return (
     <Form {...form}>
@@ -195,25 +192,11 @@ export function PaymentOrderForm({
                 </FormItem>
               )}
             />
-            <FormField
+            <DateFormField
               control={form.control}
               name="plannedOn"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Fecha prevista de pago</FormLabel>
-                  <FormControl>
-                    <EnhancedDatePicker
-                      date={field.value ? moment(field.value, 'YYYY-MM-DD').toDate() : undefined}
-                      setDate={(d) => field.onChange(d ? moment(d).format('YYYY-MM-DD') : '')}
-                      placeholder="DD/MM/AAAA"
-                    />
-                  </FormControl>
-                  <p className="text-xs text-muted-foreground">
-                    Las retenciones se calculan para este mes. El pago se registra en el mismo mes.
-                  </p>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Fecha prevista de pago"
+              description="Las retenciones se calculan para este mes. El pago se registra en el mismo mes."
             />
           </CardContent>
         </Card>
@@ -225,7 +208,7 @@ export function PaymentOrderForm({
               <CardDescription>Tildá los comprobantes y ajustá el importe si es un pago parcial.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              <ItemGroup
+              <PaymentItemGroup
                 title="Comprobantes pendientes"
                 empty="El proveedor no tiene comprobantes a pagar."
                 items={debts.map((i) => ({
@@ -242,7 +225,7 @@ export function PaymentOrderForm({
                 onAmount={setAmount}
               />
               {checkDebts.length > 0 && (
-                <ItemGroup
+                <PaymentItemGroup
                   title="Cheques de terceros endosados y rechazados (sin retenciones)"
                   empty=""
                   items={checkDebts.map((d) => ({
@@ -260,7 +243,7 @@ export function PaymentOrderForm({
                 />
               )}
               {credits.length > 0 && (
-                <ItemGroup
+                <PaymentItemGroup
                   title="Notas de crédito para aplicar (restan)"
                   empty=""
                   items={credits.map((i) => ({
@@ -278,7 +261,7 @@ export function PaymentOrderForm({
                 />
               )}
               {advances.length > 0 && (
-                <ItemGroup
+                <PaymentItemGroup
                   title="Anticipos para aplicar (restan)"
                   empty=""
                   items={advances.map((a) => ({
@@ -352,117 +335,18 @@ export function PaymentOrderForm({
         )}
 
         {hasSomething && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Retenciones y neto a pagar</CardTitle>
-              <CardDescription>
-                Se calculan solas con la situación impositiva del proveedor. Podés corregir una indicando el motivo.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {preview.isError && (
-                <Alert variant="destructive">
-                  <TriangleAlert className="h-4 w-4" />
-                  <AlertDescription>
-                    {preview.error instanceof Error ? preview.error.message : 'No se pudo calcular la orden'}
-                  </AlertDescription>
-                </Alert>
-              )}
-              {preview.isFetching && !preview.data && (
-                <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Calculando…
-                </p>
-              )}
-              {preview.data && preview.data.withholdings.length === 0 && (
-                <p className="text-sm text-muted-foreground">No corresponde retener.</p>
-              )}
-              {preview.data?.withholdings.map((w) => (
-                <div key={w.tax} className="rounded-md border p-3 text-sm">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{WITHHOLDING_TAX_LABELS[w.tax as WithholdingTax]}</span>
-                    {w.manual && (
-                      <span className="rounded bg-amber-100 px-1.5 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                        corregida
-                      </span>
-                    )}
-                    <span className="ml-auto tabular-nums font-medium">{formatMoney(w.amount)}</span>
-                    {w.manual ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeManual(w.tax as WithholdingTax)}
-                      >
-                        <Undo2 className="mr-1 h-4 w-4" />
-                        Volver al cálculo
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setManualDraft({ amount: w.amount, reason: '' });
-                          setEditingTax(w.tax as WithholdingTax);
-                        }}
-                      >
-                        <Pencil className="mr-1 h-4 w-4" />
-                        Corregir
-                      </Button>
-                    )}
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{w.detail}</p>
-                  {editingTax === w.tax && (
-                    <div className="mt-2 grid gap-2 sm:grid-cols-[8rem_1fr_auto]">
-                      <Input
-                        aria-label="Importe corregido"
-                        inputMode="decimal"
-                        value={manualDraft.amount}
-                        onChange={(e) => setManualDraft((d) => ({ ...d, amount: e.target.value }))}
-                      />
-                      <Input
-                        aria-label="Motivo"
-                        placeholder="Motivo (obligatorio)"
-                        value={manualDraft.reason}
-                        onChange={(e) => setManualDraft((d) => ({ ...d, reason: e.target.value }))}
-                      />
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={!manualDraft.reason.trim()}
-                        onClick={() => saveManual(w.tax as WithholdingTax)}
-                      >
-                        Aplicar
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-              {totals && (
-                <dl className="ml-auto grid max-w-sm grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-sm tabular-nums">
-                  <dt className="text-muted-foreground">Comprobantes</dt>
-                  <dd className="text-right">{formatMoney(totals.invoicesTotal)}</dd>
-                  {Number(totals.advanceTotal) > 0 && (
-                    <>
-                      <dt className="text-muted-foreground">Anticipo</dt>
-                      <dd className="text-right">{formatMoney(totals.advanceTotal)}</dd>
-                    </>
-                  )}
-                  {Number(totals.creditsTotal) > 0 && (
-                    <>
-                      <dt className="text-muted-foreground">NC y anticipos aplicados</dt>
-                      <dd className="text-right">−{formatMoney(totals.creditsTotal)}</dd>
-                    </>
-                  )}
-                  <dt className="text-muted-foreground">Retenciones</dt>
-                  <dd className="text-right">−{formatMoney(totals.withholdingsTotal)}</dd>
-                  <dt className="text-base font-semibold">Neto a pagar</dt>
-                  <dd className="text-right text-base font-semibold">{formatMoney(totals.netTotal)}</dd>
-                </dl>
-              )}
-            </CardContent>
-          </Card>
+          <PaymentWithholdingsCard
+            preview={preview}
+            editingTax={editingTax}
+            manualDraft={manualDraft}
+            onManualDraftChange={setManualDraft}
+            onEdit={(tax, amount) => {
+              setManualDraft({ amount, reason: '' });
+              setEditingTax(tax);
+            }}
+            onSaveManual={saveManual}
+            onRemoveManual={removeManual}
+          />
         )}
 
         <Card>
@@ -482,66 +366,5 @@ export function PaymentOrderForm({
         </div>
       </form>
     </Form>
-  );
-}
-
-function ItemGroup({
-  title,
-  empty,
-  items,
-  kind,
-  lines,
-  lineOf,
-  onToggle,
-  onAmount,
-}: {
-  title: string;
-  empty: string;
-  items: { key: string; title: string; subtitle: string; max: string; maxLabel: string }[];
-  kind: Line['kind'];
-  lines: Line[];
-  lineOf: (key: string, kind: Line['kind']) => number;
-  onToggle: (key: string, kind: Line['kind'], amount: string, checked: boolean) => void;
-  onAmount: (key: string, kind: Line['kind'], amount: string) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <p className="text-sm font-medium">{title}</p>
-      {items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{empty}</p>
-      ) : (
-        <ul className="divide-y rounded-md border">
-          {items.map((item) => {
-            const index = lineOf(item.key, kind);
-            const selected = index >= 0;
-            const id = `pay-${kind}-${item.key}`;
-            return (
-              <li key={item.key} className="flex flex-wrap items-center gap-3 px-3 py-2">
-                <Checkbox
-                  id={id}
-                  checked={selected}
-                  onCheckedChange={(c) => onToggle(item.key, kind, item.max, c === true)}
-                />
-                <label htmlFor={id} className="min-w-0 flex-1 cursor-pointer text-sm">
-                  <span className="block">{item.title}</span>
-                  <span className="block text-xs text-muted-foreground tabular-nums">
-                    {item.subtitle} · {item.maxLabel} {formatMoney(item.max)}
-                  </span>
-                </label>
-                <Input
-                  aria-label={`Importe de ${item.title}`}
-                  inputMode="decimal"
-                  className="w-36 text-right tabular-nums"
-                  disabled={!selected}
-                  value={selected ? lines[index]?.amount ?? '' : ''}
-                  placeholder={formatMoney(item.max)}
-                  onChange={(e) => onAmount(item.key, kind, e.target.value)}
-                />
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
   );
 }

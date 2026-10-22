@@ -9,16 +9,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AMOUNT_SCALE, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { Logger } from '@/lib/logger';
-import { InputFormField } from '@/shared/components/common/form-fields';
+import { DateFormField, InputFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
@@ -151,23 +149,7 @@ export function TransferFormDialog({ open, onOpenChange, accounts, defaultFromAc
                   'Hacia',
                   accounts.filter((a) => a.id !== fromId)
                 )}
-                <FormField
-                  control={form.control}
-                  name="date"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Fecha</FormLabel>
-                      <FormControl>
-                        <EnhancedDatePicker
-                          date={field.value ? moment(field.value, 'YYYY-MM-DD').toDate() : undefined}
-                          setDate={(d) => field.onChange(d ? moment(d).format('YYYY-MM-DD') : '')}
-                          placeholder="DD/MM/AAAA"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <DateFormField control={form.control} name="date" label="Fecha" />
                 <InputFormField
                   control={form.control}
                   name="amount"

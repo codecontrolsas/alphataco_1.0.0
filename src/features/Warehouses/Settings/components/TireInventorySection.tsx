@@ -2,11 +2,11 @@
 
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { tireStatusLabels, tireTreadTypeLabels } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
 import { Logger } from '@/lib/logger';
 import { SectionCard } from '@/shared/components/common/SectionCard';
+import { InputFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -119,23 +119,14 @@ export function TireInventorySection({ groups, warehouses }: TireInventorySectio
                       .join(', ')}
                   </p>
                 </div>
-                <FormField
+                <InputFormField
                   control={form.control}
                   name={`costs.${index}.unitCost`}
-                  render={({ field }) => (
-                    <FormItem className="w-44">
-                      <FormLabel className="sr-only">Costo unitario</FormLabel>
-                      <FormControl>
-                        <Input
-                          inputMode="decimal"
-                          placeholder="Costo unitario ($)"
-                          className="tabular-nums"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Costo unitario"
+                  itemClassName="w-44"
+                  inputMode="decimal"
+                  placeholder="Costo unitario ($)"
+                  className="tabular-nums"
                 />
               </div>
             ))}

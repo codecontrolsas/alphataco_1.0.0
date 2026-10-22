@@ -9,14 +9,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Logger } from '@/lib/logger';
+import { DateFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -73,23 +72,7 @@ export function OpeningBalanceDialog({ open, onOpenChange, account, current }: O
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((v) => save.mutate(v))} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="date"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Fecha</FormLabel>
-                  <FormControl>
-                    <EnhancedDatePicker
-                      date={field.value ? moment(field.value, 'YYYY-MM-DD').toDate() : undefined}
-                      setDate={(d) => field.onChange(d ? moment(d).format('YYYY-MM-DD') : '')}
-                      placeholder="DD/MM/AAAA"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <DateFormField control={form.control} name="date" label="Fecha" />
             <FormField
               control={form.control}
               name="amount"

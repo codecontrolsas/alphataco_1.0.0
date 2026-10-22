@@ -156,32 +156,20 @@ function TaxFields({
           )}
         />
       ) : (
-        <FormField
+        <InputFormField
           control={form.control}
           name={`taxes.${index}.description`}
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="sm:sr-only">Descripción</FormLabel>
-              <FormControl>
-                <Input placeholder={kind === 'OTHER_TAX' ? 'Qué tributo es' : 'Detalle (opcional)'} {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+          label="Descripción"
+          placeholder={kind === 'OTHER_TAX' ? 'Qué tributo es' : 'Detalle (opcional)'}
         />
       )}
-      <FormField
+      <InputFormField
         control={form.control}
         name={`taxes.${index}.amount`}
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel className="sm:sr-only">Importe</FormLabel>
-            <FormControl>
-              <Input inputMode="decimal" placeholder="Importe" className="text-right tabular-nums" {...field} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
+        label="Importe"
+        inputMode="decimal"
+        placeholder="Importe"
+        className="text-right tabular-nums"
       />
       <Button
         type="button"

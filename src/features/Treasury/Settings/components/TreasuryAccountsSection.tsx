@@ -13,19 +13,17 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { Logger } from '@/lib/logger';
 import { SectionCard } from '@/shared/components/common/SectionCard';
-import { InputFormField } from '@/shared/components/common/form-fields';
+import { DateFormField, InputFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Landmark, Pencil, Plus, Power, RotateCcw, Scale, Trash2, Wallet, WalletCards } from 'lucide-react';
-import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
@@ -336,23 +334,7 @@ export function TreasuryAccountsSection({
                   <Separator />
                   <p className="text-sm font-medium">Saldo inicial (opcional)</p>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <FormField
-                      control={form.control}
-                      name="openingDate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Fecha</FormLabel>
-                          <FormControl>
-                            <EnhancedDatePicker
-                              date={field.value ? moment(field.value, 'YYYY-MM-DD').toDate() : undefined}
-                              setDate={(d) => field.onChange(d ? moment(d).format('YYYY-MM-DD') : '')}
-                              placeholder="DD/MM/AAAA"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <DateFormField control={form.control} name="openingDate" label="Fecha" />
                     <InputFormField
                       control={form.control}
                       name="openingAmount"

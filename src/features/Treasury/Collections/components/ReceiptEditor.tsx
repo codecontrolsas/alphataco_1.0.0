@@ -12,18 +12,16 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { SearchCombobox } from '@/features/Warehouses/components/SearchCombobox';
 import { Logger } from '@/lib/logger';
-import { TextareaFormField } from '@/shared/components/common/form-fields';
+import { DateFormField, TextareaFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Save, Trash2 } from 'lucide-react';
-import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
@@ -239,23 +237,7 @@ export function ReceiptEditor({
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="date"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fecha del cobro</FormLabel>
-                    <FormControl>
-                      <EnhancedDatePicker
-                        date={field.value ? moment(field.value, 'YYYY-MM-DD').toDate() : undefined}
-                        setDate={(d) => field.onChange(d ? moment(d).format('YYYY-MM-DD') : '')}
-                        placeholder="DD/MM/AAAA"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <DateFormField control={form.control} name="date" label="Fecha del cobro" />
             </div>
             {values.rates.length > 0 && (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

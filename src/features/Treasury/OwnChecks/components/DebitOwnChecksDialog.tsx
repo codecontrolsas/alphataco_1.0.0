@@ -9,15 +9,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form } from '@/components/ui/form';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AMOUNT_SCALE, amountOf, formatScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { Logger } from '@/lib/logger';
+import { DateFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -125,23 +124,7 @@ export function DebitOwnChecksDialog({ open, onOpenChange, checks, onDone }: Deb
             <p className="text-sm">
               Total <span className="font-semibold tabular-nums">{formatInCurrency(total, 'ARS')}</span>
             </p>
-            <FormField
-              control={form.control}
-              name="date"
-              render={({ field }) => (
-                <FormItem className="max-w-xs">
-                  <FormLabel>Fecha del débito</FormLabel>
-                  <FormControl>
-                    <EnhancedDatePicker
-                      date={field.value ? moment(field.value, 'YYYY-MM-DD').toDate() : undefined}
-                      setDate={(d) => field.onChange(d ? moment(d).format('YYYY-MM-DD') : '')}
-                      placeholder="DD/MM/AAAA"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <DateFormField control={form.control} name="date" label="Fecha del débito" itemClassName="max-w-xs" />
             <DialogFooter className="gap-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar

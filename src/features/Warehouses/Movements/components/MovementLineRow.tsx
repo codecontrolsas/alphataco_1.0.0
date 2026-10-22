@@ -6,25 +6,17 @@ import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
+import { InputFormField, TextareaFormField } from '@/shared/components/common/form-fields';
 import { useQuery } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useWatch, type UseFormReturn } from 'react-hook-form';
-import {
-  getMaterialAvailability,
-  searchMaterialOptions,
-  type MaterialOption,
-} from '../../actions/options.server';
+import { getMaterialAvailability, searchMaterialOptions, type MaterialOption } from '../../actions/options.server';
 import { SearchCombobox } from '../../components/SearchCombobox';
 import { formatQuantity } from '../../lib/format';
-import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
 import { TRACKING_TYPE_LABELS } from '../../lib/labels';
-import {
-  isInboundLine,
-  parseSerialNumbers,
-  type StockMovementFormValues,
-} from '../../schemas/stock-movement';
+import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
+import { isInboundLine, parseSerialNumbers, type StockMovementFormValues } from '../../schemas/stock-movement';
 import { BatchOptions, UnitPicker } from './StockPickers';
 
 interface MovementLineRowProps {
@@ -197,35 +189,24 @@ export function MovementLineRow({ form, index, canRemove, onRemove }: MovementLi
           </div>
 
           {type === 'ENTRY' && (
-            <FormField
+            <InputFormField
               control={form.control}
               name={`${path}.unitCost`}
-              render={({ field }) => (
-                <FormItem className="max-w-56">
-                  <FormLabel>Costo unitario</FormLabel>
-                  <FormControl>
-                    <Input inputMode="decimal" placeholder="0,00" className="tabular-nums" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Costo unitario"
+              itemClassName="max-w-56"
+              inputMode="decimal"
+              placeholder="0,00"
+              className="tabular-nums"
             />
           )}
 
           {tracking === 'BATCH' && inbound && (
             <div className="grid gap-3 sm:grid-cols-2">
-              <FormField
+              <InputFormField
                 control={form.control}
                 name={`${path}.batchNumber`}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Lote</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Número de lote" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                label="Lote"
+                placeholder="Número de lote"
               />
               <FormField
                 control={form.control}
@@ -253,7 +234,11 @@ export function MovementLineRow({ form, index, canRemove, onRemove }: MovementLi
                   <Select value={field.value} onValueChange={field.onChange} disabled={!available?.batches.length}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder={available?.batches.length ? 'Elegí el lote' : 'Sin lotes con stock en el depósito'} />
+                        <SelectValue
+                          placeholder={
+                            available?.batches.length ? 'Elegí el lote' : 'Sin lotes con stock en el depósito'
+                          }
+                        />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -272,18 +257,14 @@ export function MovementLineRow({ form, index, canRemove, onRemove }: MovementLi
           )}
 
           {tracking === 'SERIAL' && inbound && (
-            <FormField
+            <TextareaFormField
               control={form.control}
               name={`${path}.serialNumbers`}
-              render={({ field }) => (
-                <FormItem className="max-w-md">
-                  <FormLabel>Números de serie</FormLabel>
-                  <FormControl>
-                    <Textarea rows={3} placeholder="Uno por línea (o separados por coma)" className="font-mono text-sm" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Números de serie"
+              itemClassName="max-w-md"
+              rows={3}
+              placeholder="Uno por línea (o separados por coma)"
+              className="font-mono text-sm"
             />
           )}
 

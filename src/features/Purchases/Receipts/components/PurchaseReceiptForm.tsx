@@ -287,18 +287,11 @@ function ReceiptLineFields({ form, index, line }: { form: UseFormReturn<FormValu
         />
         {line.trackingType === 'BATCH' && (
           <>
-            <FormField
+            <InputFormField
               control={form.control}
               name={`lines.${index}.batchNumber`}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Lote</FormLabel>
-                  <FormControl>
-                    <Input placeholder="L-0001" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Lote"
+              placeholder="L-0001"
             />
             <FormField
               control={form.control}

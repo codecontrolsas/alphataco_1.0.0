@@ -3,11 +3,11 @@
 import { Button } from '@/components/ui/button';
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Logger } from '@/lib/logger';
 import { SectionCard } from '@/shared/components/common/SectionCard';
+import { InputFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
@@ -193,32 +193,20 @@ function TaxRow({
       {applies && (
         <div className="grid gap-3 sm:grid-cols-4">
           {tax === 'IIBB' && (
-            <FormField
+            <InputFormField
               control={form.control}
               name={`profiles.${tax}.rate`}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Alícuota de padrón (%)</FormLabel>
-                  <FormControl>
-                    <Input inputMode="decimal" placeholder="1,75" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Alícuota de padrón (%)"
+              inputMode="decimal"
+              placeholder="1,75"
             />
           )}
-          <FormField
+          <InputFormField
             control={form.control}
             name={`profiles.${tax}.exclusionPercentage`}
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Exclusión (%)</FormLabel>
-                <FormControl>
-                  <Input inputMode="decimal" placeholder="Sin exclusión" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+            label="Exclusión (%)"
+            inputMode="decimal"
+            placeholder="Sin exclusión"
           />
           {exclusion && (
             <>
@@ -256,18 +244,10 @@ function TaxRow({
                   </FormItem>
                 )}
               />
-              <FormField
+              <InputFormField
                 control={form.control}
                 name={`profiles.${tax}.exclusionCertificate`}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Certificado</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                label="Certificado"
               />
             </>
           )}

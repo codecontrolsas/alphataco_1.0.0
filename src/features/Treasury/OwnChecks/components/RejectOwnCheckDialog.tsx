@@ -9,14 +9,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form } from '@/components/ui/form';
 import { Logger } from '@/lib/logger';
-import { TextareaFormField } from '@/shared/components/common/form-fields';
+import { DateFormField, TextareaFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -68,23 +66,7 @@ export function RejectOwnCheckDialog({ open, onOpenChange, check }: RejectOwnChe
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((values) => save.mutate(values))} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="date"
-              render={({ field }) => (
-                <FormItem className="max-w-xs">
-                  <FormLabel>Fecha del rechazo</FormLabel>
-                  <FormControl>
-                    <EnhancedDatePicker
-                      date={field.value ? moment(field.value, 'YYYY-MM-DD').toDate() : undefined}
-                      setDate={(d) => field.onChange(d ? moment(d).format('YYYY-MM-DD') : '')}
-                      placeholder="DD/MM/AAAA"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <DateFormField control={form.control} name="date" label="Fecha del rechazo" itemClassName="max-w-xs" />
             <TextareaFormField
               control={form.control}
               name="reason"

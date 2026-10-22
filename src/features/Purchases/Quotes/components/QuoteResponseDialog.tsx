@@ -161,24 +161,14 @@ export function QuoteResponseDialog({ quote }: { quote: PurchaseQuoteDetail }) {
                         {formatQuantity(line.quantity)} {line.unitAbbr} · {line.request.number}
                       </div>
                     </div>
-                    <FormField
+                    <InputFormField
                       control={form.control}
                       name={`lines.${index}.unitPrice`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">Unitario neto</FormLabel>
-                          <FormControl>
-                            <Input
-                              inputMode="decimal"
-                              className="tabular-nums"
-                              placeholder="0,00"
-                              disabled={notQuoted}
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+                      label="Unitario neto"
+                      inputMode="decimal"
+                      className="tabular-nums"
+                      placeholder="0,00"
+                      disabled={notQuoted}
                     />
                     <FormField
                       control={form.control}
