@@ -6,7 +6,9 @@ import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/ca
 import { Form } from '@/components/ui/form';
 import { getEquipmentTypeInfo } from '@/features/Checklists/actions/checklist-queries';
 import { ChecklistGeneralInfoSection } from '@/features/Checklists/components/sections/ChecklistGeneralInfoSection';
+import { ChecklistPartsDiagramDialog } from '@/features/Checklists/components/sections/ChecklistPartsDiagramDialog';
 import { ChecklistRepairDeviationsModal } from '@/features/Checklists/components/sections/ChecklistRepairDeviationsModal';
+import { ChecklistSectionsAccordion } from '@/features/Checklists/components/sections/ChecklistSectionsAccordion';
 import { HitchEquipmentDialog } from '@/features/Checklists/components/sections/HitchEquipmentDialog';
 import { useChecklistEquipmentSync } from '@/features/Checklists/hooks/useChecklistEquipmentSync';
 import { useChecklistInvalidNavigation } from '@/features/Checklists/hooks/useChecklistInvalidNavigation';
@@ -292,6 +294,7 @@ export function NormalizedChecklistForm({
           "multiple" en vez de "single": con una sola sección abierta a la vez, Radix
           desmontaba el resto y los mensajes de error de los items pendientes no
           llegaban siquiera a existir en el DOM.
+        */}
         <ChecklistSectionsAccordion
           form={form}
           visibleSections={visibleSections}
