@@ -28,6 +28,7 @@ import {
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isUuid } from '@/shared/lib/uuid';
 import { supplierFacetOptions } from '../../lib/list-facet-lookups';
+import { parseAmountFilter } from '../../lib/list-filters';
 import { PAYMENT_ORDER_STATUS_LABELS } from '../../lib/payment-order-state-machine';
 import { getPaymentOrdersToApproveCount, getPaymentOrdersToPayCount } from '../../lib/section-counts';
 import { formatCuit } from '../../lib/supplier-ids';
@@ -113,16 +114,6 @@ async function resolveCompanyId(): Promise<string | null> {
   return getActiveCompanyId();
 }
 
-/** Importe tipeado ("1234,56" o "1234.56") -> Decimal exacto; `null` si no es un numero. */
-function parseAmount(text: string): Prisma.Decimal | null {
-  const normalized = text
-    .trim()
-    .replace(/\./g, (m, _offset, s: string) => (s.includes(',') ? '' : m))
-    .replace(',', '.');
-  if (!/^\d+(\.\d+)?$/.test(normalized)) return null;
-  return new Prisma.Decimal(normalized);
-}
-
 /** WHERE compartido entre paginated, export y facets. */
 function buildWhereClause(companyId: string, state: FilterState): OrderWhere {
   const f = state.filters;
@@ -148,7 +139,7 @@ function buildWhereClause(companyId: string, state: FilterState): OrderWhere {
   for (const column of AMOUNT_COLUMNS) {
     const text = f[column]?.[0]?.trim();
     if (!text) continue;
-    const amount = parseAmount(text);
+    const amount = parseAmountFilter(text);
     and.push(amount ? { [column]: amount } : { id: { in: [] } });
   }
 

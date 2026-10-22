@@ -30,6 +30,7 @@ import { isUuid } from '@/shared/lib/uuid';
 import { ARCA_CHECK_LABELS, SUPPLIER_INVOICE_STATUS_LABELS } from '../../lib/invoice-status';
 import { supplierInvoiceLabel } from '../../lib/invoices';
 import { supplierFacetOptions } from '../../lib/list-facet-lookups';
+import { digitsOf, parseAmountFilter, voucherNumberWhere } from '../../lib/list-filters';
 import { getInvoicesSectionCount } from '../../lib/section-counts';
 import { formatCuit } from '../../lib/supplier-ids';
 import { INVOICE_CBTE_TYPE_IDS } from './constants';
@@ -100,7 +101,6 @@ const VALID_VALUES: Record<string, (value: string) => boolean> = {
   cbte_type: (v) => (INVOICE_CBTE_TYPE_IDS as readonly number[]).includes(Number(v)),
   orders: isUuidOrNull,
 };
-const digitsOf = (value: string) => value.replace(/\D/g, '');
 
 // ============================================================================
 // HELPERS INTERNOS
@@ -118,32 +118,12 @@ function parseListState(searchParams: DataTableSearchParams) {
   return parseValidatedListState(searchParams, ALLOWED_FILTER_KEYS, VALID_VALUES);
 }
 
-/** Numero de comprobante: "00003-00012345" (punto de venta + numero) o solo el numero. Coincidencia exacta. */
-function voucherNumberWhere(text: string): InvoiceWhere | null {
-  const parts = text.split('-').map(digitsOf).filter(Boolean);
-  // Fuera de rango (punto de venta Int, numero bigint): ningun comprobante coincide
-  if (parts.some((p) => p.length > 18) || (parts.length === 2 && Number(parts[0]) > 99999)) return { id: { in: [] } };
-  if (parts.length === 2) return { sales_point: Number(parts[0]), number: BigInt(parts[1]) };
-  if (parts.length === 1) return { number: BigInt(parts[0]) };
-  return null;
-}
-
 /** Ids de proveedores de la empresa cuyo CUIT contiene los digitos (columna bigint: busqueda por texto en SQL). */
 async function supplierIdsByCuit(companyId: string, digits: string): Promise<string[]> {
   const rows = await prisma.$queryRaw<{ id: string }[]>`
     SELECT id FROM suppliers WHERE company_id = ${companyId}::uuid AND cuit::text LIKE ${`%${digits}%`}
   `;
   return rows.map((r) => r.id);
-}
-
-/** Importe tipeado ("1234,56" o "1234.56") -> Decimal exacto; `null` si no es un numero. */
-function parseAmount(text: string): Prisma.Decimal | null {
-  const normalized = text
-    .trim()
-    .replace(/\./g, (m, offset, s: string) => (s.includes(',') ? '' : m))
-    .replace(',', '.');
-  if (!/^\d+(\.\d+)?$/.test(normalized)) return null;
-  return new Prisma.Decimal(normalized);
 }
 
 /** WHERE compartido entre paginated, export y facets. */
@@ -171,7 +151,7 @@ async function buildWhereClause(companyId: string, state: FilterState): Promise<
 
   const totalText = f.total?.[0]?.trim();
   if (totalText) {
-    const amount = parseAmount(totalText);
+    const amount = parseAmountFilter(totalText);
     and.push(amount ? { total: amount } : { id: { in: [] } });
   }
 
