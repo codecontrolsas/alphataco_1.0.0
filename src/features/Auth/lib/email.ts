@@ -1,7 +1,5 @@
 import 'server-only';
 
-import type { EmailInfo } from '@/features/Auth/utils/emailTemplates';
-import { renderDocumentEmailTemplate, renderHelpEmailTemplate } from '@/features/Auth/utils/emailTemplates';
 import { sendMail } from '@/shared/lib/mail/transport';
 
 /**
@@ -13,8 +11,8 @@ import { sendMail } from '@/shared/lib/mail/transport';
  * HTML que quisiera a cualquier destinatario desde nuestro SMTP. Es el mismo agujero que se cerró
  * en `POST /api/send`, pero por la puerta de la Server Action.
  *
- * Los llamadores son server-side y fijan el destinatario: `sendHelpRequestEmail`
- * (`features/Ayuda`) y `sendErrorReport` (`lib/utils`).
+ * El único llamador es server-side y fija el destinatario: `sendErrorReport`
+ * (`lib/utils`).
  *
  * **P5**: tenía su propio `nodemailer.createTransport` — un segundo transporte SMTP con su
  * propia configuración (puerto 465 por default, `rejectUnauthorized: false`) y su propio
@@ -27,32 +25,17 @@ export type EmailOptions = {
   /** Destinatario. Lo fija SIEMPRE el código del servidor, nunca un valor que venga del cliente. */
   to: string;
   subject: string;
-  userEmail: string;
-  template?: 'document' | 'help';
-  body?: EmailInfo;
   html?: string;
   text?: string;
-  reason?: string;
 };
 
 export type SendEmailResult = { success: true } | { success: false; error: string };
 
 export async function sendEmail(options: EmailOptions): Promise<SendEmailResult> {
-  const { to, subject, userEmail, template, body, html, text, reason } = options;
-
-  let emailHtml = html;
-
-  // Si se especifica un template, usarlo
-  if (template && !html) {
-    if (template === 'document' && body) {
-      emailHtml = renderDocumentEmailTemplate(userEmail, body);
-    } else if (template === 'help') {
-      emailHtml = renderHelpEmailTemplate({ userEmail, reason, body });
-    }
-  }
+  const { to, subject, html, text } = options;
 
   // Si no hay HTML ni texto, no podemos enviar el correo
-  if (!emailHtml && !text) {
+  if (!html && !text) {
     return { success: false, error: 'Se requiere contenido HTML o texto para enviar el correo' };
   }
 
@@ -64,7 +47,9 @@ export async function sendEmail(options: EmailOptions): Promise<SendEmailResult>
 
   // `undefined`, no `''`: el emisor omite la parte que no hay (el código viejo hacía lo
   // mismo). Con `''` el mensaje sale con una parte vacía.
-  const sent = await sendMail({ to: recipients, subject, html: emailHtml, text });
+  const sent = await sendMail({ to: recipients, subject, html, text });
 
-  return sent ? { success: true } : { success: false, error: 'No se pudo enviar el correo (ver el log de shared/mail)' };
+  return sent
+    ? { success: true }
+    : { success: false, error: 'No se pudo enviar el correo (ver el log de shared/mail)' };
 }
