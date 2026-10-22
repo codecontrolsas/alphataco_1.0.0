@@ -1,27 +1,13 @@
 'use client';
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import type { ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { Logger } from '@/lib/logger';
-import { unwrapAction } from '@/shared/lib/unwrap-action';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { ConfirmReasonDialog } from '@/shared/components/common/ConfirmReasonDialog';
+import { useQueryClient } from '@tanstack/react-query';
 import { Ban, Check, Lock, PackageOpen, X, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { toast } from 'sonner';
 import {
   approveRequestAction,
   cancelRequestAction,
@@ -49,35 +35,11 @@ interface DecisionDialogProps {
 
 /** Confirmacion de un cambio de estado del pedido, con motivo cuando corresponde. */
 function DecisionDialog({ icon: Icon, destructive, motive, run, ...text }: DecisionDialogProps) {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [notes, setNotes] = useState('');
-
-  const mutation = useMutation({
-    mutationFn: async () => unwrapAction(await run(notes)),
-    onSuccess: () => {
-      toast.success(text.successMessage);
-      queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.requests });
-      queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.requestsAttention });
-      queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.requestDetail });
-      setOpen(false);
-      router.refresh();
-    },
-    onError: (error) => {
-      logger.error('Error al actualizar el pedido', { data: { error } });
-      toast.error(error instanceof Error ? error.message : 'No se pudo actualizar el pedido');
-    },
-  });
 
   return (
-    <AlertDialog
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) setNotes('');
-      }}
-    >
+    <>
       <Button
         type="button"
         variant={destructive ? 'outline' : 'default'}
@@ -87,38 +49,30 @@ function DecisionDialog({ icon: Icon, destructive, motive, run, ...text }: Decis
         <Icon className="mr-2 h-4 w-4" />
         {text.label}
       </Button>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{text.title}</AlertDialogTitle>
-          <AlertDialogDescription>{text.description}</AlertDialogDescription>
-        </AlertDialogHeader>
-        {motive && (
-          <div className="space-y-2">
-            <Label htmlFor="request-decision-notes">{motive.label}</Label>
-            <Textarea
-              id="request-decision-notes"
-              rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder={motive.placeholder}
-            />
-          </div>
-        )}
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={mutation.isPending}>Volver</AlertDialogCancel>
-          <AlertDialogAction
-            disabled={(motive && !notes.trim()) || mutation.isPending}
-            className={destructive ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : undefined}
-            onClick={(event) => {
-              event.preventDefault();
-              mutation.mutate();
-            }}
-          >
-            {mutation.isPending ? text.pendingLabel : text.confirmLabel}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+      <ConfirmReasonDialog
+        open={open}
+        onOpenChange={setOpen}
+        title={text.title}
+        description={text.description}
+        confirmLabel={text.confirmLabel}
+        pendingLabel={text.pendingLabel}
+        motive={motive}
+        destructive={destructive}
+        run={run}
+        onDone={() => {
+          queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.requests });
+          queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.requestsAttention });
+          queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.requestDetail });
+        }}
+        messages={{
+          success: text.successMessage,
+          errorFallback: 'No se pudo actualizar el pedido',
+          logError: 'Error al actualizar el pedido',
+        }}
+        logger={logger}
+        resetOnClose
+      />
+    </>
   );
 }
 
