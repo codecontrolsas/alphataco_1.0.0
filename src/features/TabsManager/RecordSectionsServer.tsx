@@ -2,7 +2,7 @@ import type { ModuleSlug } from '@/features/Permissions/permissions-map';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import type { ReactNode } from 'react';
 import { RecordSectionNav, type RecordSectionNavItem } from './components/RecordSectionNav';
-import { resolveActiveEntry } from './lib/resolve-active';
+import { buildEntryHref, resolveActiveEntry } from './lib/resolve-active';
 import type { ViewDefinition, ViewManagerServerProps } from './types';
 
 /** Una sección de una ficha (legajo, documentación, …). Igual que una vista, con ícono opcional. */
@@ -52,15 +52,7 @@ export async function RecordSectionsServer<M extends ModuleSlug = ModuleSlug>({
     );
   }
 
-  const buildHref = (value: string) => {
-    const params = new URLSearchParams();
-    for (const key of preserveParams) {
-      const current = resolvedSearchParams[key];
-      if (typeof current === 'string') params.set(key, current);
-    }
-    params.set(paramName, value);
-    return `?${params.toString()}`;
-  };
+  const buildHref = (value: string) => buildEntryHref(resolvedSearchParams, preserveParams, paramName, value);
 
   const items: RecordSectionNavItem[] = visible.map((section) => ({
     value: section.value,
