@@ -3,16 +3,15 @@
 import { Button } from '@/components/ui/button';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { EMPTY_FACET } from '@/shared/components/common/DataTable/facet-filters';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { createFacetFilters } from '@/shared/components/common/DataTable/facet-filters';
 import {
   type DataTableExportConfig,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
-  type FacetResult,
 } from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { unwrapExportResult } from '@/shared/lib/export-result';
-import { Building2, CheckCircle2, CircleOff, Landmark } from 'lucide-react';
+import { Building2, CheckCircle2, Landmark } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { OWN_CHECK_KIND_LABELS, OWN_CHECK_STATUS_LABELS } from '../../../lib/own-check-transitions';
 import { TREASURY_QUERY_KEYS } from '../../../lib/query-keys';
@@ -44,6 +43,8 @@ interface Props {
 
 const DEFAULT_VISIBLE_FILTERS = ['status', 'account', 'supplier'];
 
+const facets = createFacetFilters(getOwnCheckSingleFacet);
+
 export function _OwnChecksDataTable({
   data,
   totalRows,
@@ -53,8 +54,6 @@ export function _OwnChecksDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-  const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getOwnChecksPaginated(params), []);
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -93,74 +92,28 @@ export function _OwnChecksDataTable({
 
   const columns = useMemo(() => getColumns(), []);
 
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((c) => [c, false]));
-    return { ...defaults, ...initialColumnVisibility };
-  }, [initialColumnVisibility]);
-
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
-      {
-        columnId: 'status',
-        title: 'Estado',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getOwnCheckSingleFacet('status', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: OWN_CHECK_STATUS_VALUES.map((value) => ({
-              value,
-              label: OWN_CHECK_STATUS_LABELS[value],
-              icon: ownCheckStatusIcons[value],
-            })),
-            counts: result.counts,
-          };
-        },
-      },
-      {
-        columnId: 'account',
-        title: 'Cuenta',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getOwnCheckSingleFacet('account', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: (result.resolvedOptions ?? []).map((o) => ({ value: o.id, label: o.name ?? '', icon: Landmark })),
-            counts: result.counts,
-          };
-        },
-      },
-      {
-        columnId: 'supplier',
-        title: 'Proveedor',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getOwnCheckSingleFacet('supplier', params);
-          if (!result) return EMPTY_FACET;
-          const options = (result.resolvedOptions ?? []).map((o) => ({
-            value: o.id,
-            label: o.name ?? '',
-            icon: Building2,
-          }));
-          if ((result.counts.get(NULL_FILTER_VALUE) ?? 0) > 0) {
-            options.push({ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff });
-          }
-          return { options, counts: result.counts };
-        },
-      },
-      {
-        columnId: 'kind',
-        title: 'Tipo',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getOwnCheckSingleFacet('kind', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: OWN_CHECK_KIND_VALUES.map((value) => ({
-              value,
-              label: OWN_CHECK_KIND_LABELS[value],
-              icon: ownCheckKindIcons[value],
-            })),
-            counts: result.counts,
-          };
-        },
-      },
+      facets.fixed(
+        'status',
+        'Estado',
+        OWN_CHECK_STATUS_VALUES.map((value) => ({
+          value,
+          label: OWN_CHECK_STATUS_LABELS[value],
+          icon: ownCheckStatusIcons[value],
+        }))
+      ),
+      facets.lookup('account', 'Cuenta', Landmark),
+      facets.lookup('supplier', 'Proveedor', Building2, { label: 'Sin asignar' }),
+      facets.fixed(
+        'kind',
+        'Tipo',
+        OWN_CHECK_KIND_VALUES.map((value) => ({
+          value,
+          label: OWN_CHECK_KIND_LABELS[value],
+          icon: ownCheckKindIcons[value],
+        }))
+      ),
       { columnId: 'issue_date', title: 'Emisión', type: 'dateRange' as const },
       { columnId: 'payment_date', title: 'Fecha de pago', type: 'dateRange' as const },
       { columnId: 'debited_on', title: 'Débito', type: 'dateRange' as const },
@@ -176,10 +129,15 @@ export function _OwnChecksDataTable({
     []
   );
 
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) return initialFilterVisibility;
-    return Object.fromEntries(facetedFilters.map((f) => [f.columnId, DEFAULT_VISIBLE_FILTERS.includes(f.columnId)]));
-  }, [initialFilterVisibility, facetedFilters]);
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   const exportConfig: DataTableExportConfig<OwnCheckListItem> = useMemo(
     () => ({
@@ -209,16 +167,9 @@ export function _OwnChecksDataTable({
         columns={columns}
         data={data}
         totalRows={totalRows}
-        searchParams={searchParams}
-        tableId={tableId}
-        paramNamespace={tableId}
-        facetedFilters={facetedFilters}
-        initialColumnVisibility={mergedColumnVisibility}
-        initialFilterVisibility={mergedFilterVisibility}
-        showFilterToggle
+        {...tableProps}
         queryFn={tableQueryFn}
         queryKey={[...TREASURY_QUERY_KEYS.ownChecks]}
-        onStateChange={handleStateChange}
         // Solo los cheques EMITIDOS se pueden debitar
         enableRowSelection={canOperate ? (row) => row.original.status === 'ISSUED' : false}
         showRowSelection

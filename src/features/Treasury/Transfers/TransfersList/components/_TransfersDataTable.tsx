@@ -2,16 +2,16 @@
 
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { EMPTY_FACET } from '@/shared/components/common/DataTable/facet-filters';
+import { createFacetFilters } from '@/shared/components/common/DataTable/facet-filters';
 import {
   type DataTableExportConfig,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
-  type FacetResult,
 } from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Landmark } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { TREASURY_QUERY_KEYS } from '../../../lib/query-keys';
 import { TRANSFER_STATE_UI } from '../../../lib/status-presentation';
 import { formatArgentinaDateTime } from '../../../lib/today';
@@ -38,6 +38,8 @@ const DEFAULT_VISIBLE_FILTERS = ['date', 'from_account', 'to_account'];
 
 const STATE_VALUES = Object.keys(TRANSFER_STATE_LABELS) as (keyof typeof TRANSFER_STATE_LABELS)[];
 
+const facets = createFacetFilters(getTreasuryTransferSingleFacet);
+
 export function _TransfersDataTable({
   data,
   totalRows,
@@ -47,49 +49,24 @@ export function _TransfersDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-  const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getTreasuryTransfersPaginated(params), []);
 
   const columns = useMemo(() => getColumns({ canUpdate }), [canUpdate]);
 
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((c) => [c, false]));
-    return { ...defaults, ...initialColumnVisibility };
-  }, [initialColumnVisibility]);
-
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(() => {
-    const accountFacet =
-      (columnId: string) =>
-      async (params: DataTableSearchParams): Promise<FacetResult> => {
-        const result = await getTreasuryTransferSingleFacet(columnId, params);
-        if (!result) return EMPTY_FACET;
-        return {
-          options: (result.resolvedOptions ?? []).map((o) => ({ value: o.id, label: o.name ?? '', icon: Landmark })),
-          counts: result.counts,
-        };
-      };
-
     return [
-      { columnId: 'from_account', title: 'Origen', fetchFacet: accountFacet('from_account') },
-      { columnId: 'to_account', title: 'Destino', fetchFacet: accountFacet('to_account') },
+      facets.lookup('from_account', 'Origen', Landmark),
+      facets.lookup('to_account', 'Destino', Landmark),
       { columnId: 'date', title: 'Fecha', type: 'dateRange' as const },
-      {
-        columnId: 'state',
-        title: 'Estado',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getTreasuryTransferSingleFacet('state', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: STATE_VALUES.map((value) => ({
-              value,
-              label: TRANSFER_STATE_LABELS[value],
-              icon: TRANSFER_STATE_UI[value].icon,
-            })),
-            counts: result.counts,
-          };
-        },
-      },
+      facets.fixed(
+        'state',
+        'Estado',
+        STATE_VALUES.map((value) => ({
+          value,
+          label: TRANSFER_STATE_LABELS[value],
+          icon: TRANSFER_STATE_UI[value].icon,
+        }))
+      ),
       { columnId: 'created_at', title: 'Fecha de alta', type: 'dateRange' as const },
       { columnId: 'number', title: 'Número', type: 'text' as const, placeholder: 'Buscar por número...' },
       { columnId: 'amount', title: 'Importe', type: 'text' as const, placeholder: 'Importe exacto, ej: 1234,56' },
@@ -103,10 +80,15 @@ export function _TransfersDataTable({
     ];
   }, []);
 
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) return initialFilterVisibility;
-    return Object.fromEntries(facetedFilters.map((f) => [f.columnId, DEFAULT_VISIBLE_FILTERS.includes(f.columnId)]));
-  }, [initialFilterVisibility, facetedFilters]);
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   const exportConfig: DataTableExportConfig<TreasuryTransferListItem> = useMemo(
     () => ({
@@ -126,16 +108,9 @@ export function _TransfersDataTable({
       columns={columns}
       data={data}
       totalRows={totalRows}
-      searchParams={searchParams}
-      tableId={tableId}
-      paramNamespace={tableId}
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      showFilterToggle
+      {...tableProps}
       queryFn={tableQueryFn}
       queryKey={[...TREASURY_QUERY_KEYS.transfers]}
-      onStateChange={handleStateChange}
       searchPlaceholder="Buscar por número, notas o cuenta"
       emptyMessage="No hay transferencias"
       exportConfig={exportConfig}

@@ -1,19 +1,19 @@
 'use client';
 
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableExportConfig, type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
+import { createFacetFilters } from '@/shared/components/common/DataTable/facet-filters';
+import {
+  type DataTableExportConfig,
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+} from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { CircleOff, User } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { User } from 'lucide-react';
+import { useCallback, useMemo } from 'react';
 import { WAREHOUSE_QUERY_KEYS } from '../../../../lib/query-keys';
-import {
-  getAllDepotsForExport,
-  getDepotSingleFacet,
-  getDepotsPaginated,
-  type DepotListItem,
-} from '../actions.server';
+import { getAllDepotsForExport, getDepotSingleFacet, getDepotsPaginated, type DepotListItem } from '../actions.server';
 import { HIDDEN_COLUMNS_BY_DEFAULT, activeIcons, getColumns } from '../columns';
 
 interface Props {
@@ -27,7 +27,8 @@ interface Props {
 }
 
 const DEFAULT_VISIBLE_FILTERS = ['is_active', 'manager', 'name'];
-const ALL_FILTER_IDS = ['is_active', 'manager', 'fileNumber', 'code', 'name', 'address', 'created_at'];
+
+const facets = createFacetFilters(getDepotSingleFacet);
 
 export function _DepotsDataTable({
   data,
@@ -38,59 +39,20 @@ export function _DepotsDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-  const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getDepotsPaginated(params), []);
 
   const canUpdate = permissionsMap['almacenes:depositos:update'] === true;
   const canDelete = permissionsMap['almacenes:depositos:delete'] === true;
   const columns = useMemo(() => getColumns({ canUpdate, canDelete }), [canUpdate, canDelete]);
 
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((c) => [c, false]));
-    return { ...defaults, ...initialColumnVisibility };
-  }, [initialColumnVisibility]);
-
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) return initialFilterVisibility;
-    return Object.fromEntries(ALL_FILTER_IDS.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
-  }, [initialFilterVisibility]);
-
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
-      {
-        columnId: 'is_active',
-        title: 'Estado',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getDepotSingleFacet('is_active', params);
-          if (!result) return { options: [], counts: new Map() };
-          return {
-            options: [
-              { value: 'true', label: 'Activo', icon: activeIcons.true },
-              { value: 'false', label: 'Inactivo', icon: activeIcons.false },
-            ],
-            counts: result.counts,
-          };
-        },
-      },
-      {
-        columnId: 'manager',
-        title: 'Responsable',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getDepotSingleFacet('manager', params);
-          if (!result) return { options: [], counts: new Map() };
-          return {
-            options: [
-              // Cada opcion es un empleado: mismo icono de recurso (User).
-              ...(result.resolvedOptions?.map((o) => ({ value: o.id, label: o.name ?? '', icon: User })) ?? []),
-              ...(result.counts.has(NULL_FILTER_VALUE)
-                ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-                : []),
-            ],
-            counts: result.counts,
-          };
-        },
-      },
+      facets.fixed('is_active', 'Estado', [
+        { value: 'true', label: 'Activo', icon: activeIcons.true },
+        { value: 'false', label: 'Inactivo', icon: activeIcons.false },
+      ]),
+      // Cada opcion es un empleado: mismo icono de recurso (User).
+      facets.lookup('manager', 'Responsable', User, { label: 'Sin asignar' }),
       {
         columnId: 'fileNumber',
         title: 'Legajo responsable',
@@ -105,6 +67,16 @@ export function _DepotsDataTable({
     ],
     []
   );
+
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   const exportConfig: DataTableExportConfig<DepotListItem> = useMemo(
     () => ({
@@ -124,16 +96,9 @@ export function _DepotsDataTable({
       columns={columns}
       data={data}
       totalRows={totalRows}
-      searchParams={searchParams}
-      tableId={tableId}
-      paramNamespace={tableId}
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      showFilterToggle
+      {...tableProps}
       queryFn={tableQueryFn}
       queryKey={[...WAREHOUSE_QUERY_KEYS.depots]}
-      onStateChange={handleStateChange}
       searchPlaceholder="Buscar por código, nombre o dirección"
       emptyMessage="No hay depósitos cargados"
       exportConfig={exportConfig}

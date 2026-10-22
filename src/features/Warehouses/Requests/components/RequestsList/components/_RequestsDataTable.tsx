@@ -1,17 +1,16 @@
 'use client';
 
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { EMPTY_FACET } from '@/shared/components/common/DataTable/facet-filters';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { createFacetFilters } from '@/shared/components/common/DataTable/facet-filters';
 import {
   type DataTableExportConfig,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
-  type FacetResult,
 } from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
-import { CircleOff, User } from 'lucide-react';
+import { User } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { destinationTypeIcons } from '../../../../Movements/components/MovementsList/columns';
@@ -47,6 +46,8 @@ interface Props {
 
 const DEFAULT_VISIBLE_FILTERS = ['status', 'destination_type', 'created_at'];
 
+const facets = createFacetFilters(getRequestSingleFacet);
+
 export function _RequestsDataTable({
   data,
   totalRows,
@@ -56,8 +57,6 @@ export function _RequestsDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-  const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getRequestsPaginated(params), []);
 
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -69,73 +68,31 @@ export function _RequestsDataTable({
 
   const columns = useMemo(() => getColumns({ onOpenDetail: openDetail }), [openDetail]);
 
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((c) => [c, false]));
-    return { ...defaults, ...initialColumnVisibility };
-  }, [initialColumnVisibility]);
-
   /** FK con opciones del servidor; `icon` se aplica a todas (tipo de recurso). */
-  const makeFkFetchFacet = useCallback(
-    (columnId: string, icon?: typeof User) =>
-      async (params: DataTableSearchParams): Promise<FacetResult> => {
-        const result = await getRequestSingleFacet(columnId, params);
-        if (!result) return EMPTY_FACET;
-        return {
-          options: [
-            ...(result.resolvedOptions?.map((o) => ({ value: o.id, label: o.name ?? '', ...(icon ? { icon } : {}) })) ??
-              []),
-            ...(result.counts.has(NULL_FILTER_VALUE)
-              ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-              : []),
-          ],
-          counts: result.counts,
-        };
-      },
-    []
-  );
-
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
-      {
-        columnId: 'status',
-        title: 'Estado',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getRequestSingleFacet('status', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: MATERIAL_REQUEST_STATUSES.map((value) => ({
-              value,
-              label: REQUEST_STATUS_LABELS[value],
-              icon: requestStatusIcons[value],
-            })),
-            counts: result.counts,
-          };
-        },
-      },
-      {
-        columnId: 'destination_type',
-        title: 'Tipo de destino',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getRequestSingleFacet('destination_type', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: [
-              ...STOCK_DESTINATION_TYPES.map((value) => ({
-                value,
-                label: DESTINATION_TYPE_LABELS[value],
-                icon: destinationTypeIcons[value],
-              })),
-              ...(result.counts.has(NULL_FILTER_VALUE)
-                ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-                : []),
-            ],
-            counts: result.counts,
-          };
-        },
-      },
+      facets.fixed(
+        'status',
+        'Estado',
+        MATERIAL_REQUEST_STATUSES.map((value) => ({
+          value,
+          label: REQUEST_STATUS_LABELS[value],
+          icon: requestStatusIcons[value],
+        }))
+      ),
+      facets.fixed(
+        'destination_type',
+        'Tipo de destino',
+        STOCK_DESTINATION_TYPES.map((value) => ({
+          value,
+          label: DESTINATION_TYPE_LABELS[value],
+          icon: destinationTypeIcons[value],
+        })),
+        { label: 'Sin asignar' }
+      ),
       { columnId: 'created_at', title: 'Fecha', type: 'dateRange' as const },
-      { columnId: 'requester', title: 'Solicitante', fetchFacet: makeFkFetchFacet('requester', User) },
-      { columnId: 'decider', title: 'Decidió', fetchFacet: makeFkFetchFacet('decider', User) },
+      facets.lookup('requester', 'Solicitante', User, { label: 'Sin asignar' }),
+      facets.lookup('decider', 'Decidió', User, { label: 'Sin asignar' }),
       { columnId: 'number', title: 'Número', type: 'text' as const, placeholder: 'Buscar por número...' },
       {
         columnId: 'destination',
@@ -144,13 +101,18 @@ export function _RequestsDataTable({
         placeholder: 'Legajo, apellido, dominio, interno, orden o cliente...',
       },
     ],
-    [makeFkFetchFacet]
+    []
   );
 
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) return initialFilterVisibility;
-    return Object.fromEntries(facetedFilters.map((f) => [f.columnId, DEFAULT_VISIBLE_FILTERS.includes(f.columnId)]));
-  }, [initialFilterVisibility, facetedFilters]);
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   const exportConfig: DataTableExportConfig<RequestListItem> = useMemo(
     () => ({
@@ -173,16 +135,9 @@ export function _RequestsDataTable({
         columns={columns}
         data={data}
         totalRows={totalRows}
-        searchParams={searchParams}
-        tableId={tableId}
-        paramNamespace={tableId}
-        facetedFilters={facetedFilters}
-        initialColumnVisibility={mergedColumnVisibility}
-        initialFilterVisibility={mergedFilterVisibility}
-        showFilterToggle
+        {...tableProps}
         queryFn={tableQueryFn}
         queryKey={[...WAREHOUSE_QUERY_KEYS.requests]}
-        onStateChange={handleStateChange}
         searchPlaceholder="Buscar por número o notas"
         emptyMessage="No hay pedidos"
         exportConfig={exportConfig}

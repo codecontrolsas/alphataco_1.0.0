@@ -1,18 +1,16 @@
 'use client';
 
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { EMPTY_FACET } from '@/shared/components/common/DataTable/facet-filters';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { createFacetFilters } from '@/shared/components/common/DataTable/facet-filters';
 import {
   type DataTableExportConfig,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
-  type FacetResult,
 } from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { formatDateAr } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
-import { CircleOff } from 'lucide-react';
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, type ReactNode } from 'react';
 import { destinationTypeIcons } from '../../../../Movements/components/MovementsList/columns';
 import { DESTINATION_TYPE_LABELS } from '../../../../lib/labels';
 import { WAREHOUSE_QUERY_KEYS } from '../../../../lib/query-keys';
@@ -33,6 +31,8 @@ interface Props {
 
 const DEFAULT_VISIBLE_FILTERS = ['destination_type', 'holder', 'since'];
 
+const facets = createFacetFilters(getLoanSingleFacet);
+
 export function _LoansDataTable({
   data,
   totalRows,
@@ -43,42 +43,24 @@ export function _LoansDataTable({
   initialFilterVisibility,
   topSlot,
 }: Props) {
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-  const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getLoansPaginated(params), []);
 
   const canReturn = permissionsMap['almacenes:prestamos:create'] === true;
   const canWriteOff = permissionsMap['almacenes:prestamos:delete'] === true;
   const columns = useMemo(() => getColumns({ canReturn, canWriteOff }), [canReturn, canWriteOff]);
 
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((c) => [c, false]));
-    return { ...defaults, ...initialColumnVisibility };
-  }, [initialColumnVisibility]);
-
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
-      {
-        columnId: 'destination_type',
-        title: 'Tipo de destino',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getLoanSingleFacet('destination_type', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: [
-              ...STOCK_DESTINATION_TYPES.map((value) => ({
-                value,
-                label: DESTINATION_TYPE_LABELS[value],
-                icon: destinationTypeIcons[value],
-              })),
-              ...(result.counts.has(NULL_FILTER_VALUE)
-                ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-                : []),
-            ],
-            counts: result.counts,
-          };
-        },
-      },
+      facets.fixed(
+        'destination_type',
+        'Tipo de destino',
+        STOCK_DESTINATION_TYPES.map((value) => ({
+          value,
+          label: DESTINATION_TYPE_LABELS[value],
+          icon: destinationTypeIcons[value],
+        })),
+        { label: 'Sin asignar' }
+      ),
       {
         columnId: 'holder',
         title: 'Tenedor',
@@ -100,10 +82,15 @@ export function _LoansDataTable({
     []
   );
 
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) return initialFilterVisibility;
-    return Object.fromEntries(facetedFilters.map((f) => [f.columnId, DEFAULT_VISIBLE_FILTERS.includes(f.columnId)]));
-  }, [initialFilterVisibility, facetedFilters]);
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   const exportConfig: DataTableExportConfig<LoanListItem> = useMemo(
     () => ({
@@ -126,16 +113,9 @@ export function _LoansDataTable({
         columns={columns}
         data={data}
         totalRows={totalRows}
-        searchParams={searchParams}
-        tableId={tableId}
-        paramNamespace={tableId}
-        facetedFilters={facetedFilters}
-        initialColumnVisibility={mergedColumnVisibility}
-        initialFilterVisibility={mergedFilterVisibility}
-        showFilterToggle
+        {...tableProps}
         queryFn={tableQueryFn}
         queryKey={[...WAREHOUSE_QUERY_KEYS.loans]}
-        onStateChange={handleStateChange}
         searchPlaceholder="Buscar por material, código o número de serie"
         emptyMessage="No hay préstamos abiertos"
         exportConfig={exportConfig}

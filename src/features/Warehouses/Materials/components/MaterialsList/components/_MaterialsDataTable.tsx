@@ -1,18 +1,16 @@
 'use client';
 
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { EMPTY_FACET } from '@/shared/components/common/DataTable/facet-filters';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { createFacetFilters } from '@/shared/components/common/DataTable/facet-filters';
 import {
   type DataTableExportConfig,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
-  type FacetResult,
 } from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
-import { CircleOff } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { TRACKING_TYPE_LABELS } from '../../../../lib/labels';
 import { WAREHOUSE_QUERY_KEYS } from '../../../../lib/query-keys';
 import { STOCK_LEVEL_UI } from '../../../../lib/status-presentation';
@@ -36,18 +34,12 @@ interface Props {
 }
 
 const DEFAULT_VISIBLE_FILTERS = ['category', 'tracking_type', 'is_active'];
-const ALL_FILTER_IDS = [
-  'category',
-  'unit',
-  'tracking_type',
-  'requires_approval',
-  'below_min',
-  'is_active',
-  'code',
-  'name',
-  'description',
-  'min_stock',
-  'created_at',
+
+const facets = createFacetFilters(getMaterialSingleFacet);
+
+const boolOptions = (trueLabel: string, falseLabel: string) => [
+  { value: 'true', label: trueLabel, icon: boolIcons.true },
+  { value: 'false', label: falseLabel, icon: boolIcons.false },
 ];
 
 export function _MaterialsDataTable({
@@ -59,101 +51,32 @@ export function _MaterialsDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-  const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getMaterialsPaginated(params), []);
 
   const canUpdate = permissionsMap['almacenes:materiales:update'] === true;
   const canDelete = permissionsMap['almacenes:materiales:delete'] === true;
   const columns = useMemo(() => getColumns({ canUpdate, canDelete }), [canUpdate, canDelete]);
 
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((c) => [c, false]));
-    return { ...defaults, ...initialColumnVisibility };
-  }, [initialColumnVisibility]);
-
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) return initialFilterVisibility;
-    return Object.fromEntries(ALL_FILTER_IDS.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
-  }, [initialFilterVisibility]);
-
-  // ── fetchFacet factories ────────────────────────────────────────────────
-  const makeBoolFetchFacet = useCallback(
-    (columnId: string, trueLabel: string, falseLabel: string) =>
-      async (params: DataTableSearchParams): Promise<FacetResult> => {
-        const result = await getMaterialSingleFacet(columnId, params);
-        if (!result) return EMPTY_FACET;
-        return {
-          options: [
-            { value: 'true', label: trueLabel, icon: boolIcons.true },
-            { value: 'false', label: falseLabel, icon: boolIcons.false },
-          ],
-          counts: result.counts,
-        };
-      },
-    []
-  );
-
-  const makeFkFetchFacet = useCallback(
-    (columnId: string) =>
-      async (params: DataTableSearchParams): Promise<FacetResult> => {
-        const result = await getMaterialSingleFacet(columnId, params);
-        if (!result) return EMPTY_FACET;
-        return {
-          options: [
-            ...(result.resolvedOptions?.map((o) => ({ value: o.id, label: o.name ?? '' })) ?? []),
-            ...(result.counts.has(NULL_FILTER_VALUE)
-              ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-              : []),
-          ],
-          counts: result.counts,
-        };
-      },
-    []
-  );
-
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
-      { columnId: 'category', title: 'Categoría', fetchFacet: makeFkFetchFacet('category') },
-      { columnId: 'unit', title: 'Unidad', fetchFacet: makeFkFetchFacet('unit') },
-      {
-        columnId: 'tracking_type',
-        title: 'Tipo de control',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getMaterialSingleFacet('tracking_type', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: MATERIAL_TRACKING_TYPES.map((value) => ({
-              value,
-              label: TRACKING_TYPE_LABELS[value],
-              icon: trackingIcons[value],
-            })),
-            counts: result.counts,
-          };
-        },
-      },
-      {
-        columnId: 'requires_approval',
-        title: 'Requiere aprobación',
-        fetchFacet: makeBoolFetchFacet('requires_approval', 'Sí', 'No'),
-      },
-      {
-        columnId: 'below_min',
-        title: 'Nivel de stock',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getMaterialSingleFacet('below_min', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: [
-              // Mismos textos e íconos que el badge de la celda (agotados incluidos en "Bajo mínimo")
-              { value: 'true', label: stockLevelByBelowMin.true.label, icon: stockLevelByBelowMin.true.icon },
-              { value: 'false', label: stockLevelByBelowMin.false.label, icon: stockLevelByBelowMin.false.icon },
-            ],
-            counts: result.counts,
-          };
-        },
-      },
-      { columnId: 'is_active', title: 'Estado', fetchFacet: makeBoolFetchFacet('is_active', 'Activo', 'Inactivo') },
+      facets.lookup('category', 'Categoría', undefined, { label: 'Sin asignar' }),
+      facets.lookup('unit', 'Unidad', undefined, { label: 'Sin asignar' }),
+      facets.fixed(
+        'tracking_type',
+        'Tipo de control',
+        MATERIAL_TRACKING_TYPES.map((value) => ({
+          value,
+          label: TRACKING_TYPE_LABELS[value],
+          icon: trackingIcons[value],
+        }))
+      ),
+      facets.fixed('requires_approval', 'Requiere aprobación', boolOptions('Sí', 'No')),
+      facets.fixed('below_min', 'Nivel de stock', [
+        // Mismos textos e íconos que el badge de la celda (agotados incluidos en "Bajo mínimo")
+        { value: 'true', label: stockLevelByBelowMin.true.label, icon: stockLevelByBelowMin.true.icon },
+        { value: 'false', label: stockLevelByBelowMin.false.label, icon: stockLevelByBelowMin.false.icon },
+      ]),
+      facets.fixed('is_active', 'Estado', boolOptions('Activo', 'Inactivo')),
       { columnId: 'code', title: 'Código', type: 'text' as const, placeholder: 'Buscar por código...' },
       { columnId: 'name', title: 'Nombre', type: 'text' as const, placeholder: 'Buscar por nombre...' },
       {
@@ -166,8 +89,18 @@ export function _MaterialsDataTable({
       { columnId: 'min_stock', title: 'Stock mínimo', type: 'text' as const, placeholder: 'Valor exacto...' },
       { columnId: 'created_at', title: 'Creado', type: 'dateRange' as const },
     ],
-    [makeFkFetchFacet, makeBoolFetchFacet]
+    []
   );
+
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   const exportConfig: DataTableExportConfig<MaterialListItem> = useMemo(
     () => ({
@@ -191,16 +124,9 @@ export function _MaterialsDataTable({
       columns={columns}
       data={data}
       totalRows={totalRows}
-      searchParams={searchParams}
-      tableId={tableId}
-      paramNamespace={tableId}
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      showFilterToggle
+      {...tableProps}
       queryFn={tableQueryFn}
       queryKey={[...WAREHOUSE_QUERY_KEYS.materials]}
-      onStateChange={handleStateChange}
       searchPlaceholder="Buscar por código, nombre o descripción"
       emptyMessage="No hay materiales cargados"
       exportConfig={exportConfig}
