@@ -1,15 +1,19 @@
 'use client';
 
+import {
+  type AllRolePermissionsMap,
+  type ModulesWithTabsData,
+  type RoleWithCount,
+  type UserPermissionsData,
+  type UserRolesData,
+} from '@/features/Permissions/actions/roles.server';
 import { SectionCard } from '@/shared/components/common/SectionCard';
-import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
-import { getModulesWithTabsServer, type AllRolePermissionsMap, type ModulesWithTabsData, type RoleWithCount, type UserPermissionsData, type UserRolesData } from '@/features/Permissions/actions/roles.server';
 import { UserEquipmentTypesSection } from './components/UserEquipmentTypesSection';
 import { PermissionEditor } from './components/permission-editor/PermissionEditor';
 import { AssignedRolesCard } from './components/user-permissions/AssignedRolesCard';
 import { CleanPermissionsDialog } from './components/user-permissions/CleanPermissionsDialog';
+import { usePermissionIndex } from './hooks/usePermissionIndex';
 import { useUserPermissionEditor } from './hooks/useUserPermissionEditor';
-import { buildPermissionIndex } from './lib/permission-rules';
 
 interface UserPermissionsManagerProps {
   userId: string;
@@ -34,13 +38,7 @@ export function UserPermissionsManager({
   initialRolePermissions,
   initialModules,
 }: UserPermissionsManagerProps) {
-  const { data: modules } = useQuery({
-    queryKey: ['modules-with-tabs'],
-    queryFn: () => getModulesWithTabsServer(),
-    initialData: initialModules,
-    staleTime: 5 * 60 * 1000,
-  });
-  const index = useMemo(() => buildPermissionIndex(modules), [modules]);
+  const { modules, index } = usePermissionIndex(initialModules);
 
   const editor = useUserPermissionEditor({
     userId,
