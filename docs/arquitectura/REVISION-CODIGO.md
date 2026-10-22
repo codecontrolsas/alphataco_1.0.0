@@ -14,13 +14,13 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 | Módulo                              | Archivos | Líneas | Estado |
 | ----------------------------------- | -------: | -----: | ------ |
 | src/features/Mantenimiento          |      414 |  63539 | [x]    |
-| src/features/Empresa                |      316 |  43383 | [ ]    |
+| src/features/Empresa                |      316 |  43383 | [x]    |
 | src/features/Purchases              |      219 |  30336 | [x]    |
 | src/features/Operaciones            |      212 |  28069 | [ ]    |
 | src/features/Equipos                |      135 |  21875 | [x]    |
 | src/features/Treasury               |      183 |  21596 | [x]    |
 | src/features/Dashboard              |      173 |  21093 | [ ]    |
-| src/features/Documentacion          |      143 |  17428 | [ ]    |
+| src/features/Documentacion          |      143 |  17428 | [x]    |
 | src/features/Warehouses             |      121 |  16050 | [x]    |
 | src/features/Employees              |      107 |  15103 | [ ]    |
 | src/features/Comercial              |       95 |  12176 | [ ]    |
@@ -117,6 +117,11 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 - [x] **Mantenimiento (`src/features/Mantenimiento`):** jscpd: de 126 clones y 2.390 líneas duplicadas (3,03 %) a 124 y 2.366 (3,04 %); 22.942 → 22.428 tokens (el módulo ya estaba cerca del piso por pasadas previas; lo grande quedó sin tocar, ver pendientes). Las ~85 columnas con `titled` y ~20 `filterFn` nullable pasaron a los compartidos.
   - **Código muerto:** `Gomeria/shared/TireDiagramRenderer.tsx` (307 líneas: un renderer sin uso y un reexport de tipos; `TireDiagramHitch` pasó a `tire-diagram-utils.ts` y los 6 importadores apuntan ahí), `getCachedExistingMaintenanceOrder`, `getMaintenanceRequestActivityLogCached`, `getWorkOrderActivityLogCached`, `getGroupTypeIds`, `ORDER_NUMBER_TABS`, `FOCUS_RING`, `PrismaLike`, tipos sin uso de `MaintenanceOrders/table/columns.tsx` y de `critical-deviations-repair-modal.tsx`, `handleDescriptionChange` de `useWizardItems` y las props `onDescriptionChange` (paso 1) y `sectors` (paso 4) del asistente de órdenes, más ~25 imports sin uso.
   - Verificación: `check-types` limpio, `npm test` (1494) y `next build` compilando. No se tocaron acciones con lógica de escritura, por eso no se corrieron las suites de integración.
+- [x] **Documentación y Empresa (`src/features/Documentacion`, `src/features/Empresa`):** jscpd por módulo (sin pruebas): Documentación 38 clones y 577 líneas duplicadas (2,92 %); Empresa 196 y 3.730 (7,01 %). `knip` solo marcó dos exportaciones duplicadas (default + nombrada) y `tsc --noUnusedLocals --noUnusedParameters` encontró props, variables e imports muertos (se borraron).
+  - **Documentación:** `lists-shared/document-columns.tsx` (documento, estado, subido el, afectado a, mandatorio, multirecurso, período, motivo de rechazo, acciones, legajo y empleado) reemplaza ~900 líneas copiadas en las cuatro `columns.tsx` de empleados y equipos (permanentes y mensuales); `TiposDocumentos/components/_DocTypesDataTable.tsx` reemplaza los tres clientes de personas, equipos y empresa (una tabla con la configuración por `document_applies`); las cuatro tablas de documentos pasan a `useServerTableView` y se borró `useDocumentListTable`.
+  - **Empresa:** `components/catalog-columns.tsx` (`nameColumn`, `activeStatusColumn`, `createdAtColumn`, `editActionColumn`, `RowLinkButton`) en 12 `columns.tsx` de catálogos; 11 clientes `_XDataTable` pasan a `useServerTableView` y al nuevo `Permissions/hooks/usePermissionChecker.ts`; `titled` reemplaza 161 encabezados repetidos en Empresa y Documentación.
+  - **Código muerto:** props `expires` (Eliminar/Reemplazar documento) e `id` (Reemplazar), `CLIENT_SELECT`, `nameMap`, variables y estado sin uso (`banWithEmployee`, `watch`, `setValue`, `reset`, `checklistsError`, `logger`).
+  - Verificación: `check-types` limpio, `npm test` (1494) y `next build` compilando. No se tocó lógica de acciones de escritura, por eso no se corrieron las suites de integración.
 
 ## En curso / siguiente
 
@@ -156,3 +161,14 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 - Mantenimiento: `Gomeria/Marcas` y `Gomeria/Tipos` (`_MarcasDataTable`/`_TiposDataTable`, columnas y `*-list.server.ts`, ~100 + 70 líneas) son el mismo "catálogo con activar/desactivar"; y `Gomeria/shared/facet-helpers.ts` repite lo de `createFacetFilters`. `OrderManagement/actions/queries.server.ts` (85 y 55 líneas internas), `NuevoPedido/actions/orders.server.ts` vs `requests.server.ts` (~47 líneas repetidas) y `ApprovalInbox/actions/actionsServer.ts` (633 líneas) piden extraer helpers de consulta con sus pruebas de integración.
 - Archivos de Mantenimiento por encima de ~600 líneas que no se partieron: `MaintenanceOrderReportLayout.tsx` (1.169), `ManualRepairsInput.tsx` (860), `truck-geometry.ts` (758), `ServiceOrderWizard.tsx` (701), `WorkshopSectorTasksTable/actions.server.ts` (698).
 - `Empresa/Clientes/lib/status-config.ts` tiene su propio `conditionIcons`/`conditionVariants`, igual a `Equipos/lib/condition-config.ts`.
+
+- **Documentación, `mode` sin uso:** `resolveDocumentTypeAccess` (`TiposDocumentos/lib/document-type-policy.ts`) y `catalog-scope.ts` de Empresa/Equipos reciben `mode` y no lo leen; lo pasan sus pruebas. Se dejó para no editar pruebas.
+- **Empresa, `company_id` sin uso:** `createDiagramType` (`RRHH/DiagramTypes/actions.server.ts`) llama a `getActiveCompanyId()` y no usa el resultado (puede lanzar sin empresa activa). Se dejó la llamada.
+- **Empresa, nombre de fila nulo:** el nombre accesible del botón "Editar" de puestos decía "Editar null" con nombre nulo; se conserva.
+
+## Pendiente detectado en Documentación y Empresa
+
+- `usePermissionChecker` solo se aplicó en las tablas de catálogos de Empresa; otros ~40 archivos (Clothing, Employees, Mantenimiento/Gomeria, Operaciones, Formularios, Dashboard, Clientes, Usuarios) siguen armando `hasPermission` a mano.
+- Clientes `_XDataTable` de Empresa que no se migraron a `useServerTableView`: `EquipmentOwner`, `VehiclesByOwner`, `Customers`, `ExternalApiClients`, `Users`, `CustomerEmployees` y `CustomerEquipment` (calculan la visibilidad de filtros desde los filtros o con lista propia).
+- Formularios de catálogo de Empresa (`EquipmentBrandForm`, `CostCenterForm`, `ContractTypeForm`, `DiagramTypeForm`, `TalleresForm`, `SectoresForm`: 40 a 78 líneas repetidas cada par), acciones `*.server.ts` de catálogos (`CostCenter`, `Hierarchy`, `Positions`, `WorkDiagrams`, 20 a 27 líneas), modales `Add*Modal` de CCT y skeletons de tabla de RRHH/Equipos: sin extraer.
+- Skeletons de Documentación (`Monthly*`/`*Permanent*DocumentsSkeleton`) y `_EmployeeConditions`/`_EquipmentConditions` repiten 20 a 30 líneas; `_DocumentTypeFormModal.tsx` (627) y `documentConditions.ts` (599) siguen sin partir.
