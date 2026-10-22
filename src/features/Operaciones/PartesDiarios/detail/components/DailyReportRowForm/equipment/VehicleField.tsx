@@ -6,10 +6,11 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { Check, ChevronsUpDown, X } from 'lucide-react';
+import { Check, ChevronsUpDown } from 'lucide-react';
 import { UseFormReturn } from 'react-hook-form';
 import type { VehicleForForm } from '../../../form-data.server';
 import type { DailyReportRowFormValues } from '../schema';
+import { ChipBadge, EquipmentChip, toggleId } from './EquipmentChip';
 
 interface VehicleFieldProps {
   form: UseFormReturn<DailyReportRowFormValues>;
@@ -64,12 +65,12 @@ export function VehicleField({ form, vehicles, selectedCustomerId, disabled = fa
                     {selectedCustomerId && (
                       <div className="px-3 py-1.5 text-xs text-muted-foreground space-y-1">
                         <p>
-                          Los equipos en <span className="text-warn-subtle-foreground font-medium">naranja</span> no están
-                          asignados al cliente.
+                          Los equipos en <span className="text-warn-subtle-foreground font-medium">naranja</span> no
+                          están asignados al cliente.
                         </p>
                         <p>
-                          Los equipos en <span className="text-danger-subtle-foreground font-medium">rojo</span> tienen problemas de
-                          condición.
+                          Los equipos en <span className="text-danger-subtle-foreground font-medium">rojo</span> tienen
+                          problemas de condición.
                         </p>
                       </div>
                     )}
@@ -103,15 +104,10 @@ export function VehicleField({ form, vehicles, selectedCustomerId, disabled = fa
                                   <CommandItem
                                     value={vehicle.domain ?? ''}
                                     key={vehicle.id}
-                                    onSelect={() => {
-                                      const currentValues = field.value ?? [];
-                                      const newValues = currentValues.includes(vehicle.id)
-                                        ? currentValues.filter((id) => id !== vehicle.id)
-                                        : [...currentValues, vehicle.id];
-                                      field.onChange(newValues);
-                                    }}
+                                    onSelect={() => field.onChange(toggleId(field.value, vehicle.id))}
                                     className={cn(
-                                      hasConditionIssue && 'bg-danger-subtle text-danger-subtle-foreground hover:bg-danger-subtle',
+                                      hasConditionIssue &&
+                                        'bg-danger-subtle text-danger-subtle-foreground hover:bg-danger-subtle',
                                       !isAssigned &&
                                         !hasConditionIssue &&
                                         'bg-warn-subtle text-warn-subtle-foreground hover:bg-warn-subtle'
@@ -166,9 +162,7 @@ export function VehicleField({ form, vehicles, selectedCustomerId, disabled = fa
               {field.value?.map((vehicleId) => {
                 const vehicle = vehicles.find((v) => v.id === vehicleId);
                 if (!vehicle) return null;
-                const isAssigned = vehicle.contractor_equipment?.some(
-                  (ce) => ce.customers?.id === selectedCustomerId
-                );
+                const isAssigned = vehicle.contractor_equipment?.some((ce) => ce.customers?.id === selectedCustomerId);
                 const condition = (vehicle.condition ?? 'operativo') as string;
                 const hasConditionIssue = ['no operativo', 'en reparacion'].includes(condition);
                 const conditionLabel =
@@ -179,46 +173,22 @@ export function VehicleField({ form, vehicles, selectedCustomerId, disabled = fa
                       : null;
 
                 return (
-                  <div
+                  <EquipmentChip
                     key={vehicleId}
-                    className={cn(
-                      'text-xs px-2 py-1 rounded-md flex items-center gap-1',
+                    className={
                       hasConditionIssue
                         ? 'border border-danger/40 bg-danger-subtle text-danger-subtle-foreground'
                         : isAssigned
                           ? 'bg-brand-subtle text-brand-subtle-foreground'
                           : 'border border-warn/40 bg-warn-subtle text-warn-subtle-foreground'
-                    )}
+                    }
+                    label={vehicle.domain ?? vehicle.serie ?? ''}
+                    removeName={vehicle.domain ?? vehicle.serie ?? 'equipo'}
+                    onRemove={() => field.onChange((field.value ?? []).filter((id) => id !== vehicleId))}
                   >
-                    {vehicle.domain ?? vehicle.serie}
-                    {hasConditionIssue && (
-                      <Badge
-                        variant="outline"
-                        className="ml-1 border-danger/40 bg-danger-subtle text-danger-subtle-foreground text-[10px] px-1 py-0"
-                      >
-                        {conditionLabel}
-                      </Badge>
-                    )}
-                    {!isAssigned && (
-                      <Badge
-                        variant="outline"
-                        className="ml-1 border-warn/40 bg-warn-subtle text-warn-subtle-foreground text-[10px] px-1 py-0"
-                      >
-                        No asignado
-                      </Badge>
-                    )}
-                    <button
-                      type="button"
-                      aria-label={`Quitar ${vehicle.domain ?? vehicle.serie ?? 'equipo'}`}
-                      onClick={() => {
-                        const newValues = (field.value ?? []).filter((id) => id !== vehicleId);
-                        field.onChange(newValues);
-                      }}
-                      className="ml-1 rounded-sm hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
+                    {hasConditionIssue && <ChipBadge tone="danger">{conditionLabel}</ChipBadge>}
+                    {!isAssigned && <ChipBadge tone="warn">No asignado</ChipBadge>}
+                  </EquipmentChip>
                 );
               })}
             </div>
