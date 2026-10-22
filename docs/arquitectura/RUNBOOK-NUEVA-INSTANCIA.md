@@ -4,11 +4,11 @@ Estado de cada paso: **[hoy]** existe y funciona, **[con falla]** existe pero ti
 
 ## 1. Qué se clona, qué se crea y qué se comparte
 
-| | Contenido |
-|---|---|
+|                                 | Contenido                                                                                                                                                                         |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Se clona** (repo del cliente) | Código completo, Dockerfile, compose, Caddyfile, workflows, esquema Prisma, migraciones y seed, tests y `e2e/`, historia de git con `upstream`, y la ficha `instance.yml` (nueva) |
-| **Se crea nuevo por cliente** | VPS y proyecto en Dokploy, PostgreSQL con base vacía, bucket de MinIO, secretos, dominio y TLS, imagen propia, primer admin, jobs, backups, registro para la app móvil |
-| **Se comparte** | Repo base, repo móvil y app genérica, CI y workflows reutilizables, monitoreo central, proyecto de Expo para push |
+| **Se crea nuevo por cliente**   | VPS y proyecto en Dokploy, PostgreSQL con base vacía, bucket de MinIO, secretos, dominio y TLS, imagen propia, primer admin, jobs, backups, registro para la app móvil            |
+| **Se comparte**                 | Repo base, repo móvil y app genérica, CI y workflows reutilizables, monitoreo central, proyecto de Expo para push                                                                 |
 
 ## 2. Alta de un cliente nuevo
 
@@ -25,8 +25,9 @@ Objetivo: `scripts/instance/new.sh <slug>` **[a construir]**. Mientras tanto, es
 3. **Secretos y variables** **[hoy, manual]:** se generan con `openssl rand` y se cargan en GitHub (secrets y variables) y en Dokploy. Nombres de variables (sin valores):
    - GitHub secrets: `REGISTRY_PASSWORD`, `DOKPLOY_DEPLOY_WEBHOOK`.
    - GitHub variables: `REGISTRY_USERNAME`, `REGISTRY_HOST` y `IMAGE_NAME` (propios de cada cliente para no pisar el tag `:main` de otro en el mismo registro), `DOKPLOY_HEALTH_URL`, `NEXT_PUBLIC_BASE_URL` (obligatoria), `NEXT_PUBLIC_PROJECT_URL`, `NEXT_PUBLIC_POSTHOG_*`, `NEXT_PUBLIC_SHOW_LOGS`, `CI_RUNNER`.
-   - Runtime en Dokploy: `DATABASE_URL`, `DIRECT_URL`, `BETTER_AUTH_SECRET`, `S3_*`, `JOBS_TOKEN`, `SMTP_*`, `EMAIL_FROM_NAME`, `FISCAL_SECRETS_KEY`, `ARCA_MODE`, `ARCA_ALLOW_PRODUCTION`, `RUN_SEED`, `SEED_COMPANY_NAME` (y las de integraciones que use el cliente).
+   - Runtime en Dokploy: `DATABASE_URL`, `DIRECT_URL`, `BETTER_AUTH_SECRET`, `S3_*`, `JOBS_TOKEN`, `ADMIN_STATUS_TOKEN`, `SMTP_*`, `EMAIL_FROM_NAME`, `FISCAL_SECRETS_KEY`, `ARCA_MODE`, `ARCA_ALLOW_PRODUCTION`, `RUN_SEED`, `SEED_COMPANY_NAME` (y las de integraciones que use el cliente).
    - Plantilla: `.env.docker.example`. **Los valores no se guardan en el repo.**
+   - **`ADMIN_STATUS_TOKEN`** (solo lectura, para `GET /api/admin/v1/status`): distinto de `JOBS_TOKEN`; se genera con `openssl rand -base64 32`. **Cargar el mismo valor en TaskApp → instancia → token de estado** (sala de control). Sin esta variable el endpoint responde 401 a todos y la sala de control muestra la sonda como no disponible. Para rotarlo: generar uno nuevo, cargarlo en Dokploy, redeployar y cargarlo en TaskApp.
 4. **VPS [manual]:** contratar, instalar Dokploy (o sumarla como servidor remoto) y dejar el acceso por SSH.
 5. **DNS [manual]:** registro A del dominio hacia la IP. TLS automático.
 6. **Dokploy [hoy, manual; a construir por API]:** proyecto, PostgreSQL, MinIO, aplicación (provider Docker, hace pull de `:main`) y dominio. **Almacenamiento:** usar RustFS fijado (`rustfs/rustfs:1.0.3`), no MinIO (su imagen oficial ya no se puede bajar). Receta del servicio en `docs/deploy/runbook.md` ("Almacenamiento S3"). El webhook de deploy se guarda como secret `DOKPLOY_DEPLOY_WEBHOOK`.
@@ -58,17 +59,17 @@ Objetivo: `scripts/instance/new.sh <slug>` **[a construir]**. Mientras tanto, es
 
 ## 4. Servicios de una instancia
 
-| Servicio | Función | Estado |
-|---|---|---|
-| `caddy` | Entrada, TLS y rutas | [hoy] |
-| `app` (Next) | Web, server actions, archivos y endpoints de jobs | [hoy] |
-| `api` | `/api/mobile/v1` (misma imagen, otro proceso) | [a construir] |
-| `worker` | Jobs programados; con la app, outbox y push | [hoy como `cron`] |
-| `sync` | Datos offline de la app | [a construir, opcional] |
-| `postgres` | Datos, historial por triggers, sesiones, outbox | [hoy] |
-| `storage` (RustFS) | Archivos y fotos (buckets privados; los crea `ensure-buckets` al arrancar la app) | [hoy; reemplaza a MinIO] |
-| `redis` | Límite de intentos compartido, colas, avisos en vivo | [opcional; no se usa hoy] |
-| backup | `pg_dump` + copia del bucket fuera de la VPS | [a construir] |
+| Servicio           | Función                                                                           | Estado                    |
+| ------------------ | --------------------------------------------------------------------------------- | ------------------------- |
+| `caddy`            | Entrada, TLS y rutas                                                              | [hoy]                     |
+| `app` (Next)       | Web, server actions, archivos y endpoints de jobs                                 | [hoy]                     |
+| `api`              | `/api/mobile/v1` (misma imagen, otro proceso)                                     | [a construir]             |
+| `worker`           | Jobs programados; con la app, outbox y push                                       | [hoy como `cron`]         |
+| `sync`             | Datos offline de la app                                                           | [a construir, opcional]   |
+| `postgres`         | Datos, historial por triggers, sesiones, outbox                                   | [hoy]                     |
+| `storage` (RustFS) | Archivos y fotos (buckets privados; los crea `ensure-buckets` al arrancar la app) | [hoy; reemplaza a MinIO]  |
+| `redis`            | Límite de intentos compartido, colas, avisos en vivo                              | [opcional; no se usa hoy] |
+| backup             | `pg_dump` + copia del bucket fuera de la VPS                                      | [a construir]             |
 
 Diagrama: `diagramas/mapa-instancia.html` y `diagramas/arquitectura-instancias.html`.
 
@@ -80,8 +81,8 @@ base: v1.4.1
 dominio: gestion.acme.com
 modulos: [operaciones, mantenimiento, almacenes, documentacion]
 mobile:
-  enabled: true     # false: sin api ni sync
-  offline: true     # false: solo online
+  enabled: true # false: sin api ni sync
+  offline: true # false: solo online
   push: true
 vps: { cpu: 4, ram_gb: 8 }
 backups: diario
