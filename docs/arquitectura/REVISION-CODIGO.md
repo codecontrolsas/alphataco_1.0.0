@@ -79,6 +79,14 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 
 1296 clones, 23.666 líneas duplicadas (4,9 %) antes de empezar. Por familia: columnas de DataTable (5.786 líneas), acciones `*.server.ts` (5.199), clientes `_XDataTable` (3.837), formularios (1.889), skeletons (1.718), diálogos (893), secciones (760). Pares de módulos con más código en común: Purchases↔Warehouses (1.020), Purchases↔Treasury (600), Treasury↔Warehouses (305), Documentacion↔Equipos (274).
 
+## Guion por módulo (lo que hace cada pasada)
+
+1. **Leer** todos los archivos del módulo (carpeta por carpeta). Los clones de \`jscpd\` que lo tocan están en el scratchpad del loop (\`mods/<Modulo>.txt\`); los números de línea cambiaron con los refactors anteriores: volver a medir con \`npx --yes jscpd@4 <ruta> --min-tokens 60 --min-lines 8 --ignore "**/generated/**,**/*.test.*" --reporters console\`.
+2. **Hallazgos, en este orden:** (a) código muerto: archivos, componentes, props, ramas y funciones sin uso (verificar con \`grep\`/LSP; \`knip\` en \`/tmp/knipdir\`); (b) duplicados, entre módulos primero: extraer a UN módulo compartido (\`src/shared/...\` si lo usan varios módulos, \`<Modulo>/shared\` si solo uno) y unificar TODOS los usos; (c) SRP: archivos de más de ~400 líneas o funciones de más de ~80 con varias responsabilidades; (d) DIP: lógica de negocio que depende de \`next/*\`, de la sesión o de \`prisma\` global (recibir el contexto/cliente por parámetro); (e) OCP: \`if/switch\` repetidos por tipo (tabla de configuración o mapa); (f) ISP: props o interfaces enormes; (g) tipos manuales que deben inferirse; (h) estados de carga/vacío/error, accesibilidad y reglas de \`.claude/rules/*\` en lo que se toque.
+3. **Reglas duras:** sin cambios de comportamiento visible; sin barriles (nada de \`index.ts\` que reexporte); \`'use server'\` solo exporta funciones async; código en inglés y comentarios/UI en español; sin tests nuevos (los existentes tienen que seguir pasando); no tocar migraciones ni el contrato de \`/api/mobile/v1\`.
+4. **Verificar:** \`rm -f tsconfig.tsbuildinfo && NODE_OPTIONS=--max-old-space-size=8192 npm run check-types\` (0 errores) y \`npm test\` (1494 pasan); si se tocó una acción con pruebas de integración, correr esa suite contra un Postgres descartable (\`docker run postgres:16\`, \`prisma migrate deploy\`, \`node scripts/seed-company.ts --name X\`, \`node scripts/seed-auth-fixtures.ts\`).
+5. **Commits** de una línea, sin atribución, **sin empujar**. Al final marcar la casilla del módulo en la tabla de arriba y anotar abajo qué se hizo, qué se borró (líneas) y qué quedó pendiente o necesita decisión.
+
 ## Hecho
 
 - [x] **Código muerto, pasada 3:** 44 archivos huérfanos (selectores antiguos del parte diario, secciones duplicadas de Checklists, kit de UI sin uso, utilidades legacy) y 4 más tras quitar los barriles (`TabsManager*`, `iso/react/live`), más ~105 exportaciones y tipos sin uso.
