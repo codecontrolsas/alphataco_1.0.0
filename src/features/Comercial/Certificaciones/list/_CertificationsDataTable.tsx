@@ -3,12 +3,18 @@
 import { Button } from '@/components/ui/button';
 import { certification_status } from '@/generated/prisma/enums';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import {
+  createFacetFilters,
+  dateRangeFilter,
+  enumFilterOptions,
+  textFilter,
+} from '@/shared/components/common/DataTable/facet-filters';
+import type { DataTableFacetedFilterConfig, DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { formatAmountText } from '@/shared/utils/amount-text';
-import { CircleOff, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import type { CertificationPermissions } from '../lib/permissions';
@@ -47,6 +53,10 @@ interface CertificationsDataTableProps {
 /** Solo 3 filtros visibles de entrada; el resto se activa desde el toggle de filtros. */
 const DEFAULT_VISIBLE_FILTERS = ['status', 'customer', 'period'];
 
+const UNASSIGNED = { label: 'Sin asignar' };
+
+const facets = createFacetFilters(getCertificationSingleFacet);
+
 const DEFAULT_SORTING = [{ id: 'period', desc: true }];
 
 const formatTimestamp = (value: unknown) => (value ? formatArgentinaDateTime(value as string) : '');
@@ -78,95 +88,45 @@ export default function _CertificationsDataTable({
     [canViewPrices, openDetail]
   );
 
-  // ─── Client-side navigation ────────────────────────────────────────────────
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-  const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getCertificationsPaginated(params), []);
 
-  // ─── Visibilidad: preferencias guardadas > defaults ────────────────────────
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults: Record<string, boolean> = {};
-    for (const col of HIDDEN_COLUMNS_BY_DEFAULT) defaults[col] = false;
-    return { ...defaults, ...initialColumnVisibility };
-  }, [initialColumnVisibility]);
-
-  // ─── fetchFacet factories (lazy-load por filtro) ───────────────────────────
-  const makeEnumFetchFacet = useCallback(
-    (columnId: string, options: FacetResult['options']) =>
-      async (params: DataTableSearchParams): Promise<FacetResult> => {
-        const result = await getCertificationSingleFacet(columnId, params);
-        if (!result) return { options: [], counts: new Map<string, number>() };
-        return { options, counts: result.counts };
-      },
-    []
-  );
-
-  const makeFkFetchFacet = useCallback(
-    (columnId: string) =>
-      async (params: DataTableSearchParams): Promise<FacetResult> => {
-        const result = await getCertificationSingleFacet(columnId, params);
-        if (!result) return { options: [], counts: new Map() };
-        return {
-          options: [
-            ...(result.resolvedOptions?.map((o) => ({ value: o.id, label: o.name ?? '' })) ?? []),
-            ...(result.counts.has(NULL_FILTER_VALUE)
-              ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-              : []),
-          ],
-          counts: result.counts,
-        };
-      },
-    []
-  );
-
-  // ─── Filtros ───────────────────────────────────────────────────────────────
+  // ─── Filtros (lazy-load por filtro) ────────────────────────────────────────
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
-      {
-        columnId: 'status',
-        title: 'Estado',
-        fetchFacet: makeEnumFetchFacet(
-          'status',
-          Object.values(certification_status).map((value) => ({
-            value,
-            label: CERTIFICATION_STATUS_LABELS[value],
-            icon: statusIcons[value],
-          }))
-        ),
-      },
-      { columnId: 'customer', title: 'Cliente', fetchFacet: makeFkFetchFacet('customer') },
-      { columnId: 'period', title: 'Período', type: 'dateRange' as const },
-      { columnId: 'contract', title: 'Contrato', fetchFacet: makeFkFetchFacet('contract') },
-      { columnId: 'currency', title: 'Moneda', fetchFacet: makeFkFetchFacet('currency') },
+      facets.fixed(
+        'status',
+        'Estado',
+        enumFilterOptions(Object.values(certification_status), CERTIFICATION_STATUS_LABELS, statusIcons)
+      ),
+      facets.lookup('customer', 'Cliente', undefined, UNASSIGNED),
+      dateRangeFilter('period', 'Período'),
+      facets.lookup('contract', 'Contrato', undefined, UNASSIGNED),
+      facets.lookup('currency', 'Moneda', undefined, UNASSIGNED),
 
       // ── Texto ──
-      { columnId: 'number', title: 'Número', type: 'text' as const, placeholder: 'Ej: CERT-2026-0001...' },
-      ...(canViewPrices
-        ? [{ columnId: 'total', title: 'Total', type: 'text' as const, placeholder: 'Importe exacto, ej: 1234,56' }]
-        : []),
-      { columnId: 'notes', title: 'Observaciones', type: 'text' as const, placeholder: 'Buscar en observaciones...' },
-      {
-        columnId: 'voided_reason',
-        title: 'Motivo de anulación',
-        type: 'text' as const,
-        placeholder: 'Buscar en el motivo...',
-      },
+      textFilter('number', 'Número', 'Ej: CERT-2026-0001...'),
+      ...(canViewPrices ? [textFilter('total', 'Total', 'Importe exacto, ej: 1234,56')] : []),
+      textFilter('notes', 'Observaciones', 'Buscar en observaciones...'),
+      textFilter('voided_reason', 'Motivo de anulación', 'Buscar en el motivo...'),
 
       // ── Fechas ──
-      { columnId: 'issued_at', title: 'Fecha de emisión', type: 'dateRange' as const },
-      { columnId: 'confirmed_at', title: 'Fecha de confirmación', type: 'dateRange' as const },
-      { columnId: 'voided_at', title: 'Fecha de anulación', type: 'dateRange' as const },
-      { columnId: 'created_at', title: 'Fecha de creación', type: 'dateRange' as const },
+      dateRangeFilter('issued_at', 'Fecha de emisión'),
+      dateRangeFilter('confirmed_at', 'Fecha de confirmación'),
+      dateRangeFilter('voided_at', 'Fecha de anulación'),
+      dateRangeFilter('created_at', 'Fecha de creación'),
     ],
-    [makeEnumFetchFacet, makeFkFetchFacet, canViewPrices]
+    [canViewPrices]
   );
 
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    return Object.fromEntries(facetedFilters.map((f) => [f.columnId, DEFAULT_VISIBLE_FILTERS.includes(f.columnId)]));
-  }, [initialFilterVisibility, facetedFilters]);
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
@@ -177,19 +137,12 @@ export default function _CertificationsDataTable({
         columns={columns}
         data={data}
         totalRows={totalRows}
-        searchParams={searchParams}
-        tableId={tableId}
-        paramNamespace={tableId}
-        facetedFilters={facetedFilters}
-        initialColumnVisibility={mergedColumnVisibility}
-        initialFilterVisibility={mergedFilterVisibility}
+        {...tableProps}
         initialSorting={DEFAULT_SORTING}
         showSearch
         searchPlaceholder="Buscar por número, cliente o contrato..."
-        showFilterToggle
         queryFn={tableQueryFn}
         queryKey={CERTIFICATIONS_LIST_QUERY_KEY}
-        onStateChange={handleStateChange}
         emptyMessage="Todavía no hay certificaciones. Se arma una eligiendo contrato y período."
         data-testid="certifications-table"
         toolbarActions={

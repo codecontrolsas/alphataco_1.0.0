@@ -2,15 +2,20 @@
 
 import { arca_environment, invoice_status } from '@/generated/prisma/enums';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import {
+  createFacetFilters,
+  dateRangeFilter,
+  enumFilterOptions,
+  textFilter,
+} from '@/shared/components/common/DataTable/facet-filters';
+import type { DataTableFacetedFilterConfig, DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { CBTE_TYPES, type CbteTypeId } from '@/shared/lib/arca/catalogs';
 import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { formatAmountText } from '@/shared/utils/amount-text';
-import { CircleOff } from 'lucide-react';
 import moment from 'moment';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { INVOICE_STATUS_LABELS } from '../lib/invoice-state-machine';
 import { cbteLabel } from '../lib/invoice-type';
 import {
@@ -46,22 +51,9 @@ interface InvoicesDataTableProps {
 /** Solo 3 filtros visibles de entrada; el resto se activa desde el toggle de filtros. */
 const DEFAULT_VISIBLE_FILTERS = ['status', 'cbte_type', 'customer'];
 
-const ALL_FILTER_IDS = [
-  'status',
-  'cbte_type',
-  'customer',
-  'sales_point',
-  'environment',
-  'simulated',
-  'currency',
-  'voucher_number',
-  'cuit',
-  'cae',
-  'total',
-  'issue_date',
-  'cae_due_date',
-  'created_at',
-];
+const facets = createFacetFilters(getInvoiceSingleFacet);
+
+const UNASSIGNED = { label: 'Sin asignar' };
 
 const DEFAULT_SORTING = [{ id: 'issue_date', desc: true }];
 
@@ -85,120 +77,57 @@ export default function _InvoicesDataTable({
 }: InvoicesDataTableProps) {
   const columns = useMemo(() => getInvoiceColumns(canViewPrices), [canViewPrices]);
 
-  // ─── Client-side navigation ────────────────────────────────────────────────
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-  const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getInvoicesPaginated(params), []);
 
-  // ─── Visibilidad: preferencias guardadas > defaults ────────────────────────
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults: Record<string, boolean> = {};
-    for (const col of HIDDEN_COLUMNS_BY_DEFAULT) defaults[col] = false;
-    return { ...defaults, ...initialColumnVisibility };
-  }, [initialColumnVisibility]);
-
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    return Object.fromEntries(ALL_FILTER_IDS.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
-  }, [initialFilterVisibility]);
-
-  // ─── fetchFacet factories (lazy-load por filtro) ───────────────────────────
-  const makeEnumFetchFacet = useCallback(
-    (columnId: string, options: FacetResult['options']) => async (params: DataTableSearchParams) => {
-      const result = await getInvoiceSingleFacet(columnId, params);
-      if (!result) return { options: [], counts: new Map<string, number>() } satisfies FacetResult;
-      return { options, counts: result.counts } satisfies FacetResult;
-    },
-    []
-  );
-
-  const makeFkFetchFacet = useCallback(
-    (columnId: string) =>
-      async (params: DataTableSearchParams): Promise<FacetResult> => {
-        const result = await getInvoiceSingleFacet(columnId, params);
-        if (!result) return { options: [], counts: new Map() };
-        return {
-          options: [
-            ...(result.resolvedOptions?.map((o) => ({ value: o.id, label: o.name ?? '' })) ?? []),
-            ...(result.counts.has(NULL_FILTER_VALUE)
-              ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-              : []),
-          ],
-          counts: result.counts,
-        };
-      },
-    []
-  );
-
-  // ─── Filtros ───────────────────────────────────────────────────────────────
+  // ─── Filtros (lazy-load por filtro) ────────────────────────────────────────
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
-      {
-        columnId: 'status',
-        title: 'Estado',
-        fetchFacet: makeEnumFetchFacet(
-          'status',
-          Object.values(invoice_status).map((value) => ({
-            value,
-            label: INVOICE_STATUS_LABELS[value],
-            icon: statusIcons[value],
-          }))
-        ),
-      },
-      {
-        columnId: 'cbte_type',
-        title: 'Tipo',
-        fetchFacet: makeEnumFetchFacet(
-          'cbte_type',
-          ENABLED_CBTE_TYPES.map((id) => ({ value: String(id), label: cbteLabel(id), icon: cbteTypeIcon(id) }))
-        ),
-      },
-      { columnId: 'customer', title: 'Cliente', fetchFacet: makeFkFetchFacet('customer') },
-      { columnId: 'sales_point', title: 'Punto de venta', fetchFacet: makeFkFetchFacet('sales_point') },
-      {
-        columnId: 'environment',
-        title: 'Ambiente',
-        fetchFacet: makeEnumFetchFacet(
-          'environment',
-          Object.values(arca_environment).map((value) => ({
-            value,
-            label: ENVIRONMENT_LABELS[value],
-            icon: environmentIcons[value],
-          }))
-        ),
-      },
-      {
-        columnId: 'simulated',
-        title: 'Simulado',
-        fetchFacet: makeEnumFetchFacet('simulated', [
-          { value: 'true', label: 'Sí', icon: simulatedIcons.true },
-          { value: 'false', label: 'No', icon: simulatedIcons.false },
-        ]),
-      },
-      { columnId: 'currency', title: 'Moneda', fetchFacet: makeFkFetchFacet('currency') },
+      facets.fixed(
+        'status',
+        'Estado',
+        enumFilterOptions(Object.values(invoice_status), INVOICE_STATUS_LABELS, statusIcons)
+      ),
+      facets.fixed(
+        'cbte_type',
+        'Tipo',
+        ENABLED_CBTE_TYPES.map((id) => ({ value: String(id), label: cbteLabel(id), icon: cbteTypeIcon(id) }))
+      ),
+      facets.lookup('customer', 'Cliente', undefined, UNASSIGNED),
+      facets.lookup('sales_point', 'Punto de venta', undefined, UNASSIGNED),
+      facets.fixed(
+        'environment',
+        'Ambiente',
+        enumFilterOptions(Object.values(arca_environment), ENVIRONMENT_LABELS, environmentIcons)
+      ),
+      facets.fixed('simulated', 'Simulado', [
+        { value: 'true', label: 'Sí', icon: simulatedIcons.true },
+        { value: 'false', label: 'No', icon: simulatedIcons.false },
+      ]),
+      facets.lookup('currency', 'Moneda', undefined, UNASSIGNED),
 
       // ── Texto ──
-      {
-        columnId: 'voucher_number',
-        title: 'Número',
-        type: 'text' as const,
-        placeholder: 'Ej: 00003-00000124 o 124...',
-      },
-      { columnId: 'cuit', title: 'CUIT', type: 'text' as const, placeholder: 'CUIT completo...' },
-      { columnId: 'cae', title: 'CAE', type: 'text' as const, placeholder: 'Buscar por CAE...' },
-      ...(canViewPrices
-        ? [{ columnId: 'total', title: 'Total', type: 'text' as const, placeholder: 'Importe exacto, ej: 1234,56' }]
-        : []),
+      textFilter('voucher_number', 'Número', 'Ej: 00003-00000124 o 124...'),
+      textFilter('cuit', 'CUIT', 'CUIT completo...'),
+      textFilter('cae', 'CAE', 'Buscar por CAE...'),
+      ...(canViewPrices ? [textFilter('total', 'Total', 'Importe exacto, ej: 1234,56')] : []),
 
       // ── Fechas ──
-      { columnId: 'issue_date', title: 'Fecha de emisión', type: 'dateRange' as const },
-      { columnId: 'cae_due_date', title: 'Vencimiento CAE', type: 'dateRange' as const },
-      { columnId: 'created_at', title: 'Fecha de creación', type: 'dateRange' as const },
+      dateRangeFilter('issue_date', 'Fecha de emisión'),
+      dateRangeFilter('cae_due_date', 'Vencimiento CAE'),
+      dateRangeFilter('created_at', 'Fecha de creación'),
     ],
-    [makeEnumFetchFacet, makeFkFetchFacet, canViewPrices]
+    [canViewPrices]
   );
+
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
@@ -206,19 +135,12 @@ export default function _InvoicesDataTable({
       columns={columns}
       data={data}
       totalRows={totalRows}
-      searchParams={searchParams}
-      tableId={tableId}
-      paramNamespace={tableId}
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
+      {...tableProps}
       initialSorting={DEFAULT_SORTING}
       showSearch
       searchPlaceholder="Buscar por número, cliente o CAE..."
-      showFilterToggle
       queryFn={tableQueryFn}
       queryKey={['invoices-paginated']}
-      onStateChange={handleStateChange}
       emptyMessage="Todavía no hay comprobantes. Creá uno con “Nueva factura”."
       data-testid="invoices-table"
       exportConfig={{

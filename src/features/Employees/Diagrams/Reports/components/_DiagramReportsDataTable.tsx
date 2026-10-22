@@ -2,12 +2,11 @@
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { createFacetFilters, dateRangeFilter, textFilter } from '@/shared/components/common/DataTable/facet-filters';
+import type { DataTableFacetedFilterConfig, DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
-import type { LucideIcon } from 'lucide-react';
-import { CircleOff } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useCallback, useMemo, useState } from 'react';
 import {
@@ -33,21 +32,9 @@ const DiagramReportDetailSheet = dynamic(
 /** Filtros visibles de entrada (el resto se activa desde "Filtros"). */
 const DEFAULT_VISIBLE_FILTERS = ['diagramType', 'employee', 'fileNumber'];
 
-/** Todos los filtros de la tabla: uno por columna de datos. */
-const ALL_FILTER_IDS = [
-  'employee',
-  'diagramType',
-  'companyPosition',
-  'fileNumber',
-  'lastname',
-  'firstname',
-  'cuil',
-  'day',
-  'month',
-  'year',
-  'created_at',
-  'comments',
-];
+const facets = createFacetFilters(getDiagramReportSingleFacet);
+
+const UNASSIGNED = { label: 'Sin asignar' };
 
 /** Clave base de React Query de la tabla: la usa el Sheet para refrescarla al editar una novedad. */
 const TABLE_QUERY_KEY = ['diagram-reports-paginated'] as const;
@@ -68,25 +55,8 @@ interface DiagramReportsDataTableProps {
 }
 
 // ============================================================================
-// HELPERS — builders para reducir boilerplate en fetchFacet
+// HELPERS
 // ============================================================================
-
-/** Construye FacetResult para FK/M:M: opciones del servidor + counts */
-function buildFkFacetResult(
-  resolvedOptions: Array<{ id: string; name: string | null }> | undefined,
-  counts: Map<string, number>,
-  nullLabel = 'Sin asignar'
-): FacetResult {
-  return {
-    options: [
-      ...(resolvedOptions?.map((o) => ({ value: o.id, label: o.name ?? '' })) ?? []),
-      ...(counts.has(NULL_FILTER_VALUE)
-        ? [{ value: NULL_FILTER_VALUE, label: nullLabel, icon: CircleOff as LucideIcon }]
-        : []),
-    ],
-    counts,
-  };
-}
 
 /** Un solo parámetro de texto de la URL (los filtros del DataTable llegan como string). */
 function singleParam(params: DataTableSearchParams, key: string): string | undefined {
@@ -107,13 +77,6 @@ export default function _DiagramReportsDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: DiagramReportsDataTableProps) {
-  // ─── Client-side navigation: estado reactivo para totales, período y export ───
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-
-  const handleStateChange = useCallback((params: DataTableSearchParams) => {
-    setCurrentParams(params);
-  }, []);
-
   // queryFn for client-side data fetching
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getDiagramReportsPaginated(params), []);
 
@@ -131,118 +94,42 @@ export default function _DiagramReportsDataTable({
 
   const columns = useMemo(() => getColumns({ onOpenDetail: handleOpenDetail }), [handleOpenDetail]);
 
-  // Initial column visibility: merge defaults with saved preferences
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults: Record<string, boolean> = {};
-    for (const col of HIDDEN_COLUMNS_BY_DEFAULT) {
-      defaults[col] = false;
-    }
-    return { ...defaults, ...(initialColumnVisibility ?? {}) };
-  }, [initialColumnVisibility]);
-
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    return Object.fromEntries(ALL_FILTER_IDS.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
-  }, [initialFilterVisibility]);
-
-  // ─── fetchFacet factory for FK filters ─────────────────────────────────────
-  const makeFkFetchFacet = useCallback((columnId: string, nullLabel = 'Sin asignar') => {
-    return async (params: DataTableSearchParams): Promise<FacetResult> => {
-      const result = await getDiagramReportSingleFacet(columnId, params);
-      if (!result) return { options: [], counts: new Map() };
-      return buildFkFacetResult(result.resolvedOptions, result.counts, nullLabel);
-    };
-  }, []);
-
   // ─── Faceted filters with lazy-load ─────────────────────────────────────────
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
-      // ── FK: Empleado ───────────────────────────────────────────────────────
-      {
-        columnId: 'employee',
-        title: 'Empleado',
-        fetchFacet: makeFkFetchFacet('employee'),
-      },
-
-      // ── FK: Novedad ────────────────────────────────────────────────────────
-      {
-        columnId: 'diagramType',
-        title: 'Novedad',
-        fetchFacet: makeFkFetchFacet('diagramType'),
-      },
-
-      // ── FK: Puesto ─────────────────────────────────────────────────────────
-      {
-        columnId: 'companyPosition',
-        title: 'Puesto',
-        fetchFacet: makeFkFetchFacet('companyPosition', 'Sin puesto'),
-      },
+      facets.lookup('employee', 'Empleado', undefined, UNASSIGNED),
+      facets.lookup('diagramType', 'Novedad', undefined, UNASSIGNED),
+      facets.lookup('companyPosition', 'Puesto', undefined, { label: 'Sin puesto' }),
 
       // ── Text filters ────────────────────────────────────────────────────────
-      {
-        columnId: 'fileNumber',
-        title: 'Legajo',
-        type: 'text' as const,
-        placeholder: 'Buscar por legajo (exacto)...',
-      },
-      {
-        columnId: 'lastname',
-        title: 'Apellido',
-        type: 'text' as const,
-        placeholder: 'Buscar por apellido...',
-      },
-      {
-        columnId: 'firstname',
-        title: 'Nombre',
-        type: 'text' as const,
-        placeholder: 'Buscar por nombre...',
-      },
-      {
-        columnId: 'cuil',
-        title: 'CUIL',
-        type: 'text' as const,
-        placeholder: 'Buscar por CUIL...',
-      },
+      textFilter('fileNumber', 'Legajo', 'Buscar por legajo (exacto)...'),
+      textFilter('lastname', 'Apellido', 'Buscar por apellido...'),
+      textFilter('firstname', 'Nombre', 'Buscar por nombre...'),
+      textFilter('cuil', 'CUIL', 'Buscar por CUIL...'),
 
       // ── Numeric text filters ────────────────────────────────────────────────
-      {
-        columnId: 'day',
-        title: 'Día',
-        type: 'text' as const,
-        placeholder: 'Ej: 15',
-      },
-      {
-        columnId: 'month',
-        title: 'Mes',
-        type: 'text' as const,
-        placeholder: 'Ej: 3',
-      },
-      {
-        columnId: 'year',
-        title: 'Año',
-        type: 'text' as const,
-        placeholder: 'Ej: 2024',
-      },
+      textFilter('day', 'Día', 'Ej: 15'),
+      textFilter('month', 'Mes', 'Ej: 3'),
+      textFilter('year', 'Año', 'Ej: 2024'),
 
       // ── Date range filter (cuándo se registró; el período de la novedad está en la barra) ──
-      {
-        columnId: 'created_at',
-        title: 'Fecha de registro',
-        type: 'dateRange' as const,
-      },
+      dateRangeFilter('created_at', 'Fecha de registro'),
 
       // ── Text: comentario ─────────────────────────────────────────────────────
-      {
-        columnId: 'comments',
-        title: 'Comentario',
-        type: 'text' as const,
-        placeholder: 'Buscar en comentarios...',
-      },
+      textFilter('comments', 'Comentario', 'Buscar en comentarios...'),
     ],
-    [makeFkFetchFacet]
+    []
   );
+
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -253,18 +140,11 @@ export default function _DiagramReportsDataTable({
           columns={columns}
           data={data}
           totalRows={totalRows}
-          searchParams={searchParams}
-          tableId={tableId}
-          paramNamespace={tableId}
-          facetedFilters={facetedFilters}
-          initialColumnVisibility={mergedColumnVisibility}
-          initialFilterVisibility={mergedFilterVisibility}
-          showFilterToggle
+          {...tableProps}
           mobileCards
           // Client-side navigation: instant fetch via React Query, no router.push
           queryFn={tableQueryFn}
           queryKey={TABLE_QUERY_KEY}
-          onStateChange={handleStateChange}
           searchPlaceholder="Buscar por legajo, nombre, apellido o CUIL..."
           showSearch
           emptyMessage="No se encontraron novedades con estos filtros"
