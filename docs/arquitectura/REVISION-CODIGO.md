@@ -22,8 +22,8 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 | src/features/Dashboard              |      173 |  21093 | [x]    |
 | src/features/Documentacion          |      143 |  17428 | [x]    |
 | src/features/Warehouses             |      121 |  16050 | [x]    |
-| src/features/Employees              |      107 |  15103 | [ ]    |
-| src/features/Comercial              |       95 |  12176 | [ ]    |
+| src/features/Employees              |      107 |  15103 | [x]    |
+| src/features/Comercial              |       95 |  12176 | [x]    |
 | src/features/Ayuda                  |      137 |  10967 | [ ]    |
 | src/features/Clothing               |       69 |  10858 | [x]    |
 | src/features/Checklists             |       28 |   6175 | [ ]    |
@@ -136,6 +136,12 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
   - **Detalle del parte:** `columns/employee-columns.tsx` pasa de 4 columnas copiadas a `driverColumn` y `helperColumn`; `completedColumn` (día y noche) en `status-columns.tsx`; `LoadingBadge`, `AssignedBadge` y `DeviationBadge` en `badge-cells.tsx`; `equipment/EquipmentChip.tsx` (`EquipmentChip`, `ChipBadge`, `toggleId`) en los campos de equipos propios y otros equipos; `RowColorLegend` acepta `showDeviations` y la usa Certificación; los horarios usan `InputFormField`.
   - **Archivos partidos:** `Preparte/actions/mutations.server.ts` 573 → 321 (`lib/preparte-references.ts`: validación de perímetro y traducción de sector/área; `actions/move-preparte-file.server.ts`: la imagen del pedido, la prueba de integración apunta al archivo nuevo); `HistoryDialog.tsx` 567 → 116 (`history/history-helpers.tsx` y `history/HistoryEntry.tsx`). Ningún archivo del módulo supera las 520 líneas.
   - Verificación: `check-types` limpio, `npm test` (1494) y `next build` compilando. No se tocó lógica de escritura de los casos de uso (solo se movieron funciones de Preparte), por eso no se corrieron las suites de integración (la única del módulo, `move-preparte-file`, necesita RustFS).
+- [x] **Empleados y Comercial (`src/features/Employees`, `src/features/Comercial`):** jscpd sobre ambos módulos (sin pruebas): de 17 clones y 187 líneas duplicadas (0,59 %) a 13 y 135 (0,39 %); 341.016 → 333.962 tokens. `knip` sin hallazgos en los dos módulos; `tsc --noUnusedLocals --noUnusedParameters` solo marcó `MassiveFormDataBase` (borrado). Las pasadas previas ya habían unificado casi todo lo que cruzaba módulos.
+  - **Tablas:** `_EmployeeDataTable`, `_DiagramReportsDataTable`, `_CertificationsDataTable` y `_InvoicesDataTable` pasan a `createFacetFilters` (`fixed`/`lookup`), `enumFilterOptions`, `textFilter`, `dateRangeFilter` y `useServerTableView`; la de empleados usa además `usePermissionChecker`. Se borraron los `makeEnumFetchFacet`/`makeFkFetchFacet`/`build*FacetResult` locales y la fusión manual de visibilidad (~350 líneas).
+  - **Exports:** las acciones de export de certificaciones y comprobantes usan `exportFailure`.
+  - **Formularios:** `SelectFormField` en `shared/components/common/form-fields.tsx` (selector de catálogo `{ id, name }` con skeleton, `disabled` y `onValueChange`); lo usa el formulario de datos laborales del legajo (9 selectores, 560 → 385 líneas).
+  - **Archivos partidos:** `Diagrams/Reports/actions.server.ts` 597 → 342 (`Reports/lib/report-query.ts`: filtros permitidos, orden, select, `buildWhereClause` y `toReportRow`). Solo se movieron funciones.
+  - Verificación: `check-types` limpio, `npm test` (1494) y `next build` compilando. No se tocó lógica de escritura ni firmas de casos de uso; por eso no se corrieron las suites de integración.
 
 ## En curso / siguiente
 
@@ -165,6 +171,9 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 - **Operaciones, Certificación y detalle del parte, colores de fila:** la prioridad es distinta. En el detalle una línea editada por Comercial gana sobre la agregada después de la fecha del parte; en Certificación gana la agregada después. Se conservó (`getRowClassName` y `getCertificationRowClassName`); si se decide un criterio, se unifica en un solo helper.
 - **Operaciones, presentación distinta por tabla (conservada):** el tooltip de "asignado correctamente" tarda 100 ms en empleados y 300 ms en equipos del detalle; el área se rotula con `descripcion_corta` en el detalle y con `nombre` en Certificación; el filtro de equipo propio de Certificación solo cuenta vehículos y el del detalle suma otros equipos. Por eso `SHARED_ROW_FACETS` no incluye `area`, `equipment` ni `employees`.
 - **Operaciones, `Preparte/list`:** la acción `getPreparteSingleFacet` devuelve `resolvedOptions` como `{ value, label }` y no como el `SingleFacetResult` común (`{ id, name }`); unificarlo permitiría usar `createFacetFilters` en la tabla de pedidos.
+- **Empleados, tabla de empleados y Reportes de novedades:** el `value` del selector de tipo de documento, nacionalidad, país y sexo en `PersonalDataFields` es controlado (`value` + `defaultValue`) y el de `SelectFormField` solo usa `defaultValue`; no se unificaron para no cambiar cuándo se repinta el valor. Pendiente decidir cuál es el correcto.
+- **Comercial, archivos grandes sin partir:** `Facturacion/lib/emission.server.ts` (548; `issueInvoice` ocupa ~230 líneas del flujo fiscal) y `Certificaciones/actions/certifications.server.ts` (512) se dejaron enteros por riesgo (emisión ARCA); partirlos pide pruebas de integración con Postgres.
+- **Comercial, esqueleto de la lista de certificaciones:** `CertificationsTableSkeleton` es casi `TableSkeleton inCard` pero con `aria-busy`/`aria-label` y otro ancho de buscador; se conserva hasta decidir si `TableSkeleton` acepta etiqueta accesible.
 
 ## Pendiente detectado en Compras (para las pasadas de Almacenes, Tesorería y otros)
 
