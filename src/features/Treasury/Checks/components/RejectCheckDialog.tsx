@@ -13,15 +13,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Logger } from '@/lib/logger';
 import { DateFormField, TextareaFormField } from '@/shared/components/common/form-fields';
-import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { rejectCheck } from '../../actions/checks.server';
-import { invalidateTreasury } from '../../lib/invalidate';
 import { treasuryToday } from '../../lib/today';
+import { useTreasuryMutation } from '../../lib/use-treasury-mutation';
 import { RETURNED_BY, RETURNED_BY_LABELS, rejectionSchema, type RejectionValues } from '../../schemas/checks';
 
 const logger = new Logger('Treasury/RejectCheckDialog');
@@ -34,8 +31,6 @@ interface RejectCheckDialogProps {
 
 /** Rechazo de un cheque depositado, endosado o descontado (spec Tesorería etapa 3a §3.6). */
 export function RejectCheckDialog({ open, onOpenChange, check }: RejectCheckDialogProps) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const form = useForm<RejectionValues>({
     resolver: zodResolver(rejectionSchema),
     defaultValues: {
@@ -46,18 +41,15 @@ export function RejectCheckDialog({ open, onOpenChange, check }: RejectCheckDial
     },
   });
 
-  const save = useMutation({
-    mutationFn: async (values: RejectionValues) => unwrapAction(await rejectCheck(values)),
+  const save = useTreasuryMutation({
+    action: (values: RejectionValues) => rejectCheck(values),
     onSuccess: (result) => {
       toast.success(`Rechazo ${result.number} registrado`);
-      invalidateTreasury(queryClient);
-      router.refresh();
       onOpenChange(false);
     },
-    onError: (error) => {
-      logger.error('Error al registrar el rechazo', { data: { error } });
-      toast.error(error instanceof Error ? error.message : 'No se pudo registrar el rechazo');
-    },
+    logger,
+    logError: 'Error al registrar el rechazo',
+    errorFallback: 'No se pudo registrar el rechazo',
   });
 
   const effect =

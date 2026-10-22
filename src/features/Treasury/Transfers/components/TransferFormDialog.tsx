@@ -14,10 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AMOUNT_SCALE, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { Logger } from '@/lib/logger';
 import { DateFormField, InputFormField } from '@/shared/components/common/form-fields';
-import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -26,8 +23,8 @@ import { createTransfer } from '../../actions/transfers.server';
 import { BalancePreview } from '../../components/BalancePreview';
 import { NegativeCashConfirm } from '../../components/NegativeCashConfirm';
 import { useBalanceAfter } from '../../hooks/useBalanceAfter';
-import { invalidateTreasury } from '../../lib/invalidate';
 import { treasuryToday } from '../../lib/today';
+import { useTreasuryMutation } from '../../lib/use-treasury-mutation';
 import { transferFormSchema, type TransferFormValues } from '../../schemas/transfers';
 
 const logger = new Logger('Treasury/TransferFormDialog');
@@ -46,8 +43,6 @@ interface TransferFormDialogProps {
  * en negativo pide confirmar. Se monta al abrirse.
  */
 export function TransferFormDialog({ open, onOpenChange, accounts, defaultFromAccountId }: TransferFormDialogProps) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const [confirmNegative, setConfirmNegative] = useState<TransferFormValues | null>(null);
 
   const form = useForm<TransferFormValues>({
@@ -72,19 +67,18 @@ export function TransferFormDialog({ open, onOpenChange, accounts, defaultFromAc
   const fromPreview = useBalanceAfter(fromId, date, delta === null ? null : -delta);
   const toPreview = useBalanceAfter(toId, date, delta);
 
-  const save = useMutation({
-    mutationFn: async (values: TransferFormValues) => unwrapAction(await createTransfer(values)),
+  const save = useTreasuryMutation({
+    action: (values: TransferFormValues) => createTransfer(values),
     onSuccess: (data) => {
       toast.success(`Transferencia ${data.number} registrada`);
       setConfirmNegative(null);
       onOpenChange(false);
-      invalidateTreasury(queryClient);
-      router.refresh();
     },
-    onError: (error) => {
-      logger.error('Error al registrar la transferencia', { data: { error } });
+    logger,
+    logError: 'Error al registrar la transferencia',
+    errorFallback: 'No se pudo registrar la transferencia',
+    onFailure: () => {
       setConfirmNegative(null);
-      toast.error(error instanceof Error ? error.message : 'No se pudo registrar la transferencia');
     },
   });
 

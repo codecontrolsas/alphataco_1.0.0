@@ -14,10 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Logger } from '@/lib/logger';
 import { DateFormField, InputFormField } from '@/shared/components/common/form-fields';
-import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -27,9 +24,9 @@ import { createManualMovement, updateManualMovement, type MovementDetail } from 
 import { BalancePreview } from '../../components/BalancePreview';
 import { NegativeCashConfirm } from '../../components/NegativeCashConfirm';
 import { useBalanceAfter } from '../../hooks/useBalanceAfter';
-import { invalidateTreasury } from '../../lib/invalidate';
 import { conceptAllows, signedCents } from '../../lib/movement-rules';
 import { treasuryToday } from '../../lib/today';
+import { useTreasuryMutation } from '../../lib/use-treasury-mutation';
 import {
   MOVEMENT_DIRECTION_LABELS,
   manualMovementFormSchema,
@@ -74,8 +71,6 @@ export function MovementFormDialog({
   editing,
   defaultAccountId,
 }: MovementFormDialogProps) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const [confirmNegative, setConfirmNegative] = useState<ManualMovementFormValues | null>(null);
 
   const form = useForm<ManualMovementFormValues>({
@@ -109,20 +104,19 @@ export function MovementFormDialog({
   const delta = isPositiveAmount(amount) ? signedCents(direction, amount) : null;
   const preview = useBalanceAfter(accountId, date, delta, editing?.id);
 
-  const save = useMutation({
-    mutationFn: async (values: ManualMovementFormValues) =>
-      unwrapAction(editing ? await updateManualMovement(editing.id, values) : await createManualMovement(values)),
+  const save = useTreasuryMutation({
+    action: (values: ManualMovementFormValues) =>
+      editing ? updateManualMovement(editing.id, values) : createManualMovement(values),
     onSuccess: () => {
       toast.success(editing ? 'Movimiento actualizado' : 'Movimiento registrado');
       setConfirmNegative(null);
       onOpenChange(false);
-      invalidateTreasury(queryClient);
-      router.refresh();
     },
-    onError: (error) => {
-      logger.error('Error al guardar el movimiento', { data: { error } });
+    logger,
+    logError: 'Error al guardar el movimiento',
+    errorFallback: 'No se pudo guardar el movimiento',
+    onFailure: () => {
       setConfirmNegative(null);
-      toast.error(error instanceof Error ? error.message : 'No se pudo guardar el movimiento');
     },
   });
 

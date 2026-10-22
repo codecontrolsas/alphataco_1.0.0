@@ -8,11 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AMOUNT_SCALE, formatScaled, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { Logger } from '@/lib/logger';
 import { InputFormField } from '@/shared/components/common/form-fields';
-import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import moment from 'moment';
-import { useRouter } from 'next/navigation';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { depositChecks } from '../../actions/checks.server';
@@ -20,7 +17,7 @@ import type { CheckOperationFormData } from '../../lib/check-types';
 import { minCreditDate } from '../../lib/checks-dates';
 import { formatInCurrency } from '../../lib/currency-format';
 import { formatDay } from '../../lib/dates';
-import { invalidateTreasury } from '../../lib/invalidate';
+import { useTreasuryMutation } from '../../lib/use-treasury-mutation';
 import { depositSchema, type DepositValues } from '../../schemas/checks';
 import { CheckOperationShell } from './CheckOperationShell';
 
@@ -68,8 +65,6 @@ function DepositForm({
   onClose: () => void;
   onDone?: () => void;
 }) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const form = useForm<DepositValues>({
     resolver: zodResolver(depositSchema),
     defaultValues: {
@@ -82,21 +77,18 @@ function DepositForm({
   const items = useWatch({ control: form.control, name: 'items' });
   const total = data.checks.reduce((acc, c) => acc + (parseScaled(c.amount, AMOUNT_SCALE) ?? BigInt(0)), BigInt(0));
 
-  const save = useMutation({
-    mutationFn: async (values: DepositValues) => unwrapAction(await depositChecks(values)),
+  const save = useTreasuryMutation({
+    action: (values: DepositValues) => depositChecks(values),
     onSuccess: (result) => {
       toast.success(
         `Depósito ${result.number} registrado: ${data.checks.length} ${data.checks.length === 1 ? 'cheque' : 'cheques'}`
       );
-      invalidateTreasury(queryClient);
-      router.refresh();
       onDone?.();
       onClose();
     },
-    onError: (error) => {
-      logger.error('Error al depositar cheques', { data: { error } });
-      toast.error(error instanceof Error ? error.message : 'No se pudo registrar el depósito');
-    },
+    logger,
+    logError: 'Error al depositar cheques',
+    errorFallback: 'No se pudo registrar el depósito',
   });
 
   /** Al cambiar la fecha del depósito, ninguna acreditación queda antes de su mínimo. */

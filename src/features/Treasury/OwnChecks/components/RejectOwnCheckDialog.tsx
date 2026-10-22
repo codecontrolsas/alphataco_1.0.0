@@ -12,15 +12,12 @@ import {
 import { Form } from '@/components/ui/form';
 import { Logger } from '@/lib/logger';
 import { DateFormField, TextareaFormField } from '@/shared/components/common/form-fields';
-import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { rejectOwnCheck } from '../../actions/own-checks.server';
-import { invalidateTreasury } from '../../lib/invalidate';
 import { treasuryToday } from '../../lib/today';
+import { useTreasuryMutation } from '../../lib/use-treasury-mutation';
 import { rejectOwnCheckSchema, type RejectOwnCheckValues } from '../../schemas/own-checks';
 
 const logger = new Logger('Treasury/RejectOwnCheckDialog');
@@ -33,25 +30,20 @@ interface RejectOwnCheckDialogProps {
 
 /** Rechazo de un cheque propio emitido (spec Tesorería etapa 3b §3.4): no mueve plata y vuelve la deuda con el proveedor. */
 export function RejectOwnCheckDialog({ open, onOpenChange, check }: RejectOwnCheckDialogProps) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const form = useForm<RejectOwnCheckValues>({
     resolver: zodResolver(rejectOwnCheckSchema),
     defaultValues: { date: treasuryToday(), reason: '' },
   });
 
-  const save = useMutation({
-    mutationFn: async (values: RejectOwnCheckValues) => unwrapAction(await rejectOwnCheck(check.id, values)),
+  const save = useTreasuryMutation({
+    action: (values: RejectOwnCheckValues) => rejectOwnCheck(check.id, values),
     onSuccess: () => {
       toast.success('Rechazo registrado');
-      invalidateTreasury(queryClient);
-      router.refresh();
       onOpenChange(false);
     },
-    onError: (error) => {
-      logger.error('Error al registrar el rechazo', { data: { error } });
-      toast.error(error instanceof Error ? error.message : 'No se pudo registrar el rechazo');
-    },
+    logger,
+    logError: 'Error al registrar el rechazo',
+    errorFallback: 'No se pudo registrar el rechazo',
   });
 
   return (

@@ -17,12 +17,10 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SearchCombobox } from '@/features/Warehouses/components/SearchCombobox';
 import { Logger } from '@/lib/logger';
-import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Plus, Trash2, WalletCards } from 'lucide-react';
 import moment from 'moment';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useFieldArray, useForm, type UseFormReturn } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -31,8 +29,8 @@ import { createOpeningChecks } from '../../actions/checks.server';
 import { searchCollectionCustomers } from '../../actions/customer-statement.server';
 import { CHECK_KIND_LABELS } from '../../lib/check-transitions';
 import type { CheckOperationFormData } from '../../lib/check-types';
-import { invalidateTreasury } from '../../lib/invalidate';
 import { TREASURY_QUERY_KEYS } from '../../lib/query-keys';
+import { useTreasuryMutation } from '../../lib/use-treasury-mutation';
 import { openingChecksSchema, type CheckDataValues, type OpeningChecksValues } from '../../schemas/checks';
 
 const logger = new Logger('Treasury/OpeningChecksButton');
@@ -89,8 +87,6 @@ const emptyCheck = (drawer: { name: string; cuit: string } | null, today: string
 });
 
 function OpeningForm({ data, onClose }: { data: CheckOperationFormData; onClose: () => void }) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const form = useForm<OpeningChecksValues>({
     resolver: zodResolver(openingChecksSchema),
     defaultValues: {
@@ -104,18 +100,15 @@ function OpeningForm({ data, onClose }: { data: CheckOperationFormData; onClose:
   // El cliente elegido (nombre y CUIT) sale del resultado de la búsqueda, no de un catálogo cargado de antemano.
   const [customer, setCustomer] = useState<{ id: string; label: string; name: string; cuit: string } | null>(null);
 
-  const save = useMutation({
-    mutationFn: async (values: OpeningChecksValues) => unwrapAction(await createOpeningChecks(values)),
+  const save = useTreasuryMutation({
+    action: (values: OpeningChecksValues) => createOpeningChecks(values),
     onSuccess: (result) => {
       toast.success(`${result.count} ${result.count === 1 ? 'cheque cargado' : 'cheques cargados'} en la cartera`);
-      invalidateTreasury(queryClient);
-      router.refresh();
       onClose();
     },
-    onError: (error) => {
-      logger.error('Error en la carga inicial de cheques', { data: { error } });
-      toast.error(error instanceof Error ? error.message : 'No se pudieron cargar los cheques');
-    },
+    logger,
+    logError: 'Error en la carga inicial de cheques',
+    errorFallback: 'No se pudieron cargar los cheques',
   });
 
   /** El librador se precarga con el cliente (editable): solo en los cheques que todavía no lo tienen. */

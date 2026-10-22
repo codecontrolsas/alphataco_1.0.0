@@ -13,25 +13,21 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Logger } from '@/lib/logger';
 import { InputFormField } from '@/shared/components/common/form-fields';
-import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { createCheckbook, getCheckbookFormData } from '../../actions/own-checks.server';
-import { invalidateTreasury } from '../../lib/invalidate';
 import { TREASURY_QUERY_KEYS } from '../../lib/query-keys';
+import { useTreasuryMutation } from '../../lib/use-treasury-mutation';
 import { checkbookSchema, type CheckbookValues } from '../../schemas/own-checks';
 
 const logger = new Logger('Treasury/NewCheckbookDialog');
 
 /** Alta de una chequera: cuenta bancaria y rango de números (spec Tesorería etapa 3b §2.1). */
 export function NewCheckbookDialog() {
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const { data, isLoading } = useQuery({
     queryKey: [...TREASURY_QUERY_KEYS.checkbooks, 'form'],
@@ -45,19 +41,16 @@ export function NewCheckbookDialog() {
     defaultValues: { accountId: '', firstNumber: '', lastNumber: '' },
   });
 
-  const save = useMutation({
-    mutationFn: async (values: CheckbookValues) => unwrapAction(await createCheckbook(values)),
+  const save = useTreasuryMutation({
+    action: (values: CheckbookValues) => createCheckbook(values),
     onSuccess: () => {
       toast.success('Chequera creada');
-      invalidateTreasury(queryClient);
-      router.refresh();
       form.reset({ accountId: '', firstNumber: '', lastNumber: '' });
       setOpen(false);
     },
-    onError: (error) => {
-      logger.error('Error al crear la chequera', { data: { error } });
-      toast.error(error instanceof Error ? error.message : 'No se pudo crear la chequera');
-    },
+    logger,
+    logError: 'Error al crear la chequera',
+    errorFallback: 'No se pudo crear la chequera',
   });
 
   return (

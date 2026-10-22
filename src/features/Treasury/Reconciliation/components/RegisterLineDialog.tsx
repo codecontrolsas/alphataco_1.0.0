@@ -13,16 +13,15 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Logger } from '@/lib/logger';
 import { InputFormField } from '@/shared/components/common/form-fields';
-import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { getReconciliationConcepts, registerLine } from '../../actions/reconciliation.server';
 import { formatInCurrency } from '../../lib/currency-format';
 import { formatDay } from '../../lib/dates';
-import { invalidateTreasury } from '../../lib/invalidate';
 import { TREASURY_QUERY_KEYS } from '../../lib/query-keys';
+import { useTreasuryMutation } from '../../lib/use-treasury-mutation';
 import { registerLineSchema, type RegisterLineValues } from '../../schemas/reconciliation';
 
 const logger = new Logger('Treasury/RegisterLineDialog');
@@ -35,7 +34,6 @@ interface RegisterLineDialogProps {
 
 /** Registrar una línea del extracto (gasto, interés, impuesto): crea su movimiento manual ya conciliado (spec etapa 4 §3.5). */
 export function RegisterLineDialog({ open, onOpenChange, line }: RegisterLineDialogProps) {
-  const queryClient = useQueryClient();
   const direction = line.amount.startsWith('-') ? 'OUT' : 'IN';
   const { data: concepts, isLoading } = useQuery({
     queryKey: [...TREASURY_QUERY_KEYS.reconciliation, 'concepts'],
@@ -48,17 +46,16 @@ export function RegisterLineDialog({ open, onOpenChange, line }: RegisterLineDia
     defaultValues: { lineId: line.id, conceptId: '', description: line.description },
   });
 
-  const save = useMutation({
-    mutationFn: async (values: RegisterLineValues) => unwrapAction(await registerLine(values)),
+  const save = useTreasuryMutation({
+    action: (values: RegisterLineValues) => registerLine(values),
     onSuccess: () => {
       toast.success('Movimiento registrado y conciliado');
-      invalidateTreasury(queryClient);
       onOpenChange(false);
     },
-    onError: (error) => {
-      logger.error('Error al registrar la línea', { data: { error } });
-      toast.error(error instanceof Error ? error.message : 'No se pudo registrar la línea');
-    },
+    logger,
+    logError: 'Error al registrar la línea',
+    errorFallback: 'No se pudo registrar la línea',
+    refreshRoute: false,
   });
 
   return (

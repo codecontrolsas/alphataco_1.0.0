@@ -14,17 +14,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AMOUNT_SCALE, amountOf, formatScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { Logger } from '@/lib/logger';
 import { DateFormField } from '@/shared/components/common/form-fields';
-import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { debitOwnChecks } from '../../actions/own-checks.server';
 import { formatInCurrency } from '../../lib/currency-format';
 import { formatDay } from '../../lib/dates';
-import { invalidateTreasury } from '../../lib/invalidate';
 import { treasuryToday } from '../../lib/today';
+import { useTreasuryMutation } from '../../lib/use-treasury-mutation';
 import { debitOwnChecksSchema, type DebitOwnChecksValues } from '../../schemas/own-checks';
 
 const logger = new Logger('Treasury/DebitOwnChecksDialog');
@@ -53,8 +50,6 @@ interface DebitOwnChecksDialogProps {
  * cheque arranca en su fecha de pago; con varios, en hoy.
  */
 export function DebitOwnChecksDialog({ open, onOpenChange, checks, onDone }: DebitOwnChecksDialogProps) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const today = treasuryToday();
   const single = checks.length === 1 ? checks[0] : null;
   const defaultDate = single?.paymentDate && single.paymentDate <= today ? single.paymentDate : today;
@@ -67,19 +62,16 @@ export function DebitOwnChecksDialog({ open, onOpenChange, checks, onDone }: Deb
     AMOUNT_SCALE
   );
 
-  const save = useMutation({
-    mutationFn: async (values: DebitOwnChecksValues) => unwrapAction(await debitOwnChecks(values)),
+  const save = useTreasuryMutation({
+    action: (values: DebitOwnChecksValues) => debitOwnChecks(values),
     onSuccess: (result) => {
       toast.success(result.count === 1 ? 'Débito confirmado' : `Débito confirmado de ${result.count} cheques`);
-      invalidateTreasury(queryClient);
-      router.refresh();
       onOpenChange(false);
       onDone?.();
     },
-    onError: (error) => {
-      logger.error('Error al confirmar el débito', { data: { error } });
-      toast.error(error instanceof Error ? error.message : 'No se pudo confirmar el débito');
-    },
+    logger,
+    logError: 'Error al confirmar el débito',
+    errorFallback: 'No se pudo confirmar el débito',
   });
 
   return (

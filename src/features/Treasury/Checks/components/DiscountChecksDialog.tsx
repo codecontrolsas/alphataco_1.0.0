@@ -8,10 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AMOUNT_SCALE, formatScaled, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { Logger } from '@/lib/logger';
 import { DateFormField, InputFormField } from '@/shared/components/common/form-fields';
-import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { discountChecks } from '../../actions/checks.server';
@@ -19,7 +16,7 @@ import { discountError, discountNet } from '../../lib/check-discount';
 import type { CheckOperationFormData } from '../../lib/check-types';
 import { formatInCurrency } from '../../lib/currency-format';
 import { formatDay } from '../../lib/dates';
-import { invalidateTreasury } from '../../lib/invalidate';
+import { useTreasuryMutation } from '../../lib/use-treasury-mutation';
 import { discountSchema, type DiscountValues } from '../../schemas/checks';
 import { CheckOperationShell } from './CheckOperationShell';
 
@@ -67,8 +64,6 @@ function DiscountForm({
   onClose: () => void;
   onDone?: () => void;
 }) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const form = useForm<DiscountValues>({
     resolver: zodResolver(discountSchema),
     defaultValues: {
@@ -90,19 +85,16 @@ function DiscountForm({
   });
   const netProblem = interestCents !== null && feeCents !== null ? discountError(net) : null;
 
-  const save = useMutation({
-    mutationFn: async (values: DiscountValues) => unwrapAction(await discountChecks(values)),
+  const save = useTreasuryMutation({
+    action: (values: DiscountValues) => discountChecks(values),
     onSuccess: (result) => {
       toast.success(`Descuento ${result.number} registrado: neto ${formatInCurrency(result.net, 'ARS')}`);
-      invalidateTreasury(queryClient);
-      router.refresh();
       onDone?.();
       onClose();
     },
-    onError: (error) => {
-      logger.error('Error al descontar cheques', { data: { error } });
-      toast.error(error instanceof Error ? error.message : 'No se pudo registrar el descuento');
-    },
+    logger,
+    logError: 'Error al descontar cheques',
+    errorFallback: 'No se pudo registrar el descuento',
   });
 
   const amountField = (name: 'interest' | 'fee', label: string) => (
