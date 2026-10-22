@@ -14,9 +14,9 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { StackedCell } from '@/shared/components/common/StackedCell';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { SegmentedProgress } from '@/shared/components/common/SegmentedProgress';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { StackedCell } from '@/shared/components/common/StackedCell';
 import { formatCalendarDate, formatWeekday } from '@/shared/utils/calendar-date';
 import { dailyReportStatusLabels, dailyReportStatusTones } from '@/shared/utils/mappers';
 import { useQueryClient } from '@tanstack/react-query';
@@ -26,9 +26,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { deleteDailyReport } from '../actions/mutations.server';
-import { DAILY_REPORTS_QUERY_KEY } from './constants';
 import { buildProgressSegments, summarizeStatusCountMap } from '../lib/status-progress';
 import type { DailyReportListItem } from './actions.server';
+import { DAILY_REPORTS_QUERY_KEY } from './constants';
 
 // Columnas ocultas por defecto (visibilidad inicial)
 export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['creation_date'];
@@ -137,8 +137,7 @@ export function getColumns(permissions: Permissions): ColumnDef<DailyReportListI
     // ── Fecha del parte diario (apilada con el día de la semana) ────────────
     {
       accessorKey: 'date',
-      meta: { title: 'Fecha' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
+      ...titled('Fecha'),
       cell: ({ row }) => (
         <StackedCell
           mono
@@ -152,8 +151,7 @@ export function getColumns(permissions: Permissions): ColumnDef<DailyReportListI
     // ── Estado del parte diario (enum) ─────────────────────────────────────
     {
       accessorKey: 'status',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const status = row.original.status;
         const label = dailyReportStatusLabels[status] ?? status.replaceAll('_', ' ');
@@ -170,20 +168,18 @@ export function getColumns(permissions: Permissions): ColumnDef<DailyReportListI
     // ── Líneas (virtual — total de dailyreportrows) ────────────────────────
     {
       id: 'total',
-      meta: { title: 'Líneas', excludeFromExport: true },
+      ...titled('Líneas', { excludeFromExport: true }),
       enableSorting: false,
       accessorFn: (row) => getSummary(row).total,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Líneas" />,
       cell: ({ row }) => <span className="font-mono tabular-nums">{getSummary(row.original).total}</span>,
     },
 
     // ── Pendientes (virtual — líneas con status pendiente) ─────────────────
     {
       id: 'pendientes',
-      meta: { title: 'Pendientes', excludeFromExport: true },
+      ...titled('Pendientes', { excludeFromExport: true }),
       enableSorting: false,
       accessorFn: (row) => getSummary(row).pending,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Pendientes" />,
       cell: ({ row }) => {
         const count = getSummary(row.original).pending;
         return count > 0 ? (
@@ -199,10 +195,9 @@ export function getColumns(permissions: Permissions): ColumnDef<DailyReportListI
     // ── Sin recursos (virtual — líneas con status sin_recursos_asignados) ──
     {
       id: 'sin_recursos',
-      meta: { title: 'Sin recursos', excludeFromExport: true },
+      ...titled('Sin recursos', { excludeFromExport: true }),
       enableSorting: false,
       accessorFn: (row) => getSummary(row).withoutResources,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Sin recursos" />,
       cell: ({ row }) => {
         const count = getSummary(row.original).withoutResources;
         return count > 0 ? (
@@ -218,10 +213,9 @@ export function getColumns(permissions: Permissions): ColumnDef<DailyReportListI
     // ── Avance (virtual — barra segmentada) ────────────────────────────────
     {
       id: 'progress',
-      meta: { title: 'Avance', excludeFromExport: true },
+      ...titled('Avance', { excludeFromExport: true }),
       enableSorting: false,
       accessorFn: (row) => getSummary(row).percent,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Avance" />,
       cell: ({ row }) => {
         const summary = getSummary(row.original);
         if (summary.progressTotal <= 0) return <span className="text-muted-foreground">—</span>;
@@ -243,8 +237,7 @@ export function getColumns(permissions: Permissions): ColumnDef<DailyReportListI
     // ── Fecha de creación (oculta por defecto) ─────────────────────────────
     {
       accessorKey: 'creation_date',
-      meta: { title: 'Fecha de creación' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de creación" />,
+      ...titled('Fecha de creación'),
       cell: ({ row }) => (
         <span className="tabular-nums">
           {row.original.creation_date ? formatCalendarDate(row.original.creation_date) : '—'}
@@ -255,8 +248,7 @@ export function getColumns(permissions: Permissions): ColumnDef<DailyReportListI
     // ── Activo (solo lectura: no hay mutación de is_active) ────────────────
     {
       accessorKey: 'is_active',
-      meta: { title: 'Activo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Activo" />,
+      ...titled('Activo'),
       cell: ({ row }) => (
         <Badge variant={row.original.is_active ? 'success' : 'secondary'}>
           {row.original.is_active ? 'Activo' : 'Inactivo'}

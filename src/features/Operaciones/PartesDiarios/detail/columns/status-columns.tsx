@@ -2,7 +2,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { dailyReportRowStatusLabels, dailyReportRowStatusTones } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -19,8 +19,7 @@ import type { Permissions, RowActionHandlers } from './types';
 function completedColumn(key: 'completed_day' | 'completed_night', title: string): ColumnDef<DailyReportDetailRow> {
   return {
     accessorKey: key,
-    meta: { title },
-    header: ({ column }) => <DataTableColumnHeader column={column} title={title} />,
+    ...titled(title),
     cell: ({ row }) => {
       const val = row.original[key];
       if (val === null || val === undefined) {
@@ -51,8 +50,7 @@ export function getStatusColumns(): ColumnDef<DailyReportDetailRow>[] {
     // ── Jornada (texto — valores discretos como turnos o fechas) ─────────────
     {
       accessorKey: 'working_day',
-      meta: { title: 'Jornada' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Jornada" />,
+      ...titled('Jornada'),
       cell: ({ row }) => <span>{row.original.working_day ?? '—'}</span>,
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id) as string | null;
@@ -64,8 +62,7 @@ export function getStatusColumns(): ColumnDef<DailyReportDetailRow>[] {
     // ── Hora Inicio (texto) ───────────────────────────────────────────────────
     {
       accessorKey: 'start_time',
-      meta: { title: 'Hora Inicio' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Hora Inicio" />,
+      ...titled('Hora Inicio'),
       cell: ({ row }) => {
         const val = row.original.start_time;
         if (!val) return <span className="text-muted-foreground text-xs">—</span>;
@@ -81,8 +78,7 @@ export function getStatusColumns(): ColumnDef<DailyReportDetailRow>[] {
     // ── Hora Fin (texto) ──────────────────────────────────────────────────────
     {
       accessorKey: 'end_time',
-      meta: { title: 'Hora Fin' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Hora Fin" />,
+      ...titled('Hora Fin'),
       cell: ({ row }) => {
         const val = row.original.end_time;
         if (!val) return <span className="text-muted-foreground text-xs">—</span>;
@@ -96,8 +92,7 @@ export function getStatusColumns(): ColumnDef<DailyReportDetailRow>[] {
     // ── Estado (enum NOT NULL) ────────────────────────────────────────────────
     {
       accessorKey: 'status',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const val = row.original.status;
         const label = dailyReportRowStatusLabels[val] ?? val;
@@ -141,8 +136,7 @@ export function getStatusColumns(): ColumnDef<DailyReportDetailRow>[] {
     // ── Descripción (texto nullable) ──────────────────────────────────────────
     {
       accessorKey: 'description',
-      meta: { title: 'Descripción' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
+      ...titled('Descripción'),
       cell: ({ row }) => {
         const val = row.original.description;
         if (!val) return <span className="text-muted-foreground text-xs">—</span>;
@@ -167,8 +161,7 @@ export function getStatusColumns(): ColumnDef<DailyReportDetailRow>[] {
     // ── Nro Remito (texto nullable) ───────────────────────────────────────────
     {
       accessorKey: 'remit_number',
-      meta: { title: 'Nro Remito' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nro Remito" />,
+      ...titled('Nro Remito'),
       cell: ({ row }) => <span>{row.original.remit_number ?? '—'}</span>,
     },
 

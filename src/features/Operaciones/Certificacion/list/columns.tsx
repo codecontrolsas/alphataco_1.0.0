@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ServiceDetailModal } from '@/features/Operaciones/PartesDiarios/components/ServiceDetailModal';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { matchesAnyIdOrNone, matchesNullableId, titled } from '@/shared/components/common/DataTable/column-helpers';
 import { argentinaDate, formatDateAr } from '@/shared/lib/argentina-time';
 import { employeeLabel } from '@/shared/lib/resource-labels';
 import {
@@ -41,18 +41,6 @@ export function getCertificationRowClassName(row: CertificationRow): string {
   }
   if (row.last_comercial_edit_at) return 'bg-brand-subtle/60';
   return '';
-}
-
-/** Filtro client-side de una FK nullable: compara contra el id y contra la opción "Sin asignar". */
-function matchesNullable(id: string | null | undefined, value: string[]): boolean {
-  if (id == null) return value.includes(NULL_FILTER_VALUE);
-  return value.includes(id);
-}
-
-/** Filtro client-side de una M:M: alguno de los ids coincide, o no hay ninguno y se pidió "Sin asignar". */
-function matchesAny(ids: (string | null | undefined)[], value: string[]): boolean {
-  if (ids.length === 0) return value.includes(NULL_FILTER_VALUE);
-  return ids.some((id) => id != null && value.includes(id));
 }
 
 function ChipList({ items, variant = 'secondary' }: { items: string[]; variant?: 'secondary' | 'outline' }) {
@@ -138,8 +126,7 @@ export function getCertificationColumns(
     {
       id: 'date',
       accessorFn: (row) => row.report_date ?? '',
-      meta: { title: 'Fecha' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
+      ...titled('Fecha'),
       cell: ({ row }) => (
         <span className="font-medium tabular-nums">
           {row.original.report_date ? formatDateAr(row.original.report_date) : '—'}
@@ -151,38 +138,34 @@ export function getCertificationColumns(
     {
       id: 'customer',
       accessorFn: (row) => row.customer,
-      meta: { title: 'Cliente' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Cliente" />,
+      ...titled('Cliente'),
       cell: ({ row }) => <span className="font-medium">{row.original.customer || '—'}</span>,
-      filterFn: (row, _id, value: string[]) => matchesNullable(row.original.customer_id, value),
+      filterFn: matchesNullableId((row) => row.customer_id),
     },
 
     // ── Servicio (FK UUID nullable) ───────────────────────────────────────────
     {
       id: 'service',
       accessorFn: (row) => row.services,
-      meta: { title: 'Servicio' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Servicio" />,
+      ...titled('Servicio'),
       cell: ({ row }) => <span>{row.original.services || '—'}</span>,
-      filterFn: (row, _id, value: string[]) => matchesNullable(row.original.service_id, value),
+      filterFn: matchesNullableId((row) => row.service_id),
     },
 
     // ── Ítem (FK UUID nullable) ───────────────────────────────────────────────
     {
       id: 'item',
       accessorFn: (row) => row.item,
-      meta: { title: 'Ítem' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Ítem" />,
+      ...titled('Ítem'),
       cell: ({ row }) => <span>{row.original.item || '—'}</span>,
-      filterFn: (row, _id, value: string[]) => matchesNullable(row.original.item_id, value),
+      filterFn: matchesNullableId((row) => row.item_id),
     },
 
     // ── Descripción del ítem (texto de la relación) ───────────────────────────
     {
       id: 'item_description',
       accessorFn: (row) => row.item_description,
-      meta: { title: 'Descripción del ítem' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción del ítem" />,
+      ...titled('Descripción del ítem'),
       cell: ({ row }) => (
         <div className="max-w-[150px] whitespace-pre-wrap break-words">
           <span className="text-muted-foreground text-sm">{row.original.item_description || '—'}</span>
@@ -194,43 +177,35 @@ export function getCertificationColumns(
     {
       id: 'customer_equipment',
       accessorFn: (row) => row.customer_equipment.map((equipment) => equipment.name).join(', '),
-      meta: { title: 'Equipo del cliente' },
+      ...titled('Equipo del cliente'),
       enableSorting: false,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo del cliente" />,
       cell: ({ row }) => <ChipList items={row.original.customer_equipment.map((equipment) => equipment.name)} />,
-      filterFn: (row, _id, value: string[]) =>
-        matchesAny(
-          row.original.customer_equipment.map((equipment) => equipment.id),
-          value
-        ),
+      filterFn: matchesAnyIdOrNone((row) => row.customer_equipment.map((item) => item.id)),
     },
 
     // ── Área (FK UUID nullable) ───────────────────────────────────────────────
     {
       id: 'area',
       accessorFn: (row) => row.area,
-      meta: { title: 'Área' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Área" />,
+      ...titled('Área'),
       cell: ({ row }) => <span>{row.original.area || '—'}</span>,
-      filterFn: (row, _id, value: string[]) => matchesNullable(row.original.area_id, value),
+      filterFn: matchesNullableId((row) => row.area_id),
     },
 
     // ── Sector (FK UUID nullable) ─────────────────────────────────────────────
     {
       id: 'sector',
       accessorFn: (row) => row.sector,
-      meta: { title: 'Sector' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Sector" />,
+      ...titled('Sector'),
       cell: ({ row }) => <span>{row.original.sector || '—'}</span>,
-      filterFn: (row, _id, value: string[]) => matchesNullable(row.original.sector_id, value),
+      filterFn: matchesNullableId((row) => row.sector_id),
     },
 
     // ── Tipo de servicio (enum nullable) ──────────────────────────────────────
     {
       id: 'type_service',
       accessorFn: (row) => row.type_service,
-      meta: { title: 'Tipo de servicio' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de servicio" />,
+      ...titled('Tipo de servicio'),
       cell: ({ row }) => {
         const type = row.original.type_service;
         return type ? (
@@ -239,16 +214,15 @@ export function getCertificationColumns(
           <span className="text-muted-foreground text-xs">—</span>
         );
       },
-      filterFn: (row, _id, value: string[]) => matchesNullable(row.original.type_service, value),
+      filterFn: matchesNullableId((row) => row.type_service),
     },
 
     // ── N° de remito (1:N; filtro de texto) ───────────────────────────────────
     {
       id: 'remit_number',
       accessorFn: (row) => row.remit_number,
-      meta: { title: 'N° de remito' },
+      ...titled('N° de remito'),
       enableSorting: false,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="N° de remito" />,
       cell: ({ row }) => (
         <ChipList
           variant="outline"
@@ -264,8 +238,7 @@ export function getCertificationColumns(
     {
       id: 'status',
       accessorFn: (row) => row.status,
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const status = row.original.status;
         const Icon = rowStatusIcons[status];
@@ -289,36 +262,26 @@ export function getCertificationColumns(
       cell: ({ row }) => (
         <ChipList items={row.original.employees_references.map((employee) => employeeLabel(employee))} />
       ),
-      filterFn: (row, _id, value: string[]) =>
-        matchesAny(
-          row.original.employees_references.map((employee) => employee.id),
-          value
-        ),
+      filterFn: matchesAnyIdOrNone((row) => row.employees_references.map((item) => item.id)),
     },
 
     // ── Equipo de la empresa (M:M) ────────────────────────────────────────────
     {
       id: 'equipment',
       accessorFn: (row) => row.equipment_references.map((equipment) => equipment.name).join(', '),
-      meta: { title: 'Equipo de la empresa' },
+      ...titled('Equipo de la empresa'),
       enableSorting: false,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo de la empresa" />,
       cell: ({ row }) => <ChipList items={row.original.equipment_references.map((equipment) => equipment.name)} />,
-      filterFn: (row, _id, value: string[]) =>
-        matchesAny(
-          row.original.equipment_references.map((equipment) => equipment.id),
-          value
-        ),
+      filterFn: matchesAnyIdOrNone((row) => row.equipment_references.map((item) => item.id)),
     },
 
     // ── Jornada (texto nullable) ──────────────────────────────────────────────
     {
       id: 'working_day',
       accessorFn: (row) => row.working_day,
-      meta: { title: 'Jornada' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Jornada" />,
+      ...titled('Jornada'),
       cell: ({ row }) => <span>{row.original.working_day || '—'}</span>,
-      filterFn: (row, _id, value: string[]) => matchesNullable(row.original.working_day, value),
+      filterFn: matchesNullableId((row) => row.working_day),
     },
 
     // ── Descripción (texto) ───────────────────────────────────────────────────

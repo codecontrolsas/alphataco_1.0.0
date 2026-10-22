@@ -1,6 +1,6 @@
 'use client';
 
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { ColumnDef } from '@tanstack/react-table';
 import { ResourceCell } from '../components/ResourceCell';
@@ -35,14 +35,13 @@ function driverColumn(
       if (!rel?.employees) return '';
       return buildEmployeeLabel(rel.employees);
     },
-    meta: { title },
+    ...titled(title),
     enableSorting: true,
     sortingFn: (rowA, rowB) => {
       const a = findRel(rowA.original)?.employees?.lastname ?? '';
       const b = findRel(rowB.original)?.employees?.lastname ?? '';
       return a.localeCompare(b);
     },
-    header: ({ column }) => <DataTableColumnHeader column={column} title={title} />,
     cell: ({ row }) => {
       const wday = row.original.working_day?.toLowerCase();
       if (!wday || !workdays.includes(wday)) return dashCell;
@@ -76,7 +75,7 @@ function helperColumn(
         .filter((r) => r.role === role && r.employees)
         .map((r) => buildEmployeeLabel(r.employees!))
         .join(', '),
-    meta: { title },
+    ...titled(title),
     enableSorting: true,
     sortingFn: (rowA, rowB) => {
       const firstLastname = (row: typeof rowA) =>
@@ -86,7 +85,6 @@ function helperColumn(
           .sort()[0] ?? '';
       return firstLastname(rowA).localeCompare(firstLastname(rowB));
     },
-    header: ({ column }) => <DataTableColumnHeader column={column} title={title} />,
     cell: ({ row }) => {
       const wday = row.original.working_day?.toLowerCase();
       if (!wday || !workdays.includes(wday)) return dashCell;
@@ -134,9 +132,8 @@ export function getEmployeeColumns(deviations: DeviationGetters): ColumnDef<Dail
           })
           .filter(Boolean)
           .join(', '),
-      meta: { title: 'Empleados' },
+      ...titled('Empleados'),
       enableSorting: false,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Empleados" />,
       cell: ({ row }) => <EmployeeBadgeCell row={row.original} deviations={deviations} />,
       filterFn: (row, _id, value: string[]) => {
         const relations = row.original.dailyreportemployeerelations;
@@ -157,9 +154,8 @@ export function getEmployeeColumns(deviations: DeviationGetters): ColumnDef<Dail
           })
           .filter(Boolean)
           .join(', '),
-      meta: { title: 'Equipos' },
+      ...titled('Equipos'),
       enableSorting: false,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Equipos" />,
       cell: ({ row }) => <EquipmentBadgeCell row={row.original} deviations={deviations} />,
       filterFn: (row, _id, value: string[]) => {
         const relations = row.original.dailyreportequipmentrelations;
