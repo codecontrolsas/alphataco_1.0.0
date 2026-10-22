@@ -1,4 +1,4 @@
-import type { DataTableFilterOption, FacetResult } from '@/shared/components/common/DataTable';
+import type { DataTableFilterOption, FacetResult } from '@/shared/components/common/DataTable/types';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { LucideIcon } from 'lucide-react';

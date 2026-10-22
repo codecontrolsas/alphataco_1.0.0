@@ -3,7 +3,7 @@
 import { formatSalesPoint, formatVoucherNumber } from '@/features/Comercial/Facturacion/lib/invoice-type';
 import { errorMessage, fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { isValidCuit } from '@/features/Empresa/General/lib/company-form';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import type { arca_environment } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';

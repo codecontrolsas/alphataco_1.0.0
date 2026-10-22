@@ -1,12 +1,9 @@
 'use client';
 
-import {
-  DataTable,
-  DataTableColumnHeader,
-  inMemoryFacetedFilterFn,
-  inMemoryTextFilterFn,
-  type DataTableFacetedFilterConfig,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { inMemoryFacetedFilterFn, inMemoryTextFilterFn } from '@/shared/components/common/DataTable/in-memory';
+import { type DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable/types';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Truck } from 'lucide-react';
 import { useMemo } from 'react';

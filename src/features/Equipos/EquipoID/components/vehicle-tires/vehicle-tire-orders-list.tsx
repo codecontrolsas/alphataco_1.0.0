@@ -1,6 +1,6 @@
 import { getTablePreferences } from '@/shared/actions/table-preferences';
-import type { DataTableSearchParams } from '@/shared/components/common/DataTable';
-import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable';
+import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import { getVehicleTireOrdersPaginated } from './actions/orders.server';
 import { VehicleTireOrdersDataTable } from './vehicle-tire-orders/_VehicleTireOrdersDataTable';
 

@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { revalidatePath } from 'next/cache';
 
 const PURCHASES_PATH = '/dashboard/purchases';

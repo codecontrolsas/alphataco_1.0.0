@@ -13,7 +13,7 @@ const PROFILE = 'd1000000-0000-4000-8000-000000000003';
 let activeCompany = COMPANY;
 
 vi.mock('@/shared/lib/tenant', () => ({ getActiveCompanyId: async () => activeCompany }));
-vi.mock('@/features/Permissions', () => ({ checkPermissionServer: async () => true }));
+vi.mock('@/features/Permissions/actions/permissions.server', () => ({ checkPermissionServer: async () => true }));
 vi.mock('@/shared/actions/auth.actions', () => {
   const profile = { id: PROFILE, credentialId: PROFILE, fullname: 'Compras Test', email: null };
   return { getServerAuthProfile: async () => profile, requireServerAuthProfile: async () => profile };

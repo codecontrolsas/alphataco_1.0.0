@@ -2,7 +2,7 @@
 
 import { amountOf } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { cbteLabel, formatVoucherLabel } from '@/features/Comercial/Facturacion/lib/invoice-type';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';

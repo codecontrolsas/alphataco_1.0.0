@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { checkPermissionServer } from '../actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import type { ActionSlug, AllTabSlugs, ModuleSlug } from '../permissions-map';
 
 interface PermissionGuardServerProps<M extends ModuleSlug = ModuleSlug> {

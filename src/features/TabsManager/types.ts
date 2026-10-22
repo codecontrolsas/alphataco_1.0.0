@@ -180,41 +180,6 @@ export interface TabsManagerServerProps<M extends ModuleSlug = ModuleSlug> {
 export type TabsManagerVariant = 'default' | 'line';
 
 /**
- * Props para el componente Cliente TabsManagerClient con tipado inferido.
- */
-export interface TabsManagerClientProps<M extends ModuleSlug = ModuleSlug> {
-  /** Nombre del parámetro en la URL */
-  paramName: string;
-  /** Lista de pestañas (ya filtradas por permisos en el servidor) */
-  tabs: readonly TabDefinition<M>[] | TabDefinition<M>[];
-  /**
-   * Pestaña activa inicial.
-   * Para tipado fuerte, usa `as const` en el array de tabs.
-   */
-  defaultTab: string;
-  /** Parámetros dependientes a limpiar al cambiar de tab */
-  dependentParams?: string[];
-  /** Clases CSS para la lista de tabs */
-  listClassName?: string;
-  /** Clases CSS para los triggers de tabs */
-  triggerClassName?: string;
-  /** Clases CSS para el contenido de tabs */
-  contentClassName?: string;
-  /**
-   * Variante visual de las tabs.
-   * - 'line': Underline, más prominente (para tabs principales de nivel 1)
-   * - 'default': Pill con fondo muted (para subtabs de nivel 2+)
-   * @default 'default'
-   */
-  variant?: TabsManagerVariant;
-  /**
-   * Acciones a renderizar a la derecha de la lista de tabs.
-   * Útil para botones de acción como "Agregar", "Exportar", etc.
-   */
-  actions?: React.ReactNode;
-}
-
-/**
  * Props de `SectionManagerServer`: las mismas que `TabsManagerServer` menos lo que describe una
  * barra de pestañas que ya no existe (`variant`, `dependentParams`).
  *

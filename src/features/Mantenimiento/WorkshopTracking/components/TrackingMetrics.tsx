@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { useDataTableFilter } from '@/shared/components/common/DataTable';
+import { useDataTableFilter } from '@/shared/components/common/DataTable/useDataTableFilter';
 import { MetricCard, type MetricTone } from '@/shared/components/common/MetricCard';
 import { useQuery } from '@tanstack/react-query';
 import { Suspense, use } from 'react';

@@ -1,10 +1,6 @@
 'use client';
 
-import type {
-  DataTableFacetedFilterConfig,
-  DataTableSearchParams,
-  FacetResult,
-} from '@/shared/components/common/DataTable';
+import type { DataTableFacetedFilterConfig, DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { dailyReportRowStatusLabels, dailyReportTypeServiceLabels } from '@/shared/utils/mappers';
 import {

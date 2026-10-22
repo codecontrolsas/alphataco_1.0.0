@@ -12,7 +12,7 @@ import {
 import { MaintenanceStatusPill } from '@/features/Mantenimiento/shared/components/MaintenanceStatusPill';
 import { RelativeAge } from '@/features/Mantenimiento/shared/components/RelativeAge';
 import { ResourceCell, toResourceCellResource } from '@/features/Mantenimiento/shared/components/ResourceCell';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { type ColumnDef } from '@tanstack/react-table';
 import { Calendar, ClipboardList, Eye, History, Shield, Wrench, XCircle } from 'lucide-react';
 import moment from 'moment';

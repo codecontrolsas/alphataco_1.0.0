@@ -1,6 +1,6 @@
 import { Skeleton } from '@/components/ui/skeleton';
 import ContactComponent from '@/features/Empresa/Contactos/components/ContactComponent';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { cn } from '@/lib/utils';
 import BackButton from '@/shared/components/common/BackButton';
 import { StateBlock } from '@/shared/components/common/StateBlock';

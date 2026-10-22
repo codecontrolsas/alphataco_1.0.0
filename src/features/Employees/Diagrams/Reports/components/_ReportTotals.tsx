@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { DataTableSearchParams } from '@/shared/components/common/DataTable';
+import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { getContrastTextColor } from '../../lib/color-contrast';

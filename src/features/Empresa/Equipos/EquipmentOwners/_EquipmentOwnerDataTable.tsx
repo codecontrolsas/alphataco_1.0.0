@@ -7,8 +7,8 @@ import {
   CatalogTableSurface,
   useCatalogSheet,
 } from '@/shared/components/common/CatalogFormSheet';
-import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable';
-import { DataTable } from '@/shared/components/common/DataTable';
+import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Suspense, useCallback, useMemo, useState } from 'react';

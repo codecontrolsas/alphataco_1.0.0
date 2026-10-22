@@ -17,7 +17,7 @@ import {
 } from '@/features/Mantenimiento/shared/maintenance-resource';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { cn } from '@/lib/utils';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { conditionLabels } from '@/shared/utils/mappers';
 import { type ColumnDef } from '@tanstack/react-table';

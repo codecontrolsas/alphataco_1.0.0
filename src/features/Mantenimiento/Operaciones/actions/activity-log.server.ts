@@ -1,6 +1,6 @@
 'use server';
 
-import { checkMultiplePermissionsServer } from '@/features/Permissions/actionsServer';
+import { checkMultiplePermissionsServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
 import { CACHE_TAGS, CACHE_TTL } from '@/shared/constants/cache';

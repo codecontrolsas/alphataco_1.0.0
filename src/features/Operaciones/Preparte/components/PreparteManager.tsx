@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PermissionGuard } from '@/features/Permissions';
+import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 

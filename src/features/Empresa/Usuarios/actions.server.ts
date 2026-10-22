@@ -1,7 +1,8 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import { stateToPrismaParams, type DataTableSearchParams } from '@/shared/components/common/DataTable';
+import { stateToPrismaParams } from '@/shared/components/common/DataTable/helpers';
+import { type DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { CACHE_TAGS, CACHE_TTL } from '@/shared/constants/cache';
 import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';

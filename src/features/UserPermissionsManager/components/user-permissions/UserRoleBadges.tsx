@@ -2,7 +2,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { useQuery } from '@tanstack/react-query';
-import { getUserRolesServer, type UserRolesData } from '../../actions.server';
+import { getUserRolesServer, type UserRolesData } from '@/features/Permissions/actions/roles.server';
 import { userPermissionKeys } from '../../hooks/useUserPermissionEditor';
 
 /** Roles del usuario en la cabecera; comparte la consulta con la tarjeta "Roles asignados". */

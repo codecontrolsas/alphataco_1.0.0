@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { Prisma } from '@/generated/prisma/client';
 import { condition_enum, status_type } from '@/generated/prisma/enums';
-import type { DataTableSearchParams } from '@/shared/components/common/DataTable';
+import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import {
   NULL_FILTER_VALUE,
   buildDateRangeFiltersWhere,

@@ -1,12 +1,8 @@
 'use client';
 
 import { arca_environment, invoice_status } from '@/generated/prisma/enums';
-import {
-  DataTable,
-  type DataTableFacetedFilterConfig,
-  type DataTableSearchParams,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { CBTE_TYPES, type CbteTypeId } from '@/shared/lib/arca/catalogs';
 import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';

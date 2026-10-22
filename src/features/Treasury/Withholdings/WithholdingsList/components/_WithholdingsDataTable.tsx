@@ -1,12 +1,7 @@
 'use client';
 
-import {
-  DataTable,
-  type DataTableExportConfig,
-  type DataTableFacetedFilterConfig,
-  type DataTableSearchParams,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { type DataTableExportConfig, type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Users } from 'lucide-react';

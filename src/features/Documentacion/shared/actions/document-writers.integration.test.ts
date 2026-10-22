@@ -28,7 +28,7 @@ vi.mock('@/shared/lib/tenant', () => ({
   getActiveCompanyId: async () => 'e4000000-0000-4000-8000-000000000001',
   assertCompanyAccess: async () => undefined,
 }));
-vi.mock('@/features/Permissions/actionsServer', () => ({ checkPermissionServer: async () => true }));
+vi.mock('@/features/Permissions/actions/permissions.server', () => ({ checkPermissionServer: async () => true }));
 vi.mock('@/shared/actions/auth.actions', () => ({
   requireServerAuthProfile: async () => ({
     id: 'e4000000-0000-4000-8000-000000000002',
@@ -345,7 +345,7 @@ describe.skipIf(!RUN)('escritores de documentos sin filas pendientes (integraciÃ
 
   it('multirrecurso mensual: el perÃ­odo corriente se saltea; el anterior no lo cubre y se crea otra fila', async () => {
     const { uploadMultiResourceDocument } = await import('./upload-multiresource-document');
-    const { arCurrentPeriod } = await import('../compliance');
+    const { arCurrentPeriod } = await import('../compliance/dates');
     const t = await mkType('Mensual', { is_it_montlhy: true, multiresource: true });
     const period = arCurrentPeriod(new Date());
     const previous = arCurrentPeriod(new Date(Date.now() - 45 * DAY));

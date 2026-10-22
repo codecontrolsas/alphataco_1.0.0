@@ -1,6 +1,6 @@
 import { EmployeeDeliveriesTableSkeleton } from '@/features/Clothing/EmployeeDeliveries/EmployeeDeliveriesList/fallback/EmployeeDeliveriesTableSkeleton';
 import { EmployeeDeliveriesTabContent } from '@/features/Clothing/EmployeeDeliveries/EmployeeDeliveriesTabContent';
-import { getUserPermissionsMapServer } from '@/features/Permissions';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
 import { RecordSectionsServer } from '@/features/TabsManager/RecordSectionsServer';

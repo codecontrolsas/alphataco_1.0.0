@@ -1,13 +1,13 @@
 import 'server-only';
 
 import { notify } from '@/features/Notifications/lib/dispatch.server';
-import type { SendMail } from '@/shared/lib/mail';
+import type { SendMail } from '@/shared/lib/mail/transport';
 import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
 import { callScalar } from '@/shared/lib/sql';
-import { argentinaDate } from '../lib/dates';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { runForEachCompany, runJobWithBitacora } from '../lib/per-company';
 import type { JobSummary } from '../lib/types';
-import { deviationsResultSchema } from '../schemas/deviations';
+import { deviationsResultSchema } from '@/features/Operaciones/PartesDiarios/schemas/deviations';
 import { renderDeviationsEmail } from '../templates/deviations';
 
 /**

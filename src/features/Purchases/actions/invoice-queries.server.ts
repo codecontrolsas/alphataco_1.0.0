@@ -1,6 +1,6 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { VAT_RATE_LABELS, isVatRateId } from '@/shared/lib/arca/catalogs';
 import type { arca_check_result } from '@/generated/prisma/enums';

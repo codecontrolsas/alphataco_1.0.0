@@ -14,9 +14,9 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { StackedCell } from '@/features/Operaciones/shared/components/StackedCell';
-import { SegmentedProgress } from '@/features/Operaciones/shared/components/SegmentedProgress';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { StackedCell } from '@/shared/components/common/StackedCell';
+import { SegmentedProgress } from '@/shared/components/common/SegmentedProgress';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { formatCalendarDate, formatWeekday } from '@/shared/utils/calendar-date';
 import { dailyReportStatusLabels, dailyReportStatusTones } from '@/shared/utils/mappers';
 import { useQueryClient } from '@tanstack/react-query';

@@ -1,6 +1,6 @@
 'use client';
 
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { StackedCell } from '@/shared/components/common/StackedCell';
 import { argentinaDate, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';

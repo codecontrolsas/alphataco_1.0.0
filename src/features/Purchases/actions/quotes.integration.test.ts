@@ -24,7 +24,7 @@ const mails = vi.hoisted(() => ({
 }));
 
 vi.mock('@/shared/lib/tenant', () => ({ getActiveCompanyId: async () => 'd4000000-0000-4000-8000-000000000001' }));
-vi.mock('@/features/Permissions', () => ({
+vi.mock('@/features/Permissions/actions/permissions.server', () => ({
   checkPermissionServer: async (module: string, tab: string, action: string) =>
     !state.denied.has(`${module}:${tab}:${action}`),
 }));

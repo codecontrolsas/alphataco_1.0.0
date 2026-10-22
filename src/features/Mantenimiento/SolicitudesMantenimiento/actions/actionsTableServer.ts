@@ -1,14 +1,9 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
-import {
-  buildDateRangeFiltersWhere,
-  buildFiltersWhere,
-  buildTextFiltersWhere,
-  parseSearchParams,
-  type DataTableSearchParams,
-} from '@/shared/components/common/DataTable';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { buildDateRangeFiltersWhere, buildFiltersWhere, buildTextFiltersWhere, parseSearchParams } from '@/shared/components/common/DataTable/helpers';
+import { type DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { sanitizeFilters, dateRangeKeys } from '@/shared/lib/table-filters';

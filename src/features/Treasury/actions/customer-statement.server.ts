@@ -1,7 +1,7 @@
 'use server';
 
 import { amountOf } from '@/features/Comercial/Facturacion/lib/invoice-math';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';

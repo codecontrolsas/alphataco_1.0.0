@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 
 /**
  * Tabs/subtabs del módulo `empleados` que gobiernan Diagramas (`empleados:<tab>:<acción>`).

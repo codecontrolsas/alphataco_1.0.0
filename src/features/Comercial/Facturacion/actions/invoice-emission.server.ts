@@ -2,7 +2,7 @@
 
 import { errorMessage, fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { getFiscalDataOverview } from '@/features/Empresa/General/FiscalData/lib/fiscal-data-overview.server';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { getArcaGateway, isArcaMockMode } from '@/shared/lib/arca/server/gateway';
 import { getSessionUserId } from '@/shared/lib/session';

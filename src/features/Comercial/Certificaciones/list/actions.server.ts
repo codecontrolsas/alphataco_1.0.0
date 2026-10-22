@@ -1,6 +1,6 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { UUID_RE } from '@/features/Purchases/lib/action-errors';
 import type { Prisma } from '@/generated/prisma/client';
 import { certification_status } from '@/generated/prisma/enums';

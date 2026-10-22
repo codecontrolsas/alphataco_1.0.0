@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { MailMessage } from '@/shared/lib/mail';
+import type { MailMessage } from '@/shared/lib/mail/transport';
 
 /**
  * Integracion del mail semanal de lotes por vencer (Almacenes etapa 2) contra el Postgres del

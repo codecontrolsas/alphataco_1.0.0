@@ -1,6 +1,6 @@
 'use client';
 
-import { useDataTableFilter } from '@/shared/components/common/DataTable';
+import { useDataTableFilter } from '@/shared/components/common/DataTable/useDataTableFilter';
 import { MetricCard, type MetricTone } from '@/shared/components/common/MetricCard';
 import type { getOtherEquipmentConditionMetrics } from '../metrics.server';
 

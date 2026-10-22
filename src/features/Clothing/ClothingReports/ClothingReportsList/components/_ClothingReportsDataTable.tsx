@@ -8,12 +8,8 @@ import { clothingDeliveryTypeLabels } from '@/features/Clothing/utils/mappers';
 import type { clothing_delivery_type } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import {
-  DataTable,
-  type DataTableFacetedFilterConfig,
-  type DataTableSearchParams,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
 import { Check, CircleOff, X } from 'lucide-react';
 import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';

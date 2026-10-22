@@ -12,24 +12,18 @@ import { useState } from 'react';
 import type { FieldErrors } from 'react-hook-form';
 import { toast } from 'sonner';
 
-import {
-  CustomerDataSection,
-  DateTimeSection,
-  ObservationsSection,
-  ResourcesSection,
-  StatusSection,
-  TypeServiceSection,
-} from './form-sections';
-import {
-  buildCreateDefaults,
-  buildEditDefaults,
-  formatReportDate,
-  useCustomerData,
-  useFormInitialization,
-  useFormSchema,
-  useFormSubmit,
-  useResourceStatusSync,
-} from './hooks';
+import { CustomerDataSection } from '@/features/Operaciones/Certificacion/components/form-sections/CustomerDataSection';
+import { DateTimeSection } from '@/features/Operaciones/Certificacion/components/form-sections/DateTimeSection';
+import { ObservationsSection } from '@/features/Operaciones/Certificacion/components/form-sections/ObservationsSection';
+import { ResourcesSection } from '@/features/Operaciones/Certificacion/components/form-sections/ResourcesSection';
+import { StatusSection } from '@/features/Operaciones/Certificacion/components/form-sections/StatusSection';
+import { TypeServiceSection } from '@/features/Operaciones/Certificacion/components/form-sections/TypeServiceSection';
+import { buildCreateDefaults, buildEditDefaults, formatReportDate } from '@/features/Operaciones/Certificacion/components/hooks/rowFormDefaults';
+import { useCustomerData } from '@/features/Operaciones/Certificacion/components/hooks/useCustomerData';
+import { useFormInitialization } from '@/features/Operaciones/Certificacion/components/hooks/useFormInitialization';
+import { useFormSchema } from '@/features/Operaciones/Certificacion/components/hooks/useFormSchema';
+import { useFormSubmit } from '@/features/Operaciones/Certificacion/components/hooks/useFormSubmit';
+import { useResourceStatusSync } from '@/features/Operaciones/Certificacion/components/hooks/useResourceStatusSync';
 
 /**
  * Hoja lateral de alta / edición de una línea del parte diario (tablero comercial).

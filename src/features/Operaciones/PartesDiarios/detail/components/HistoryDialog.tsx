@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Timeline, type TimelineItem, type TimelineTone } from '@/features/Operaciones/shared/components/Timeline';
+import { Timeline, type TimelineItem, type TimelineTone } from '@/shared/components/common/Timeline';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { dailyReportRowStatusLabels, dailyReportTypeServiceLabels } from '@/shared/utils/mappers';

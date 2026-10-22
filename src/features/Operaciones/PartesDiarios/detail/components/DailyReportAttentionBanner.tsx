@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { useDataTableFilter } from '@/shared/components/common/DataTable';
+import { useDataTableFilter } from '@/shared/components/common/DataTable/useDataTableFilter';
 import { AlertTriangle } from 'lucide-react';
 import { DETAIL_PARAM_NAMESPACE } from '../constants';
 import { useDailyReportStatusSummary } from '../hooks/useDailyReportStatusSummary';

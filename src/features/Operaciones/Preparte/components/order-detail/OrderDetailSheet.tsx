@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatArgentinaDateTime } from '@/features/Treasury/lib/today';
-import { Timeline, type TimelineItem, type TimelineTone } from '@/features/Operaciones/shared/components/Timeline';
+import { Timeline, type TimelineItem, type TimelineTone } from '@/shared/components/common/Timeline';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import { formatCalendarDate } from '@/shared/utils/calendar-date';
 import { preparteStatusBadges, preparteStatusLabels } from '@/shared/utils/mappers';

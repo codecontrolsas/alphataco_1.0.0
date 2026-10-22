@@ -2,7 +2,7 @@
 
 import { QUANTITY_SCALE, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { DESTINATION_SELECT, destinationLabel } from '@/features/Warehouses/lib/labels';
 import { registerStockMovement, reverseStockMovement } from '@/features/Warehouses/lib/stock-engine';
 import { hasTireMaterials, linkTiresFromEntry } from '@/features/Warehouses/lib/tire-stock';

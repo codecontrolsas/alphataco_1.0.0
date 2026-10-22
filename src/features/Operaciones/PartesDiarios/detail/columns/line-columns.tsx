@@ -1,9 +1,9 @@
 'use client';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { StackedCell } from '@/features/Operaciones/shared/components/StackedCell';
+import { StackedCell } from '@/shared/components/common/StackedCell';
 import { cn } from '@/lib/utils';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import type { ColumnDef } from '@tanstack/react-table';
 import { AlertTriangle, Truck } from 'lucide-react';
 import { deviationText, employeeDeviations, equipmentDeviations } from '../../lib/resource-deviations';

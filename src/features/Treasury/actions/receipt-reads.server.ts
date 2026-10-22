@@ -2,7 +2,7 @@
 
 import { formatVoucherLabel } from '@/features/Comercial/Facturacion/lib/invoice-type';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import type { payment_method } from '@/generated/prisma/enums';
 import { prisma } from '@/shared/lib/prisma';
 import { storagePublicUrl } from '@/shared/lib/storage';

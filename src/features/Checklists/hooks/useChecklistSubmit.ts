@@ -1,6 +1,6 @@
 'use client';
 
-import { CreateChecklistAnswer } from '@/features/Checklists';
+import { CreateChecklistAnswer } from '@/features/Checklists/actions/actionsServer';
 import { fetchSupervisorsForEquipment } from '@/features/Checklists/actions/actionsServer';
 import {
   buildAnswersBySection,

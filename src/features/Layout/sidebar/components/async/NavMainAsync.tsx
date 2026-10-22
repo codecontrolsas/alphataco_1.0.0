@@ -1,4 +1,4 @@
-import { getUserAccessibleModulesServer, getUserPermissionsMapServer } from '@/features/Permissions';
+import { getUserAccessibleModulesServer, getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { resolveVisibleTabs } from '../../utils/tabs-visibility';
 import { NavMain } from '../NavMain';
 

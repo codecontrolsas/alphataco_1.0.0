@@ -1,6 +1,6 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { DESTINATION_SELECT, destinationLabel } from '@/features/Warehouses/lib/labels';
 import type { StockDestinationTypeValue } from '@/features/Warehouses/schemas/stock-movement';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';

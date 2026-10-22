@@ -23,8 +23,8 @@ import {
   getVehicleOwners,
   getVehicleTypes,
 } from '@/features/Equipos/EquipoID/lib/actions/vehicle-catalog-actions';
-import { getUserPermissionsMapServer } from '@/features/Permissions';
-import { canViewServer } from '@/features/Permissions/actionsServer';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
+import { canViewServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 
 // Componentes de Otros Equipos

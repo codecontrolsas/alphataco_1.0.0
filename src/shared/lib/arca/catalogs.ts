@@ -129,14 +129,6 @@ export const CONCEPTS = {
 
 export type ConceptId = keyof typeof CONCEPTS;
 
-/** Tipos de documento del receptor. La v1 solo emite a CUIT (80). */
-export const DOC_TYPES = {
-  80: 'CUIT',
-  86: 'CUIL',
-  96: 'DNI',
-  99: 'Sin identificar',
-} as const;
-
 /** Moneda ISO (como la guardan contratos y certificaciones) → código de moneda ARCA. */
 export const ARCA_CURRENCY_BY_ISO = {
   ARS: 'PES',

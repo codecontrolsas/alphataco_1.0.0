@@ -2,8 +2,8 @@
 
 import { ServiceOrderDetailView } from '@/features/Mantenimiento/Gomeria/Ordenes/components/ServiceOrderDetailView';
 import { tireServiceOrderStatusLabels } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
-import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable';
-import { DataTable } from '@/shared/components/common/DataTable';
+import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useCallback, useMemo, useState } from 'react';

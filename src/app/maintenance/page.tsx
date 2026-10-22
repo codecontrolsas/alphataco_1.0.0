@@ -1,5 +1,5 @@
 import { Skeleton } from '@/components/ui/skeleton';
-import { MaintenanceLoginCard } from '@/features/Mantenimiento/AnonymousLogin';
+import { MaintenanceLoginCard } from '@/features/Mantenimiento/AnonymousLogin/MaintenanceLoginCard';
 import { Suspense } from 'react';
 
 export default function MaintenanceLoginPage() {

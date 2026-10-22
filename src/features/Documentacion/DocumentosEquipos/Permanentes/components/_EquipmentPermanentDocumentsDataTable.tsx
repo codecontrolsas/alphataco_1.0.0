@@ -11,11 +11,8 @@ import {
   useDocumentListFacets,
   useDocumentListTable,
 } from '@/features/Documentacion/lists-shared/use-document-list-table';
-import {
-  DataTable,
-  type DataTableFacetedFilterConfig,
-  type DataTableSearchParams,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { type DataTableFacetedFilterConfig, type DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { contractTypeVehiclesLabels } from '@/shared/utils/mappers';
 import { useCallback, useMemo } from 'react';

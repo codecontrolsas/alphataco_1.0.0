@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { checkMultiplePermissionsServer } from '@/features/Permissions/actionsServer';
+import { checkMultiplePermissionsServer } from '@/features/Permissions/actions/permissions.server';
 
 /** Módulo de permisos de Mantenimiento. */
 const MAINTENANCE_MODULE = 'mantenimiento';

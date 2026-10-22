@@ -1,4 +1,4 @@
-import { argentinaDate } from '@/features/Jobs/lib/dates';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 
 /**
  * Saneo del nombre de archivo que manda el cliente.

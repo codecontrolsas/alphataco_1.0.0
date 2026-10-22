@@ -5,22 +5,8 @@ import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { reconcileRowResourceStatus } from '../lib/row-resource-status';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import {
-  assertDailyReportInCompany,
-  assertRowInCompany,
-  assertRowResourcesInCompany,
-  filterRowsInCompany,
-} from './lib/row-query';
-import {
-  assertRowDeletableUnderLock,
-  assertRowEditableUnderLock,
-  assertStatusSettable,
-  authorizeBulkRowUpdate,
-  authorizeRowCreate,
-  authorizeRowDelete,
-  authorizeRowUpdate,
-  RowRuleError,
-} from './lib/row-guards';
+import { assertRowInCompany, assertRowResourcesInCompany, filterRowsInCompany } from './lib/row-query';
+import { assertRowDeletableUnderLock, assertRowEditableUnderLock, assertStatusSettable, authorizeBulkRowUpdate, authorizeRowDelete, authorizeRowUpdate, RowRuleError } from './lib/row-guards';
 import {
   buildResourceCheck,
   buildResourcesOnlyCheck,
@@ -29,9 +15,6 @@ import {
 } from './lib/row-write-helpers';
 import { prismaBase } from '@/shared/lib/prisma';
 import { getTenantContext } from '@/shared/lib/tenant-db';
-import { changeRowResources } from './use-cases/change-row-resources';
-import { changeRowResourcesSchema, changeRowStatusSchema } from './use-cases/command-schemas';
-import { changeRowStatus } from './use-cases/change-row-status';
 import { createRow } from './use-cases/create-row';
 import { syncRowResources } from './use-cases/row-resources';
 import { touchRow } from './use-cases/row-state';
@@ -123,23 +106,6 @@ export async function createDailyReportRowPrisma(data: DailyReportRowInput & { d
 
 function invalidCommand(detail?: string): UseCaseResult<RowWriteResult> {
   return { ok: false, code: 'INVALID_INPUT', message: detail ? `Pedido inválido: ${detail}` : 'Pedido inválido.' };
-}
-
-/**
- * Cambia los recursos de una línea con altas y bajas EXPLÍCITAS. Devuelve la unión del caso de uso: quien llama
- * decide qué mostrar según `code` (y debe lanzar si `!ok` en su `mutationFn`, para no mostrar un "guardado" falso).
- */
-export async function changeDailyReportRowResources(command: unknown): Promise<UseCaseResult<RowWriteResult>> {
-  const parsed = changeRowResourcesSchema.safeParse(command);
-  if (!parsed.success) return invalidCommand(parsed.error.issues[0]?.message);
-  return changeRowResources({ db: prismaBase }, await getTenantContext(), parsed.data);
-}
-
-/** Cambia el estado de una línea (o completa un turno) con control de versión. */
-export async function changeDailyReportRowStatus(command: unknown): Promise<UseCaseResult<RowWriteResult>> {
-  const parsed = changeRowStatusSchema.safeParse(command);
-  if (!parsed.success) return invalidCommand(parsed.error.issues[0]?.message);
-  return changeRowStatus({ db: prismaBase }, await getTenantContext(), parsed.data);
 }
 
 // ============================================================================

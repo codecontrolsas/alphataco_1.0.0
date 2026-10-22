@@ -1,6 +1,6 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { STOCK_DESTINATION_TYPES } from '@/features/Warehouses/schemas/stock-movement';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';

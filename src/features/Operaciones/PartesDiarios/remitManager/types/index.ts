@@ -5,10 +5,7 @@ import type {
 } from '../actions/remitos.server';
 
 export type {
-  AvailableDocument,
-  AvailableRemito,
   RemitDocument,
-  Remito,
   RemitoWithDocuments,
 } from '../actions/remitos.server';
 

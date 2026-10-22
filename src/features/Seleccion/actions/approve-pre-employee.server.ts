@@ -1,6 +1,6 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
@@ -9,7 +9,7 @@ import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { prisma } from '@/shared/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { typeAppliesTo } from '@/features/Documentacion/shared/compliance';
+import { typeAppliesTo } from '@/features/Documentacion/shared/compliance/applicability';
 import { loadComplianceDataset } from '@/features/Documentacion/shared/compliance/server/dataset.server';
 import { refreshResourceStatus } from '@/features/Documentacion/shared/compliance/server/document-status.server';
 import { Prisma } from '@/generated/prisma/client';

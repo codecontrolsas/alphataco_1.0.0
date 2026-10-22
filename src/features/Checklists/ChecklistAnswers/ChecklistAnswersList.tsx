@@ -1,5 +1,5 @@
 import { getTablePreferences } from '@/shared/actions/table-preferences';
-import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable';
+import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { getChecklistAnswersPaginated } from './actions.server';
 import { _ChecklistAnswersDataTable } from './components/_ChecklistAnswersDataTable';

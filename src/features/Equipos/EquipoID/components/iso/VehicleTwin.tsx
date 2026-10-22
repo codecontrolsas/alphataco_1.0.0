@@ -14,7 +14,8 @@ import {
 } from '@/features/Mantenimiento/Gomeria/shared/iso/truck-geometry';
 import { calculatePositions } from '@/features/Mantenimiento/Gomeria/shared/tire-diagram-utils';
 import { cn } from '@/lib/utils';
-import { IsoFigure, useIsoSelect } from '@/shared/components/iso';
+import { IsoFigure } from '@/shared/components/iso/IsoFigure';
+import { useIsoSelect } from '@/shared/components/iso/use-iso-select';
 import { ArrowRight } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type PointerEvent } from 'react';

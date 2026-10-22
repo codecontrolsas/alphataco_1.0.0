@@ -1,5 +1,5 @@
-import { getUserPermissionsMapServer } from '@/features/Permissions';
-import { SectionManagerServer } from '@/features/TabsManager';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
+import { SectionManagerServer } from '@/features/TabsManager/SectionManagerServer';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { FileText } from 'lucide-react';
 import { Suspense } from 'react';

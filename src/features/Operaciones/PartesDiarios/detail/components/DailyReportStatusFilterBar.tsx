@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { useDataTableFilter } from '@/shared/components/common/DataTable';
+import { useDataTableFilter } from '@/shared/components/common/DataTable/useDataTableFilter';
 import { DETAIL_PARAM_NAMESPACE } from '../constants';
 import { useDailyReportStatusSummary } from '../hooks/useDailyReportStatusSummary';
 

@@ -1,7 +1,7 @@
 'use server';
 
 import { employeeLabel } from '../../../lib/labels';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {

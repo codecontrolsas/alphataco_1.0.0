@@ -12,7 +12,7 @@ import { TransporteSPANAYCHKHYS03 } from '@/features/Formularios/pdf/generators/
 import { TransporteSPANAYCHKHYS04 } from '@/features/Formularios/pdf/generators/TransporteSPANAYCHKHYS04';
 import { toPdfSections } from '@/features/Formularios/utils/checklistView';
 import { TONE_TO_BADGE, type StatusUi } from '@/features/Mantenimiento/lib/status-presentation';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { fetchCurrentCompany } from '@/shared/actions/company.actions';
 import BackButton from '@/shared/components/common/BackButton';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';

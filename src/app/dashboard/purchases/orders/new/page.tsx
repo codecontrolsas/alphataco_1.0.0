@@ -1,4 +1,4 @@
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { NewPurchaseOrderPage } from '@/features/Purchases/Orders/PurchaseOrderPages';
 import { notFound } from 'next/navigation';
 

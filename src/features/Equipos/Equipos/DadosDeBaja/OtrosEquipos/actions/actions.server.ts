@@ -11,7 +11,7 @@ import {
   withoutColumnFilter,
   type OtherEquipmentListConfig,
 } from '@/features/Equipos/OtherEquipment/list/lib/other-equipment-where';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import type { ExportResult } from '@/shared/lib/export-result';

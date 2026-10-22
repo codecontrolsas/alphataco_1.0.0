@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { Bell, Pencil, Shield, Trash2, Users } from 'lucide-react';
-import type { RoleWithCount } from '../../actions.server';
+import type { RoleWithCount } from '@/features/Permissions/actions/roles.server';
 
 interface RoleCardProps {
   role: RoleWithCount;

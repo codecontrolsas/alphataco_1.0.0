@@ -20,7 +20,7 @@ const CUSTOMER = 'c3000000-0000-4000-8000-000000000030';
 let denied = new Set<string>();
 let currentProfile = PROFILE;
 
-vi.mock('@/features/Permissions', () => ({
+vi.mock('@/features/Permissions/actions/permissions.server', () => ({
   checkPermissionServer: async (_module: string, tab: string, action: string) => !denied.has(`${tab}:${action}`),
 }));
 vi.mock('@/shared/lib/tenant', () => ({ getActiveCompanyId: async () => COMPANY }));

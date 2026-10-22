@@ -1,6 +1,6 @@
 import DocumentNav from '@/features/Documentacion/shared/components/DocumentNav';
-import { PermissionGuardServer } from '@/features/Permissions';
-import { ViewManagerServer } from '@/features/TabsManager';
+import { PermissionGuardServer } from '@/features/Permissions/components/PermissionGuardServer';
+import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
 import { Suspense } from 'react';
 import { MonthlyEquipmentDocumentsList } from './Mensuales/MonthlyEquipmentDocumentsList';
 import { MonthlyEquipmentDocumentsSkeleton } from './Mensuales/fallback/MonthlyEquipmentDocumentsSkeleton';

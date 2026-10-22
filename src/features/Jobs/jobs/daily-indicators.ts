@@ -2,7 +2,7 @@ import 'server-only';
 
 import { callVoid } from '@/shared/lib/sql';
 import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
-import { argentinaDate } from '../lib/dates';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { runForEachCompany, runGlobalStep, runJobWithBitacora } from '../lib/per-company';
 import type { JobSummary, JobUnitOutcome } from '../lib/types';
 

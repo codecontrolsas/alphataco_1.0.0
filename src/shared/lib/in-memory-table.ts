@@ -1,4 +1,4 @@
-import { argentinaDate } from '@/features/Jobs/lib/dates';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableState } from '@/shared/components/common/DataTable/types';
 

@@ -6,9 +6,10 @@ import type { PipelineStep } from '../types';
 import { getOperacionesPipelineSummary } from './actions/pipeline-summary.server';
 
 // TabContent components existentes
-import { SolicitudesMantenimientoTabContent } from '@/features/Mantenimiento/SolicitudesMantenimiento';
-import { SolicitudesTableSkeleton } from '@/features/Mantenimiento/SolicitudesMantenimiento/fallback';
-import { WorkshopTrackingSkeleton, WorkshopTrackingTabContent } from '@/features/Mantenimiento/WorkshopTracking';
+import { SolicitudesMantenimientoTabContent } from '@/features/Mantenimiento/SolicitudesMantenimiento/SolicitudesMantenimientoTabContent';
+import { SolicitudesTableSkeleton } from '@/features/Mantenimiento/SolicitudesMantenimiento/fallback/SolicitudesTableSkeleton';
+import { WorkshopTrackingSkeleton } from '@/features/Mantenimiento/WorkshopTracking/fallback/WorkshopTrackingSkeleton';
+import { WorkshopTrackingTabContent } from '@/features/Mantenimiento/WorkshopTracking/WorkshopTrackingTabContent';
 
 const PARAM_NAME = 'op_step';
 const DEFAULT_STEP = 'validate';

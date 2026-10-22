@@ -1,4 +1,4 @@
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
 import { CalendarDays } from 'lucide-react';
 import moment from 'moment';

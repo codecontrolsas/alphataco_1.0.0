@@ -1,5 +1,5 @@
-import { checkPermissionServer } from '@/features/Permissions';
-import type { DataTableSearchParams } from '@/shared/components/common/DataTable';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { CreateExternalAccessModal } from './components/CreateExternalAccessModal';
 import { ExternalApiClientsList } from './list/ExternalApiClientsList';
 

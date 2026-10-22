@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 
 import { PreEmployeeList } from './components/PreEmployeeList/PreEmployeeList';

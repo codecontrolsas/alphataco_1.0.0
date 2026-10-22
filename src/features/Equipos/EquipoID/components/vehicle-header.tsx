@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EquipmentConditionControl } from '@/features/Equipos/components/EquipmentConditionControl';
 import { EquipmentStatusActions } from '@/features/Equipos/components/EquipmentStatusActions';
-import { PermissionGuard } from '@/features/Permissions';
+import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
 import { reasonForTerminationLabels } from '@/shared/utils/mappers';
 import { Pencil, Truck } from 'lucide-react';

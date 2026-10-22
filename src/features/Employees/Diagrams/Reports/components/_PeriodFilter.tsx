@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { useDataTablePending } from '@/shared/components/common/DataTable';
+import { useDataTablePending } from '@/shared/components/common/DataTable/DataTablePendingContext';
 import { argentinaDate } from '@/shared/lib/argentina-time';
 import { CalendarIcon, X } from 'lucide-react';
 import moment from 'moment';

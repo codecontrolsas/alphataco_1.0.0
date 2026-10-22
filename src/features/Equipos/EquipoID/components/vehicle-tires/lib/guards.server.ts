@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { assertVehicleInActiveCompany } from '@/features/Mantenimiento/Gomeria/shared/perimeter';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { z } from 'zod';
 
 /**

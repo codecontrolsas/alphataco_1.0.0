@@ -66,30 +66,3 @@ export async function getPreparteChangeLogs(preparteId: string) {
     throw new Error('Error al obtener el historial de cambios');
   }
 }
-
-/**
- * Historial de cambios de todas las líneas que comparten el mismo `numero_pedido`.
- *
- * Perímetro: sólo pedidos de la empresa activa.
- */
-export async function getPreparteChangeLogsByOrderNumber(numeroPedido: string) {
-  try {
-    const companyId = await getActiveCompanyId();
-
-    const data = await prisma.preparte_change_logs.findMany({
-      where: {
-        preparte: {
-          numero_pedido: numeroPedido,
-          ...preparteCompanyScope(companyId),
-        },
-      },
-      include: CHANGE_LOG_INCLUDE,
-      orderBy: { changed_at: 'desc' },
-    });
-
-    return data.map(toChangeLogEntry);
-  } catch (error) {
-    logger.error('Error al obtener el historial por número de pedido', { data: { error, numeroPedido } });
-    throw new Error('Error al obtener el historial de cambios');
-  }
-}

@@ -2,7 +2,7 @@
 
 import { toPathExtension, toPathIdentifier } from '@/shared/lib/storage-file-name';
 import { formatPathSegment } from '@/shared/utils/legacy-mappers';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
 import { prisma } from '@/shared/lib/prisma';

@@ -16,7 +16,7 @@ const CUSTOMER = 'c2000000-0000-4000-8000-000000000030';
 
 let canViewPrices = true;
 
-vi.mock('@/features/Permissions', () => ({
+vi.mock('@/features/Permissions/actions/permissions.server', () => ({
   checkPermissionServer: async (_module: string, _tab: string, action: string) =>
     action === 'view_prices' ? canViewPrices : true,
 }));

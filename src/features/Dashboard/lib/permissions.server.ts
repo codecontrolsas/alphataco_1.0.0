@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { cache } from 'react';
 
 /** Tabs/subtabs del módulo `dashboard` con permiso `view` propio (ver permissions-map.ts). */

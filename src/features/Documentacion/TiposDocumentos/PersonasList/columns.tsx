@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatArgentinaDay } from '@/features/Treasury/lib/today';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Check, MoreHorizontal, Pencil, X } from 'lucide-react';
 import type { DocumentTypeListItem } from '../actions/queries.server';

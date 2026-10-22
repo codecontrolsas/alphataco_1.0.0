@@ -2,13 +2,8 @@
 
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import type { payment_method, payment_order_status } from '@/generated/prisma/enums';
-import {
-  DataTable,
-  type DataTableExportConfig,
-  type DataTableFacetedFilterConfig,
-  type DataTableSearchParams,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { type DataTableExportConfig, type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { Banknote, CircleOff, Landmark, Truck, User, Wallet, WalletCards, type LucideIcon } from 'lucide-react';
 import { formatArgentinaDay, formatDateAr } from '@/shared/lib/argentina-time';

@@ -153,4 +153,3 @@ export async function getOperatorContext() {
 }
 
 export type OperatorContext = NonNullable<Awaited<ReturnType<typeof getOperatorContext>>>;
-export type OperatorAssignedSector = OperatorContext['sectors'][number];

@@ -6,7 +6,7 @@ const { checkPermissionServer, reportFindFirst, rowFindFirst } = vi.hoisted(() =
   rowFindFirst: vi.fn(),
 }));
 
-vi.mock('@/features/Permissions', () => ({ checkPermissionServer }));
+vi.mock('@/features/Permissions/actions/permissions.server', () => ({ checkPermissionServer }));
 vi.mock('@/shared/lib/prisma', () => ({
   prisma: { dailyreport: { findFirst: reportFindFirst }, dailyreportrows: { findFirst: rowFindFirst } },
 }));

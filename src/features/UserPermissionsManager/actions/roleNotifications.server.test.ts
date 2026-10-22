@@ -8,7 +8,7 @@ const state = vi.hoisted(() => ({
   deletedWhere: null as unknown,
 }));
 
-vi.mock('@/features/Permissions/actionsServer', () => ({ checkPermissionServer: async () => state.allowed }));
+vi.mock('@/features/Permissions/actions/permissions.server', () => ({ checkPermissionServer: async () => state.allowed }));
 vi.mock('@/shared/lib/prisma', () => {
   const tx = {
     roles: { findUnique: async () => (state.roleExists ? { id: BigInt(7) } : null) },

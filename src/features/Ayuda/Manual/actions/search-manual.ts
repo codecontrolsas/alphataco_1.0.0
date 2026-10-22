@@ -1,6 +1,6 @@
 'use server';
 
-import { getUserPermissionsMapServer } from '@/features/Permissions';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { z } from 'zod';
 import { canManual } from '../../lib/access.server';

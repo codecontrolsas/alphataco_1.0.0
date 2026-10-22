@@ -1,33 +1,5 @@
 import { Skeleton } from '@/components/ui/skeleton';
 
-export function EquipmentOwnerTableSkeleton() {
-  return (
-    <div className="space-y-4">
-      {/* Toolbar skeleton */}
-      <div className="flex items-center justify-between gap-2">
-        <Skeleton className="h-9 w-64" />
-        <div className="flex gap-2">
-          <Skeleton className="h-9 w-24" />
-          <Skeleton className="h-9 w-24" />
-        </div>
-      </div>
-      {/* Table skeleton */}
-      <div className="rounded-md border">
-        <div className="p-4 space-y-3">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-10 w-full" />
-          ))}
-        </div>
-      </div>
-      {/* Pagination skeleton */}
-      <div className="flex justify-end gap-2">
-        <Skeleton className="h-9 w-20" />
-        <Skeleton className="h-9 w-20" />
-      </div>
-    </div>
-  );
-}
-
 export function VehiclesByOwnerTableSkeleton() {
   return (
     <div className="space-y-4">

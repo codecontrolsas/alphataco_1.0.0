@@ -21,14 +21,8 @@ import {
   tableHeaderRow,
   type MailTone,
 } from '@/shared/lib/mail/shell';
-import { formatLongDateAr } from '../lib/dates';
-import type {
-  CustomerEquipment,
-  DeviationsResult,
-  EmployeeDeviation,
-  EquipmentDeviation,
-  RowWithDeviations,
-} from '../schemas/deviations';
+import { formatLongDateAr } from '@/shared/lib/argentina-time';
+import type { CustomerEquipmentInfo as CustomerEquipment, DailyReportDeviationsResult as DeviationsResult, EmployeeDeviation, EquipmentDeviation, RowWithDeviations } from '@/features/Operaciones/PartesDiarios/schemas/deviations';
 
 /**
  * Correo de desvíos del parte diario. Portado de `supabase/functions/send-deviations-email`.

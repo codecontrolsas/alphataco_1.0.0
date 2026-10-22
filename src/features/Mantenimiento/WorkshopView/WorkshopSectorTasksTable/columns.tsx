@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { MaintenanceStatusPill } from '@/features/Mantenimiento/shared/components/MaintenanceStatusPill';
 import { ResourceCell, toResourceCellResource } from '@/features/Mantenimiento/shared/components/ResourceCell';
 import { cn } from '@/lib/utils';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { argentinaDate, formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { type ColumnDef } from '@tanstack/react-table';

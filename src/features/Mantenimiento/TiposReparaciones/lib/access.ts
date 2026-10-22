@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 
 /**
  * Permisos de la configuración de Tipos de Reparación y Grupos. Las claves son las que usa la

@@ -38,5 +38,3 @@ export async function getCostCenterOptions() {
     return [];
   }
 }
-
-export type CostCenterOption = Awaited<ReturnType<typeof getCostCenterOptions>>[number];

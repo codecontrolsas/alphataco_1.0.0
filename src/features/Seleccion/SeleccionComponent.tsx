@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
-import { getUserPermissionsMapServer } from '@/features/Permissions';
-import { SectionManagerServer } from '@/features/TabsManager';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
+import { SectionManagerServer } from '@/features/TabsManager/SectionManagerServer';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { Plus, UserSearch } from 'lucide-react';
 import Link from 'next/link';

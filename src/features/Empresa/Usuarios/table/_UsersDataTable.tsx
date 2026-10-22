@@ -1,13 +1,8 @@
 'use client';
 
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
-import type {
-  DataTableFacetedFilterConfig,
-  DataTableFilterOption,
-  DataTableSearchParams,
-  FacetResult,
-} from '@/shared/components/common/DataTable';
-import { DataTable } from '@/shared/components/common/DataTable';
+import type { DataTableFacetedFilterConfig, DataTableFilterOption, DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';

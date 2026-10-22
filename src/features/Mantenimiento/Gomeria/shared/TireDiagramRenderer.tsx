@@ -1,6 +1,6 @@
 'use client';
 
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { Check, Circle, CircleDashed } from 'lucide-react';
 import type { ComputedPosition, DiagramAxle, DiagramPosition } from './tire-diagram-utils';
@@ -15,22 +15,6 @@ export interface TireDiagramHitch {
   label: string;
   /** Extremo donde se conecta: la cabina está adelante, el enganche atrás. */
   position: 'front' | 'rear';
-}
-
-export interface TireDiagramRendererProps {
-  axles: DiagramAxle[];
-  positions?: DiagramPosition[];
-  interactive?: boolean;
-  onPositionClick?: (positionNumber: number) => void;
-  highlightedPositions?: number[];
-  /** Posición abierta en el panel: se marca con `aria-pressed` y un anillo de foco fijo. */
-  selectedPosition?: number | null;
-  /** e.g. vehicle domain/plate */
-  label?: string;
-  /** Texto del bloque de cabina (vista superior). Si no viene, no se dibuja. */
-  cabinLabel?: string;
-  /** Extremo de conexión con otro vehículo. */
-  hitch?: TireDiagramHitch;
 }
 
 // ─── Internal helpers ──────────────────────────────────────────────────────
@@ -319,158 +303,5 @@ function HitchEnd({ hitch }: { hitch: TireDiagramHitch }) {
         {hitch.label}
       </span>
     </div>
-  );
-}
-
-// ─── Main Component ────────────────────────────────────────────────────────
-
-export function TireDiagramRenderer({
-  axles,
-  positions = [],
-  interactive = false,
-  onPositionClick,
-  highlightedPositions = [],
-  selectedPosition = null,
-  label,
-  cabinLabel,
-  hitch,
-}: TireDiagramRendererProps) {
-  const computed = calculatePositions(axles);
-  const merged = mergePositions(computed, positions);
-
-  // Sort ALL axles by axle_number — render in order (regular + spare interleaved)
-  const sortedAxles = [...axles].sort((a, b) => a.axle_number - b.axle_number);
-  const regularAxles = sortedAxles.filter((a) => !a.is_spare);
-
-  // Group regular merged positions by axle_number and side
-  const byAxle = new Map<number, { left: MergedPosition[]; right: MergedPosition[] }>();
-  for (const pos of merged) {
-    if (pos.side === 'SPARE') continue;
-    if (!byAxle.has(pos.axle_number)) {
-      byAxle.set(pos.axle_number, { left: [], right: [] });
-    }
-    const group = byAxle.get(pos.axle_number)!;
-    if (pos.side === 'LEFT') group.left.push(pos);
-    else group.right.push(pos);
-  }
-
-  // Group spare merged positions by axle_number
-  const bySpareAxle = new Map<number, MergedPosition>();
-  for (const pos of merged) {
-    if (pos.side === 'SPARE') {
-      bySpareAxle.set(pos.axle_number, pos);
-    }
-  }
-
-  const withTire = positions.filter((p) => p.tire_id !== null).length;
-
-  return (
-    <TooltipProvider delayDuration={200}>
-      <div className="mx-auto flex max-w-3xl flex-col gap-2" role="group" aria-label={label ?? 'Diagrama de cubiertas'}>
-        {label && <div className="text-sm font-medium text-muted-foreground">{label}</div>}
-
-        {/* Leyenda: ícono + texto, nunca solo color */}
-        <ul className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-          <li className="flex items-center gap-1">
-            <span
-              className={cn(
-                'inline-flex h-4 w-6 items-center justify-center rounded-sm border-2',
-                stateClasses.tire.body
-              )}
-            >
-              <StateGlyph state="tire" className="size-2.5" />
-            </span>
-            Con cubierta
-          </li>
-          <li className="flex items-center gap-1">
-            <span
-              className={cn(
-                'inline-flex h-4 w-6 items-center justify-center rounded-sm border-2',
-                stateClasses.empty.body
-              )}
-            >
-              <StateGlyph state="empty" className="size-2.5" />
-            </span>
-            Sin cubierta
-          </li>
-          {highlightedPositions.length > 0 && (
-            <li className="flex items-center gap-1">
-              <span
-                className={cn(
-                  'inline-flex h-4 w-6 items-center justify-center rounded-sm border-2',
-                  stateClasses.done.body
-                )}
-              >
-                <StateGlyph state="done" className="size-2.5" />
-              </span>
-              Intervenida
-            </li>
-          )}
-        </ul>
-
-        {/* Diagrama (vista superior, el vehículo avanza hacia la izquierda: cabina primero) */}
-        <div className="flex w-full flex-row items-center overflow-x-auto pb-1">
-          <div className="flex shrink-0 flex-col items-center justify-center pr-2 text-xs text-muted-foreground">
-            <span aria-hidden="true">←</span>
-            <span className="whitespace-nowrap">Frente</span>
-          </div>
-
-          {regularAxles.length > 0 && (
-            <div className="flex shrink-0 flex-col justify-between py-6 pr-1.5 text-[10px] text-muted-foreground">
-              <span className="whitespace-nowrap">Izq</span>
-              <span className="whitespace-nowrap">Der</span>
-            </div>
-          )}
-
-          {cabinLabel && <CabinBlock label={cabinLabel} />}
-          {hitch?.position === 'front' && <HitchEnd hitch={hitch} />}
-
-          {sortedAxles.length > 0 && (
-            <div className="relative flex min-h-[11rem] min-w-0 flex-1 flex-row items-stretch justify-around rounded-xl border-2 bg-muted/40 px-3 py-5">
-              <div className="absolute left-4 right-4 top-0 h-0.5 rounded-full bg-border" aria-hidden="true" />
-              <div className="absolute bottom-0 left-4 right-4 h-0.5 rounded-full bg-border" aria-hidden="true" />
-
-              {sortedAxles.map((axle) => {
-                if (axle.is_spare) {
-                  const sparePos = bySpareAxle.get(axle.axle_number);
-                  if (!sparePos) return null;
-                  return (
-                    <SpareAxleColumn
-                      key={axle.id}
-                      axle={axle}
-                      sparePosition={sparePos}
-                      interactive={interactive}
-                      highlightedPositions={highlightedPositions}
-                      selectedPosition={selectedPosition}
-                      onPositionClick={onPositionClick}
-                    />
-                  );
-                }
-                const group = byAxle.get(axle.axle_number) ?? { left: [], right: [] };
-                return (
-                  <AxleColumn
-                    key={axle.id}
-                    axle={axle}
-                    leftPositions={group.left}
-                    rightPositions={group.right}
-                    interactive={interactive}
-                    highlightedPositions={highlightedPositions}
-                    selectedPosition={selectedPosition}
-                    onPositionClick={onPositionClick}
-                  />
-                );
-              })}
-            </div>
-          )}
-
-          {hitch?.position === 'rear' && <HitchEnd hitch={hitch} />}
-        </div>
-
-        <p className="text-[11px] text-muted-foreground">
-          {computed.filter((p) => p.side !== 'SPARE').length} posiciones · {withTire} con cubierta ·{' '}
-          {computed.filter((p) => p.side === 'SPARE').length} auxilio
-        </p>
-      </div>
-    </TooltipProvider>
   );
 }

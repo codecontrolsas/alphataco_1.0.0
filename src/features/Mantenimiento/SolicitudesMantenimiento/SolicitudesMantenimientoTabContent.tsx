@@ -1,4 +1,4 @@
-import type { DataTableSearchParams } from '@/shared/components/common/DataTable';
+import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { MaintenanceRequestList } from './MaintenanceRequestList';
 
 interface SolicitudesMantenimientoTabContentProps {

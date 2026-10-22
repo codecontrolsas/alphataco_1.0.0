@@ -1,7 +1,7 @@
 import { Skeleton } from '@/components/ui/skeleton';
 import TiposDocumentosTabContent from '@/features/Documentacion/TiposDocumentos/TiposDocumentosTabContent';
-import { getUserPermissionsMapServer } from '@/features/Permissions';
-import { SectionManagerServer } from '@/features/TabsManager';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
+import { SectionManagerServer } from '@/features/TabsManager/SectionManagerServer';
 import { Suspense } from 'react';
 import EquipmentsTabContent from './Equipos/EquipmentsTabContent';
 import GeneralTabContent from './General/GeneralTabContent';

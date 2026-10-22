@@ -1,4 +1,4 @@
-import { argentinaDate } from '@/features/Jobs/lib/dates';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { AlertTriangle } from 'lucide-react';
 import type { DailyReportDetailRow } from '../types';
 

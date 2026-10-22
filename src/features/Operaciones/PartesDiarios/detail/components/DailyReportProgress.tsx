@@ -1,7 +1,7 @@
 'use client';
 
 import { Skeleton } from '@/components/ui/skeleton';
-import { SegmentedProgress } from '@/features/Operaciones/shared/components/SegmentedProgress';
+import { SegmentedProgress } from '@/shared/components/common/SegmentedProgress';
 import { useDailyReportStatusSummary } from '../hooks/useDailyReportStatusSummary';
 import { buildProgressSegments } from '../../lib/status-progress';
 

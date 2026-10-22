@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { canViewServer, checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { canViewServer, checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 
 /**
  * Permisos de los catálogos de Configuración (módulo `configuracion`) validados en el servidor.

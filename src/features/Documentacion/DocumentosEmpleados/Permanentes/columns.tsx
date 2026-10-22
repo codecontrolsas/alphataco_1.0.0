@@ -1,14 +1,7 @@
 'use client';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  DocumentExpiryCell,
-  DocumentNameCell,
-  DocumentRowActions,
-  DocumentStatePill,
-  documentListStateLabels,
-  documentStateIcons,
-} from '@/features/Documentacion/shared/components/DocumentCells';
+import { DocumentExpiryCell, DocumentNameCell, DocumentRowActions, DocumentStatePill } from '@/features/Documentacion/shared/components/DocumentCells';
 import { RequirementUpload } from '@/features/Documentacion/shared/components/RequirementUpload';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
@@ -24,10 +17,6 @@ import type { EmployeePermanentDocumentListItem } from './actions.server';
 
 /** Datos que ya se ven en las columnas principales (Documento) o que son secundarios. */
 export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['mandatory', 'multiresource', 'deny_reason'];
-
-/** Íconos y labels de estado: los mismos que usa la pill de la tabla (los consume el filtro de Estado). */
-export const stateIcons = documentStateIcons;
-export const stateLabels = documentListStateLabels;
 
 // ============================================================================
 // ACTIONS CELL

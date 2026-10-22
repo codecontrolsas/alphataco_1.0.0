@@ -1,11 +1,11 @@
-import { fetchActiveCustomersForChecklist, fetchActiveEmployeesForChecklist } from '@/features/Checklists';
+import { fetchActiveCustomersForChecklist, fetchActiveEmployeesForChecklist } from '@/features/Checklists/actions/actionsServer';
 import {
   fetchChecklistTemplateById,
   fetchFilteredEquipmentForChecklist,
 } from '@/features/Checklists/actions/checklist-queries';
 import { NormalizedChecklistForm } from '@/features/Checklists/components/NormalizedChecklistForm';
 import { fetchCustomFormById, getCurrentProfile } from '@/features/Formularios/actions/form-actions';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { mapEquipmentToChecklistFormat } from '@/lib/utils';
 import BackButton from '@/shared/components/common/BackButton';
 import { StateBlock } from '@/shared/components/common/StateBlock';

@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { getMovementFormLookups } from '@/features/Warehouses/actions/options.server';
 import { NewMovementForm } from '@/features/Warehouses/Movements/components/NewMovementForm';
 import { STOCK_MOVEMENT_TYPES, type StockMovementTypeValue } from '@/features/Warehouses/schemas/stock-movement';

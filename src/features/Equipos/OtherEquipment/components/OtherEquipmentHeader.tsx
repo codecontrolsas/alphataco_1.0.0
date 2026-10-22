@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import type { OtherEquipmentDetail } from '@/features/Equipos/OtherEquipment/actions/actionsServer';
 import { EquipmentConditionControl } from '@/features/Equipos/components/EquipmentConditionControl';
 import { EquipmentStatusActions } from '@/features/Equipos/components/EquipmentStatusActions';
-import { PermissionGuard } from '@/features/Permissions';
+import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
 import { terminationReasonEquipmentLabels } from '@/shared/utils/mappers';
 import { Package, Pencil } from 'lucide-react';

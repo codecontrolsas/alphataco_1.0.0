@@ -1,7 +1,8 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { DataTableColumnHeader, inMemoryTextFilterFn } from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { inMemoryTextFilterFn } from '@/shared/components/common/DataTable/in-memory';
 import { ColumnDef } from '@tanstack/react-table';
 import { Users } from 'lucide-react';
 import { DepartmentAbsenceSummaryItem } from '../../actions.server';

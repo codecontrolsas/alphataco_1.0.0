@@ -2,7 +2,7 @@
 
 import { pickDuplicateRaceWinner, raceWindowStart } from '@/features/Equipos/EquipoID/lib/duplicate-domain';
 import { buildEquipmentStatusUpdate } from '@/features/Equipos/EquipoID/lib/vehicle-status';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { condition_enum } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';

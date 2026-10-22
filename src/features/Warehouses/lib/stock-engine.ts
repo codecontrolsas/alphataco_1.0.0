@@ -2,7 +2,7 @@ import 'server-only';
 
 import moment from 'moment';
 import { Prisma } from '@/generated/prisma/client';
-import { argentinaDate } from '@/features/Jobs/lib/dates';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { averageCostAfterEntry, averageCostAfterEntryReversal, lineTotal } from './average-cost';
 import { classifyBatch, dateColumnToYmd } from './batch-expiry';
 import { nextStockMovementNumber } from './movement-numbering';

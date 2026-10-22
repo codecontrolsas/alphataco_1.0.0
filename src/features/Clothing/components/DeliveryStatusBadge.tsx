@@ -7,7 +7,7 @@ import {
   DELIVERY_STATUS_CANCELLED,
   deliveryStatusLabels,
 } from '@/features/Clothing/lib/delivery-stock-where';
-import type { FacetResult } from '@/shared/components/common/DataTable';
+import type { FacetResult } from '@/shared/components/common/DataTable/types';
 import { Ban, CheckCircle2, type LucideIcon } from 'lucide-react';
 import moment from 'moment';
 

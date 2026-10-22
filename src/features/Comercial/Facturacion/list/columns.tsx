@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CertificationAmount } from '@/features/Comercial/Certificaciones/components/CertificationAmount';
 import type { arca_environment } from '@/generated/prisma/enums';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { CBTE_TYPES, isCbteTypeId } from '@/shared/lib/arca/catalogs';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';

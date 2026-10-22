@@ -4,7 +4,7 @@ import type { Prisma } from '@/generated/prisma/client';
 import { isMaintenanceOrderStatus, nextMaintenanceOrderStatuses } from '@/features/Mantenimiento/lib/order-status';
 import { lockMaintenanceOrder } from '@/features/Mantenimiento/shared/order-lock';
 import { OrderTransitionError } from '@/features/Mantenimiento/shared/order-transition';
-import { checkMultiplePermissionsServer, checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkMultiplePermissionsServer, checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 
 /**
  * Permisos de servidor de la gestión de órdenes del taller.

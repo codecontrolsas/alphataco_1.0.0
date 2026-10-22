@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { AttentionBanner } from '@/features/Mantenimiento/shared/components/AttentionBanner';
-import { useDataTableFilter } from '@/shared/components/common/DataTable';
+import { useDataTableFilter } from '@/shared/components/common/DataTable/useDataTableFilter';
 import type { DataTableFilterUpdates } from '@/shared/components/common/DataTable/useDataTableFilter';
 import { PARAM_SEPARATOR } from '@/shared/components/common/DataTable/helpers';
 import { DATA_TABLE_URL_CHANGE_EVENT } from '@/shared/components/common/DataTable/useDataTable';

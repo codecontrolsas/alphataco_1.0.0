@@ -1,7 +1,7 @@
 import { getEmployeeByIdCached } from '@/features/Employees/EmpleadoID/actions.server';
 import { EmployeeDetailClient } from '@/features/Employees/EmpleadoID/components/EmployeeDetailClient';
 import { EmployeeReadView } from '@/features/Employees/EmpleadoID/components/view/EmployeeReadView';
-import { canViewServer, checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { canViewServer, checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { notFound } from 'next/navigation';
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { Shield, Users } from 'lucide-react';
-import type { RoleWithCount } from '../../actions.server';
+import type { RoleWithCount } from '@/features/Permissions/actions/roles.server';
 import { RoleCard } from './RoleCard';
 
 interface RoleGroupsProps {

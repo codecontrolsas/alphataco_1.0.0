@@ -1,4 +1,4 @@
-import { getUserPermissionsMapServer } from '@/features/Permissions';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { Suspense } from 'react';
 import KpisIndicadoresList from './Indicadores/KpisIndicadoresList';
 import { KpisIndicadoresSkeleton } from './Indicadores/fallback/KpisIndicadoresSkeleton';

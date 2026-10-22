@@ -1,6 +1,6 @@
 import { getFiscalDataOverview } from '@/features/Empresa/General/FiscalData/lib/fiscal-data-overview.server';
 import { joinList } from '@/features/Empresa/General/FiscalData/utils/format';
-import { getUserPermissionsMapServer } from '@/features/Permissions';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { ArrowLeft, CircleDashed, FilePlus2, FileSpreadsheet, Lock } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';

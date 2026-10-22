@@ -1,4 +1,4 @@
-import { fetchActiveCustomersForEquipment } from '@/features/Checklists';
+import { fetchActiveCustomersForEquipment } from '@/features/Checklists/actions/actionsServer';
 import {
   fetchChecklistTemplateById,
   fetchEquipmentUsageForChecklist,

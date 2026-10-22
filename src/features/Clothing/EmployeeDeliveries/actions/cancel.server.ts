@@ -1,7 +1,7 @@
 'use server';
 
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { toActionError } from '@/features/Warehouses/lib/action-errors';
 import { reverseStockMovement } from '@/features/Warehouses/lib/stock-engine';
 import { StockError } from '@/features/Warehouses/lib/stock-errors';

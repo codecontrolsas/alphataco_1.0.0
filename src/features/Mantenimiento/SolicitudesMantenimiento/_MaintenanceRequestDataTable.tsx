@@ -3,12 +3,8 @@
 import { Button } from '@/components/ui/button';
 import { ActivityHistoryModal } from '@/features/Mantenimiento/components/ActivityHistoryModal';
 import { invalidateAllMaintenanceQueries } from '@/features/Mantenimiento/utils/queryInvalidation';
-import type {
-  DataTableFacetedFilterConfig,
-  DataTableSearchParams,
-  FacetResult,
-} from '@/shared/components/common/DataTable';
-import { DataTable } from '@/shared/components/common/DataTable';
+import type { DataTableFacetedFilterConfig, DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { formatArgentinaDateTime, argentinaDate } from '@/shared/lib/argentina-time';

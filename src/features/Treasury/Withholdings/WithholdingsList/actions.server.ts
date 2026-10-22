@@ -1,6 +1,6 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { formatCuit } from '@/features/Purchases/lib/supplier-ids';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
@@ -340,4 +340,3 @@ export async function getWithholdingSingleFacet(
 // ============================================================================
 
 export type WithholdingListItem = Awaited<ReturnType<typeof getWithholdingsPaginated>>['data'][number];
-export type WithholdingTotals = Awaited<ReturnType<typeof getWithholdingTotalsByTax>>;

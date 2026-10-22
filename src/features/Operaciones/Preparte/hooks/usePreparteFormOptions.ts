@@ -7,14 +7,7 @@ import {
   fetchEquipmentsByCustomer,
   fetchSectorsByContract,
 } from '@/features/Operaciones/Preparte/actions/form-data.server';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-
-// Tipos de retorno inferidos de las acciones
-export type Contrato = Awaited<ReturnType<typeof fetchContractsByClientId>>[number];
-export type ServiceItem = Awaited<ReturnType<typeof getActiveServiceItems>>[number];
-export type Sector = Awaited<ReturnType<typeof fetchSectorsByContract>>[number];
-export type Area = Awaited<ReturnType<typeof fetchAreasByContract>>[number];
-export type Equipment = Awaited<ReturnType<typeof fetchEquipmentsByCustomer>>[number];
+import { useQuery } from '@tanstack/react-query';
 
 /**
  * Hook para obtener contratos por cliente
@@ -119,35 +112,5 @@ export function usePreparteFormDependentOptions(clienteId: string | undefined, c
     isLoadingAreas: areasQuery.isLoading,
     isLoadingEquipments: equipmentsQuery.isLoading,
     isError: sectorsQuery.isError || areasQuery.isError || equipmentsQuery.isError,
-  };
-}
-
-/**
- * Hook para invalidar las queries de preparte
- * Útil después de mutaciones para refrescar los datos
- */
-export function usePreparteQueryInvalidation() {
-  const queryClient = useQueryClient();
-
-  const invalidatePreparteQueries = () => {
-    queryClient.invalidateQueries({ queryKey: ['prepartes'] });
-    queryClient.invalidateQueries({ queryKey: ['preparte-table'] });
-  };
-
-  const invalidateFormOptions = (clienteId?: string, contratoId?: string) => {
-    if (clienteId) {
-      queryClient.invalidateQueries({ queryKey: ['preparte-contratos', clienteId] });
-      queryClient.invalidateQueries({ queryKey: ['preparte-equipments', clienteId] });
-    }
-    if (contratoId) {
-      queryClient.invalidateQueries({ queryKey: ['preparte-service-items', contratoId] });
-      queryClient.invalidateQueries({ queryKey: ['preparte-sectors', contratoId] });
-      queryClient.invalidateQueries({ queryKey: ['preparte-areas', contratoId] });
-    }
-  };
-
-  return {
-    invalidatePreparteQueries,
-    invalidateFormOptions,
   };
 }

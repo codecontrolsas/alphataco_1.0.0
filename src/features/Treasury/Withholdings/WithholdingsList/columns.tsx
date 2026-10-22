@@ -2,7 +2,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { formatMoney } from '@/features/Warehouses/lib/format';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import type { ColumnDef } from '@tanstack/react-table';
 import { BadgeCheck, FileCheck2, FileX2, Landmark, Percent, ReceiptText, ShieldCheck, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';

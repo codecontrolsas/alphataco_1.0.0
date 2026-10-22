@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
-import { DataTable, type DataTableSearchParams } from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { type DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { useDailyReportFormStore } from '@/shared/store/useDailyReportFormStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Plus, X } from 'lucide-react';
@@ -25,7 +26,7 @@ const HistoryDialog = dynamic(
   { ssr: false }
 );
 const RemitosManagerModal = dynamic(
-  () => import('@/features/Operaciones/PartesDiarios/remitManager').then((m) => ({ default: m.RemitosManagerModal })),
+  () => import('@/features/Operaciones/PartesDiarios/remitManager/components/RemitosManagerModal').then((m) => ({ default: m.RemitosManagerModal })),
   { ssr: false }
 );
 

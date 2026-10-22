@@ -1,4 +1,4 @@
-import { ViewManagerServer } from '@/features/TabsManager';
+import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
 import ClothingBrandsTabContent from './ClothingBrands/ClothingBrandsTabContent';
 import ClothingItemsTabContent from './ClothingItems/ClothingItemsTabContent';
 import ClothingReportsTabContent from './ClothingReports/ClothingReportsTabContent';

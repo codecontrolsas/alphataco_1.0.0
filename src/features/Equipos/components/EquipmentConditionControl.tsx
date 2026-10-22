@@ -14,7 +14,7 @@ import {
 import { invalidateVehicleLists } from '@/features/Equipos/EquipoID/lib/invalidate-vehicle-lists';
 import { REACTIVATION_TARGET_CONDITIONS } from '@/features/Equipos/EquipoID/lib/vehicle-status';
 import { conditionIcons, conditionVariants } from '@/features/Equipos/Equipos/VehicleList/columns';
-import { PermissionGuard } from '@/features/Permissions';
+import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { condition_enum } from '@/generated/prisma/enums';
 import { conditionLabels } from '@/shared/utils/mappers';
 import { useQuery, useQueryClient } from '@tanstack/react-query';

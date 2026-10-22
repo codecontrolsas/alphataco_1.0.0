@@ -2,14 +2,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  DocumentEquipmentCell,
-  DocumentNameCell,
-  DocumentRowActions,
-  DocumentStatePill,
-  documentListStateLabels,
-  documentStateIcons,
-} from '@/features/Documentacion/shared/components/DocumentCells';
+import { DocumentEquipmentCell, DocumentNameCell, DocumentRowActions, DocumentStatePill } from '@/features/Documentacion/shared/components/DocumentCells';
 import { RequirementUpload } from '@/features/Documentacion/shared/components/RequirementUpload';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
@@ -30,10 +23,6 @@ export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = [
   'period',
   'deny_reason',
 ];
-
-/** Íconos y labels de estado: los mismos que usa la pill de la tabla (los consume el filtro de Estado). */
-export const stateIcons = documentStateIcons;
-export const stateLabels = documentListStateLabels;
 
 // ============================================================================
 // ACTIONS CELL

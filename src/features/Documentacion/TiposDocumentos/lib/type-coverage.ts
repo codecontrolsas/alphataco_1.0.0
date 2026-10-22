@@ -5,8 +5,9 @@
  * todo se calcula con el motor de cumplimiento (`shared/compliance`), sin filas pendientes.
  */
 
-import type { ComplianceDoc, ComplianceResource, ComplianceType, EvaluateOptions } from '../../shared/compliance';
-import { evaluateResource, typeAppliesTo } from '../../shared/compliance';
+import type { ComplianceDoc, ComplianceResource, ComplianceType, EvaluateOptions } from '@/features/Documentacion/shared/compliance/types';
+import { evaluateResource } from '@/features/Documentacion/shared/compliance/evaluation';
+import { typeAppliesTo } from '@/features/Documentacion/shared/compliance/applicability';
 
 export interface TypeCoverage {
   /** Recursos evaluados (todos los de la empresa para ese tipo de recurso). */

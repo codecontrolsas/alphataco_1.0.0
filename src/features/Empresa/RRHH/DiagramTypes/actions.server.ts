@@ -1,7 +1,7 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable';
+import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
 import {
   NULL_FILTER_VALUE,
   buildDateRangeFiltersWhere,

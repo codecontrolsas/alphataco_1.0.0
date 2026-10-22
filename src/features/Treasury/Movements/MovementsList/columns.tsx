@@ -3,7 +3,7 @@
 import { Badge } from '@/components/ui/badge';
 import { StackedCell } from '@/shared/components/common/StackedCell';
 import { formatMoney } from '@/features/Warehouses/lib/format';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { ColumnDef } from '@tanstack/react-table';
 import { ArrowLeftRight, HandCoins, Pencil, PiggyBank, ScrollText, Truck, WalletCards, type LucideIcon } from 'lucide-react';

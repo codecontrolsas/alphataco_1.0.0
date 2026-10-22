@@ -7,7 +7,7 @@ import { resourceIdFields, type MaintenanceResourceKind } from '@/features/Mante
 import { NUEVO_PEDIDO_CREATE, requireResourceAccess } from '@/features/Mantenimiento/shared/resource-access.server';
 import type { PreventiveType } from '@/features/Mantenimiento/shared/preventive-maintenance';
 import { Logger } from '@/lib/logger';
-import { getServerAuthProfile, requireServerAuthProfile } from '@/shared/actions/auth.actions';
+import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
 import { INVALIDATION_MAP } from '@/shared/constants/cache-invalidation-map';
 import { prisma } from '@/shared/lib/prisma';
 import { invalidateCacheTags } from '@/shared/utils/cache-invalidation';
@@ -15,137 +15,6 @@ import { withMaintenanceActor } from '@/features/Mantenimiento/shared/maintenanc
 import { assertSupervisorInCompany } from '@/features/Mantenimiento/shared/supervisor-perimeter';
 
 const serverLogger = new Logger('Mantenimiento/NuevoPedido/orders');
-
-/**
- * Tipo para crear un item de pedido de mantenimiento directo
- */
-export type CreateMaintenanceOrderItemInput = {
-  repair_type_id: string;
-  description?: string;
-  images?: string[];
-};
-
-/**
- * Tipo para crear un pedido de mantenimiento directo
- */
-export type CreateMaintenanceOrderDirectInput = {
-  equipment_id: string;
-  kilometer?: string;
-  engine_hours?: string;
-  /** Descripción libre del pedido (campo "Descripción (opcional)" del Nuevo Pedido) */
-  description?: string;
-  items: CreateMaintenanceOrderItemInput[];
-};
-
-/**
- * Crea un pedido de mantenimiento directamente sin pasar por solicitud.
- * El pedido se crea con status 'pending_scheduling' para que taller le asigne fecha.
- * Usa $transaction para garantizar atomicidad (elimina rollbacks manuales).
- */
-export async function createMaintenanceOrderDirect(input: CreateMaintenanceOrderDirectInput) {
-  serverLogger.info('Creando pedido de mantenimiento directo', {
-    data: { equipment_id: input.equipment_id, itemsCount: input.items.length },
-  });
-
-  // Sin sesión (alta directa desde el QR) el trigger deja `performed_by` NULL, igual que antes.
-  const actorProfile = await getServerAuthProfile();
-
-  // Perímetro de dos caminos (QR de la empresa del equipo o dashboard con `nuevo_pedido:create`).
-  const { companyId } = await requireResourceAccess('vehicle', input.equipment_id, {
-    dashboardPermissions: [NUEVO_PEDIDO_CREATE],
-  });
-
-  const { order, items } = await withMaintenanceActor(actorProfile?.id ?? null, async (tx) => {
-    // 1. Crear el maintenance_order
-    const order = await tx.maintenance_orders.create({
-      data: {
-        equipment_id: input.equipment_id,
-        company_id: companyId,
-        maintenance_request_id: null,
-        status: 'pending_scheduling',
-        kilometer_at_entry: input.kilometer ?? null,
-        engine_hours_at_entry: input.engine_hours ?? null,
-        description: input.description?.trim() || null,
-      },
-    });
-
-    // 2. Crear los maintenance_order_items
-    await tx.maintenance_order_items.createMany({
-      data: input.items.map((item) => ({
-        maintenance_order_id: order.id,
-        company_id: companyId,
-        maintenance_request_item_id: null,
-        repair_type_id: item.repair_type_id,
-        description: item.description ?? null,
-        images: item.images ?? [],
-      })),
-    });
-
-    // Obtener los items creados para retornarlos
-    const items = await tx.maintenance_order_items.findMany({
-      where: { maintenance_order_id: order.id },
-    });
-
-    return { order, items };
-  });
-
-  // 3. Actualizar kilometraje y horómetro del vehículo (fuera de transacción — es warning, no crítico)
-  if (input.kilometer || input.engine_hours) {
-    try {
-      const currentVehicle = await prisma.vehicles.findUnique({
-        where: { id: input.equipment_id },
-        select: { kilometer: true, engine_hours: true },
-      });
-
-      const updateData: Record<string, unknown> = {};
-
-      // Kilometraje: solo si es >= al actual
-      if (input.kilometer) {
-        const currentKm = Number(currentVehicle?.kilometer) || 0;
-        const newKm = Number(input.kilometer);
-        if (newKm >= currentKm) {
-          updateData.kilometer = input.kilometer;
-        } else {
-          serverLogger.warn('Kilometraje ignorado: menor al actual', {
-            data: { newKm, currentKm, equipmentId: input.equipment_id },
-          });
-        }
-      }
-
-      // Horómetro: solo si es >= al actual
-      if (input.engine_hours) {
-        const currentHours = Number(currentVehicle?.engine_hours) || 0;
-        const newHours = Number(input.engine_hours);
-        if (newHours >= currentHours) {
-          updateData.engine_hours = input.engine_hours;
-        } else {
-          serverLogger.warn('Horómetro ignorado: menor al actual', {
-            data: { newHours, currentHours, equipmentId: input.equipment_id },
-          });
-        }
-      }
-
-      if (Object.keys(updateData).length > 0) {
-        await prisma.vehicles.update({
-          where: { id: input.equipment_id },
-          data: updateData,
-        });
-      }
-    } catch (vehicleError) {
-      serverLogger.warn('No se pudo actualizar datos del vehículo', {
-        data: { error: vehicleError },
-      });
-    }
-  }
-
-  serverLogger.info('Pedido de mantenimiento creado exitosamente', {
-    data: { orderId: order.id, itemsCreated: items.length },
-  });
-
-  await invalidateCacheTags(INVALIDATION_MAP.createMaintenanceOrderDirect);
-
-  return { order, items };
-}
 
 /**
  * Tipo para crear desvíos desde el formulario de Nuevo Pedido

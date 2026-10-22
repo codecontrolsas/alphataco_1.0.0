@@ -3,8 +3,9 @@ import { DiagramsSkeleton } from '@/features/Employees/Diagrams/fallback/Diagram
 import EmployeeList from '@/features/Employees/Empleados/EmployeeList/EmployeeList';
 import { EmployeeTableSkeleton } from '@/features/Employees/Empleados/EmployeeList/fallback/EmployeeTableSkeleton';
 import { getCompanyName } from '@/features/Empresa/General/actions/company.server';
-import { getUserPermissionsMapServer } from '@/features/Permissions';
-import { SectionManagerServer, ViewManagerServer } from '@/features/TabsManager';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
+import { SectionManagerServer } from '@/features/TabsManager/SectionManagerServer';
+import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
 import { cookies } from 'next/headers';
 import { Suspense } from 'react';
 

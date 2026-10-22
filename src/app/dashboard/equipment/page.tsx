@@ -1,6 +1,6 @@
 import { getCompanyName } from '@/features/Empresa/General/actions/company.server';
 import EquiposComponent from '@/features/Equipos/EquiposComponent';
-import { getUserPermissionsMapServer } from '@/features/Permissions';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 

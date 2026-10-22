@@ -60,40 +60,6 @@ export const SharedUser = z.object({
 
 export type SharedUser = z.infer<typeof SharedUser>;
 
-export const VehicleSchema =
-  z.array(
-    z.object({
-      created_at: z.coerce.date(),
-      picture: z.string().optional(),
-      type_of_vehicle: z.number(),
-      domain: z.string(),
-      chassis: z.string(),
-      engine: z.string(),
-      serie: z.string(),
-      intern_number: z.string(),
-      year: z.string(),
-      brand: z.number(),
-      model: z.number(),
-      is_active: z.boolean(),
-      termination_date: z.null() || z.string(),
-      reason_for_termination: z.null() || z.string(),
-      user_id: z.string(),
-      company_id: z.string(),
-      id: z.string(),
-      type: z.object({
-        name: z.string(),
-      }),
-      status: z.string(),
-      types_of_vehicles: z.object({ name: z.string() }),
-      brand_vehicles: z.object({ name: z.string() }),
-      model_vehicles: z.object({ name: z.string() }),
-      condition: z.enum(['operativo', 'no operativo', 'en reparacion', 'operativo condicionado', 'en preparacion']),
-      kilometer: z.string(),
-    })
-  ) || [];
-
-export type Vehicle = z.infer<typeof VehicleSchema>;
-
 export const contactSchema = z.object({
   contact_name: z
     .string({ required_error: 'El nombre es requerido' })
@@ -206,80 +172,6 @@ const CitySchema = z.object({
   id: z.number(),
   name: z.string(),
 });
-
-export const CompanySchema = z.array(
-  z.object({
-    id: z.string(),
-    company_name: z.string(),
-    description: z.string(),
-    website: z.string(),
-    contact_email: z.string(),
-    contact_phone: z.string(),
-    address: z.string(),
-    city: CitySchema,
-    country: z.string(),
-    industry: z.string(),
-    company_logo: z.string(),
-    is_active: z.boolean(),
-    company_cuit: z.string(),
-    province_id: CitySchema,
-    owner_id: ProfileSchema,
-    by_defect: z.boolean(),
-    share_company_users: z.array(ShareCompanyUserSchema) || null,
-    companies_employees: z.array(CompaniesEmployeeSchema) || null,
-  })
-);
-export type Company = z.infer<typeof CompanySchema>;
-
-export const EquipoSchema = z
-  .array(
-    z.object({
-      id: z.string(),
-      created_at: z.coerce.date(),
-      name: z.string(),
-      applies: z.string(),
-      multiresource: z.boolean(),
-      mandatory: z.boolean(),
-      explired: z.boolean(),
-      special: z.boolean(),
-      is_active: z.boolean(),
-      description: z.union([z.null(), z.string()]),
-      company_id: z.string().optional().nullable(),
-      is_it_montlhy: z.boolean().optional().nullable(),
-      private: z.boolean().optional().nullable(),
-      down_document: z.boolean().optional().nullable(),
-      type: z.object({
-        name: z.string(),
-      }),
-      conditions: z
-        .array(
-          z.object({
-            ids: z.array(z.string()),
-            values: z.array(z.string()),
-            is_relation: z.boolean(),
-            property_key: z.string(),
-            filter_column: z.string(),
-            relation_type: z.string(),
-            property_label: z.string(),
-            relation_table: z.string(),
-            reference_values: z.array(z.object({ id: z.string(), value: z.string() })),
-            is_array_relation: z.boolean(),
-            column_on_relation: z.string(),
-            column_on_employees: z.string(),
-          })
-        )
-        .optional(),
-    })
-  )
-  .default([]);
-
-export type Equipo = z.infer<typeof EquipoSchema>;
-
-export const MandatoryDocumentsSchema = z.object({
-  Persona: EquipoSchema,
-  Equipos: EquipoSchema,
-});
-export type MandatoryDocuments = z.infer<typeof MandatoryDocumentsSchema>;
 
 const CompanyIdSchema =
   z.object({

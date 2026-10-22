@@ -4,7 +4,7 @@ import {
   COMPANY_DOCUMENT_SPEC,
   loadCompanyDocumentRows,
 } from '@/features/Documentacion/DocumentosEmpresa/lib/company-document-rows.server';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 // Resultado discriminado de export: Next enmascara el mensaje de un error lanzado desde una server action.
 import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';

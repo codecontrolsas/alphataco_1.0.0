@@ -1,6 +1,6 @@
 'use client';
 
-import { useDataTableFilter } from '@/shared/components/common/DataTable';
+import { useDataTableFilter } from '@/shared/components/common/DataTable/useDataTableFilter';
 import { useEffect } from 'react';
 import { hasTableParams } from '../lib/default-table-filter';
 

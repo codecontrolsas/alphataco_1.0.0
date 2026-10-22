@@ -1,9 +1,9 @@
 import 'server-only';
 
 import { notify } from '@/features/Notifications/lib/dispatch.server';
-import type { SendMail } from '@/shared/lib/mail';
+import type { SendMail } from '@/shared/lib/mail/transport';
 import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
-import { argentinaDate } from '../lib/dates';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { buildDocumentsExpirySummary } from '../lib/documents-expiry-summary.server';
 import { runForEachCompany, runJobWithBitacora } from '../lib/per-company';
 import type { JobSummary } from '../lib/types';

@@ -3,7 +3,7 @@ import 'server-only';
 import { prismaSystem } from '@/shared/lib/prisma-system';
 import { callScalar } from '@/shared/lib/sql';
 import { z } from 'zod';
-import { argentinaDate } from '../lib/dates';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { runGlobalStep, runJobWithBitacora } from '../lib/per-company';
 import type { JobSummary } from '../lib/types';
 

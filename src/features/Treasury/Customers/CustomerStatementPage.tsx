@@ -1,4 +1,4 @@
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';

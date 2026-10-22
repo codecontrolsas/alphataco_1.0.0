@@ -1,7 +1,7 @@
 'use client';
 
 import { formatMoney } from '@/features/Warehouses/lib/format';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import type { ColumnDef } from '@tanstack/react-table';
 import { formatArgentinaDateTime } from '../../lib/today';
 import { AccountCell } from '../../components/AccountCell';

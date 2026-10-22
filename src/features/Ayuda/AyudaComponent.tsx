@@ -1,6 +1,6 @@
-import { getUserPermissionsMapServer } from '@/features/Permissions';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
-import { SectionManagerServer } from '@/features/TabsManager';
+import { SectionManagerServer } from '@/features/TabsManager/SectionManagerServer';
 import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
 import { BookOpen, LifeBuoy } from 'lucide-react';
 import { redirect } from 'next/navigation';

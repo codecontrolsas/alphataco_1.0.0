@@ -3,14 +3,7 @@
 import { SectionCard } from '@/shared/components/common/SectionCard';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import {
-  getModulesWithTabsServer,
-  type AllRolePermissionsMap,
-  type ModulesWithTabsData,
-  type RoleWithCount,
-  type UserPermissionsData,
-  type UserRolesData,
-} from './actions.server';
+import { getModulesWithTabsServer, type AllRolePermissionsMap, type ModulesWithTabsData, type RoleWithCount, type UserPermissionsData, type UserRolesData } from '@/features/Permissions/actions/roles.server';
 import { UserEquipmentTypesSection } from './components/UserEquipmentTypesSection';
 import { PermissionEditor } from './components/permission-editor/PermissionEditor';
 import { AssignedRolesCard } from './components/user-permissions/AssignedRolesCard';

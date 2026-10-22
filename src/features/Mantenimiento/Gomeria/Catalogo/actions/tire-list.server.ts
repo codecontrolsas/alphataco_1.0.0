@@ -6,7 +6,7 @@ import {
   GOMERIA_EXPORT_MAX_ROWS,
   gomeriaExportTooLargeMessage,
 } from '@/features/Mantenimiento/Gomeria/shared/list-query';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { getBelowMinimumMaterials } from '@/features/Warehouses/lib/stock-levels';
 import type { Prisma } from '@/generated/prisma/client';
 import type { TireStatus, TireTreadType } from '@/generated/prisma/enums';

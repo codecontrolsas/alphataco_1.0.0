@@ -10,12 +10,8 @@ import { PermissionGuard } from '@/features/Permissions/components/PermissionGua
 import { clothing_delivery_type } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import {
-  DataTable,
-  type DataTableFacetedFilterConfig,
-  type DataTableSearchParams,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
 import { CircleOff, ExternalLink } from 'lucide-react';
 import moment from 'moment';
 import Link from 'next/link';

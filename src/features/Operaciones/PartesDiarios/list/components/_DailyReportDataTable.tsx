@@ -1,12 +1,7 @@
 'use client';
 
-import {
-  DataTable,
-  type DataTableFacetedFilterConfig,
-  type DataTableSearchParams,
-  type DataTableFilterOption,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type DataTableFilterOption, type FacetResult } from '@/shared/components/common/DataTable/types';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { dailyReportStatusLabels } from '@/shared/utils/mappers';
 import { unwrapExportResult } from '@/shared/lib/export-result';

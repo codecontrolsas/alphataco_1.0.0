@@ -1,4 +1,4 @@
-import { ViewManagerServer } from '@/features/TabsManager';
+import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
 import { Suspense } from 'react';
 import { InactiveOtherEquipmentList } from './OtrosEquipos/InactiveOtherEquipmentList';
 import { InactiveOtherEquipmentTableSkeleton } from './OtrosEquipos/fallback/InactiveOtherEquipmentTableSkeleton';

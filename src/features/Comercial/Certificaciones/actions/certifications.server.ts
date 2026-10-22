@@ -2,7 +2,7 @@
 
 import { formatVoucherLabel } from '@/features/Comercial/Facturacion/lib/invoice-type';
 import { errorMessage, fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { UUID_RE } from '@/features/Purchases/lib/action-errors';
 import { Prisma } from '@/generated/prisma/client';
 import type { certification_status } from '@/generated/prisma/enums';

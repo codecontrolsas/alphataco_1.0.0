@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { AttentionBanner } from '@/features/Mantenimiento/shared/components/AttentionBanner';
-import { useDataTableFilter } from '@/shared/components/common/DataTable';
+import { useDataTableFilter } from '@/shared/components/common/DataTable/useDataTableFilter';
 import { PARAM_SEPARATOR } from '@/shared/components/common/DataTable/helpers';
 import { MetricCard } from '@/shared/components/common/MetricCard';
 import { formatDateAr } from '@/shared/lib/argentina-time';

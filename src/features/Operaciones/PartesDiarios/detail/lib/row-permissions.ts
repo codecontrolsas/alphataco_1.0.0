@@ -1,4 +1,4 @@
-import { argentinaDate } from '@/features/Jobs/lib/dates';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import type { Permissions } from '../columns/types';
 import { toReportDateString } from './report-date';
 

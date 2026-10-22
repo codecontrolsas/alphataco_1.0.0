@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import MaintenanceGroupsWrapper from '@/features/Mantenimiento/TiposReparaciones/MaintenanceGroupsWrapper';
 import RepairTypeFormWrapper from '@/features/Mantenimiento/TiposReparaciones/RepairTypeFormWrapper';
 import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
-import { ViewManagerServer } from '@/features/TabsManager';
+import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
 import { CatalogTableSurface } from '@/shared/components/common/CatalogFormSheet';
 import { Suspense } from 'react';
 import TalleresTab from '../General/components/mantenimiento/TalleresTab';

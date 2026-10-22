@@ -6,7 +6,7 @@ import { ATTENTION_THRESHOLDS } from '@/features/Mantenimiento/lib/attention-thr
 import { RelativeAge } from '@/features/Mantenimiento/shared/components/RelativeAge';
 import { ResourceCell } from '@/features/Mantenimiento/shared/components/ResourceCell';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { ColumnDef } from '@tanstack/react-table';
 import { AlertTriangle, Wrench } from 'lucide-react';

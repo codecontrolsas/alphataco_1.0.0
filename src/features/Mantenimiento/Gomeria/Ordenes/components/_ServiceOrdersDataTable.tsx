@@ -16,12 +16,8 @@ import { buildEnumFacetResult, buildFkFacetResult } from '@/features/Mantenimien
 import { tireServiceOrderStatusLabels } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
 import { TIRE_SERVICE_ORDER_STATUS_UI } from '@/features/Mantenimiento/Gomeria/shared/tire-status-presentation';
 import { TireServiceOrderStatus } from '@/generated/prisma/enums';
-import {
-  DataTable,
-  type DataTableFacetedFilterConfig,
-  type DataTableSearchParams,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
 import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useQueryClient } from '@tanstack/react-query';

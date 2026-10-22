@@ -1,7 +1,7 @@
 'use client';
 
 import type { TireStatus } from '@/generated/prisma/enums';
-import { useDataTableFilter } from '@/shared/components/common/DataTable';
+import { useDataTableFilter } from '@/shared/components/common/DataTable/useDataTableFilter';
 import { MetricCard, type MetricTone } from '@/shared/components/common/MetricCard';
 import { useQuery } from '@tanstack/react-query';
 import { getTireStatusCounts } from '../actions/tire-list.server';

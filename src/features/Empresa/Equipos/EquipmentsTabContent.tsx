@@ -1,5 +1,5 @@
 import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
-import { ViewManagerServer } from '@/features/TabsManager';
+import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
 import type { ReactNode } from 'react';
 import { Suspense } from 'react';
 import EquipmentBrandList from './EquipmentBrands/EquipmentBrandList';

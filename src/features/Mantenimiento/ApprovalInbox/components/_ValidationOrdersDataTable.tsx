@@ -11,7 +11,7 @@ import { RelativeAge } from '@/features/Mantenimiento/shared/components/Relative
 import { ResourceCell, toResourceCellResource } from '@/features/Mantenimiento/shared/components/ResourceCell';
 import { calculateRepairProgress } from '@/features/Mantenimiento/utils/repairProgress';
 import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
-import { DataTable } from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import type { ColumnDef } from '@tanstack/react-table';
 import { ClipboardCheck, Clock, Eye } from 'lucide-react';

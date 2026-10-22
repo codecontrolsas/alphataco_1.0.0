@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { sumAmounts } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { formatMoney } from '@/features/Warehouses/lib/format';
-import type { DataTableSearchParams } from '@/shared/components/common/DataTable';
+import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import { useQuery } from '@tanstack/react-query';
 import { TREASURY_QUERY_KEYS } from '../../../lib/query-keys';

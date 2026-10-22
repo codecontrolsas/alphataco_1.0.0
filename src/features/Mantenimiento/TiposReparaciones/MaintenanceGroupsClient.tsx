@@ -1,5 +1,5 @@
 'use client';
-import { usePermissions } from '@/features/Permissions';
+import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
 import { CatalogCreateButton, CatalogFormSheet, useCatalogSheet } from '@/shared/components/common/CatalogFormSheet';
 import MaintenanceGroupForm from './MaintenanceGroupForm';
 import MaintenanceGroupsTable from './MaintenanceGroupsTable';

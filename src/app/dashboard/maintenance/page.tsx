@@ -1,6 +1,6 @@
 import { getCompanyName } from '@/features/Empresa/General/actions/company.server';
 import MantenimientoComponent from '@/features/Mantenimiento/MantenimientoComponent';
-import { getUserPermissionsMapServer } from '@/features/Permissions/actionsServer';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { cookies } from 'next/headers';
 
 export async function generateMetadata() {

@@ -1,4 +1,4 @@
-import { argentinaDate } from '@/features/Jobs/lib/dates';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 
 export { EXPIRING_SOON_DAYS } from '../lib/document-expiry';
 

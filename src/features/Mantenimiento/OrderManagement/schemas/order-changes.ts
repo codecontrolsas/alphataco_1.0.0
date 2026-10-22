@@ -54,8 +54,4 @@ export const wizardSectorOrderSchema = z
   .array(z.object({ sectorId: id, sequenceOrder: z.number().int().min(0).max(10000) }))
   .max(200);
 
-export const assignSectorInputSchema = z
-  .array(z.object({ maintenanceOrderItemIds: ids, sectorId: id, sequenceOrder: z.number().int().min(0).max(10000) }))
-  .max(200);
-
 export const orderIdSchema = id;

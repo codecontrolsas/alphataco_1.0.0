@@ -103,36 +103,6 @@ export interface DataTableFacetedFilterConfig {
 }
 
 // ============================================================================
-// COLUMN TYPES
-// ============================================================================
-
-/**
- * Configuración extendida para columnas del DataTable
- */
-export interface DataTableColumnConfig<TData> {
-  /** ID único de la columna */
-  id: string;
-  /** Título visible en el header */
-  title: string;
-  /** Key del objeto de datos (para accessorKey) */
-  accessorKey?: keyof TData | string;
-  /** Función de acceso personalizada */
-  accessorFn?: (row: TData) => unknown;
-  /** Si la columna es ordenable (default: true) */
-  sortable?: boolean;
-  /** Si la columna se puede ocultar (default: true) */
-  hideable?: boolean;
-  /** Si la columna es filtrable */
-  filterable?: boolean;
-  /** Ancho fijo de la columna */
-  width?: number | string;
-  /** Alineación del contenido */
-  align?: 'left' | 'center' | 'right';
-  /** Renderizado personalizado de la celda */
-  cell?: (props: { row: Row<TData>; getValue: () => unknown }) => React.ReactNode;
-}
-
-// ============================================================================
 // EXPORT CONFIG
 // ============================================================================
 
@@ -430,45 +400,4 @@ export interface DataTableViewOptionsProps<TData> {
   table: Table<TData>;
   /** Habilita la interaccion para reordenar columnas dentro del menu */
   enableColumnReorder?: boolean;
-}
-
-// ============================================================================
-// SERVER ACTION TYPES
-// ============================================================================
-
-/**
- * Parámetros para server actions de paginación
- */
-export interface DataTableQueryParams {
-  page: number;
-  pageSize: number;
-  /** Multi-sort array */
-  sorting?: SortItem[];
-  search?: string;
-  filters?: Record<string, string[]>;
-}
-
-/**
- * Respuesta de server actions con paginación
- */
-export interface DataTableQueryResult<TData> {
-  data: TData[];
-  total: number;
-  page: number;
-  pageSize: number;
-  pageCount: number;
-}
-
-// ============================================================================
-// PRISMA HELPERS
-// ============================================================================
-
-/**
- * Genera los parámetros de Prisma a partir de DataTableQueryParams
- */
-export interface PrismaTableParams {
-  skip: number;
-  take: number;
-  orderBy?: Record<string, 'asc' | 'desc'>[];
-  where?: Record<string, unknown>;
 }

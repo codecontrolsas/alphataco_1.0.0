@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge';
-import { getUserPermissionsMapServer } from '@/features/Permissions';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
 import { argentinaDate } from '@/shared/lib/argentina-time';
 import { ExpiredSupplierDocumentsAlert } from '../components/ExpiredSupplierDocumentsAlert';

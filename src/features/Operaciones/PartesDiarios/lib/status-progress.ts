@@ -1,4 +1,4 @@
-import type { ProgressSegment } from '@/features/Operaciones/shared/components/SegmentedProgress';
+import type { ProgressSegment } from '@/shared/components/common/SegmentedProgress';
 
 /**
  * Resumen de líneas por estado y avance de un parte. Puro: lo comparten la lista (conteos que

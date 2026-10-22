@@ -1,12 +1,8 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import {
-  DataTable,
-  type DataTableFacetedFilterConfig,
-  type DataTableSearchParams,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { formatCalendarDate } from '@/shared/utils/calendar-date';

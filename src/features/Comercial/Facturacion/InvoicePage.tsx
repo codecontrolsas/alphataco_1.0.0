@@ -1,4 +1,4 @@
-import { getUserPermissionsMapServer } from '@/features/Permissions';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { getInvoiceReceivable } from '@/features/Treasury/actions/customer-statement.server';
 import { Lock } from 'lucide-react';
 import { notFound } from 'next/navigation';

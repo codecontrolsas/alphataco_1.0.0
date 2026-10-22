@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 
 type ComercialAction = 'view' | 'create' | 'update' | 'delete' | 'view_prices' | 'update_prices';
 

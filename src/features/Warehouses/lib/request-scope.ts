@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import type { Prisma } from '@/generated/prisma/client';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { getActiveCompanyId } from '@/shared/lib/tenant';

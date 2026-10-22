@@ -9,7 +9,7 @@ import {
 import type { ComplianceKind } from '@/features/Documentacion/shared/compliance/types';
 import type { Prisma } from '@/generated/prisma/client';
 import type { ExpirySummary } from '../schemas/documents-expiry';
-import { ARGENTINA_TIME_ZONE } from './dates';
+import { ARGENTINA_TIME_ZONE } from '@/shared/lib/argentina-time';
 
 /** Delegados del cargador del motor más los que hacen falta para resolver nombres del detalle. */
 export type ExpirySummaryDb = ComplianceDb & Pick<Prisma.TransactionClient, 'employees' | 'vehicles'>;

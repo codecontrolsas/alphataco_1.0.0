@@ -1,5 +1,5 @@
-import { getUserPermissionsMapServer } from '@/features/Permissions';
-import type { DataTableSearchParams } from '@/shared/components/common/DataTable';
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
+import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import EquipmentOwnerList from './EquipmentOwnerList';
 
 // ============================================================================

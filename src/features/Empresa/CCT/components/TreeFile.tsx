@@ -2,7 +2,7 @@
 import AddCategoryModal from '@/features/Empresa/CCT/components/AddCategoryModal';
 import AddCovenantModal from '@/features/Empresa/CCT/components/AddCovenantModal';
 import AddGuildModal from '@/features/Empresa/CCT/components/AddGuildModal';
-import { PermissionGuard } from '@/features/Permissions';
+import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { ChevronDown, ChevronRight, FileText, FolderClosed, FolderOpen } from 'lucide-react';
 import React, { useState } from 'react';
 import type { TreeNodeData } from '../lib/covenant-tree';

@@ -1624,21 +1624,3 @@ export type AllTabSlugsUnion<M extends ModuleSlug> = M extends any ? AllTabSlugs
 
 /** Forma mínima de una tab indexable por slug arbitrario (helpers `getTabId`/`getSubtabId`). */
 type TabsByKey = Record<string, { tabId: string; subtabs?: Record<string, { tabId: string }> }>;
-
-// Helper para obtener el tabId correcto
-export function getTabId(module: ModuleSlug, tab: string): string {
-  const moduleData = PERMISSIONS[module];
-  if (!moduleData || !moduleData.tabs) return '';
-  const tabData = (moduleData.tabs as TabsByKey)[tab];
-  return tabData?.tabId || '';
-}
-
-// Helper para obtener el subtabId correcto
-export function getSubtabId(module: ModuleSlug, tab: string, subtab: string): string {
-  const moduleData = PERMISSIONS[module];
-  if (!moduleData || !moduleData.tabs) return '';
-  const tabData = (moduleData.tabs as TabsByKey)[tab];
-  if (!tabData || !tabData.subtabs) return '';
-  const subtabData = tabData.subtabs[subtab];
-  return subtabData?.tabId || '';
-}

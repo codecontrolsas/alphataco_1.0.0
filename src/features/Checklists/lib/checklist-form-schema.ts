@@ -25,7 +25,6 @@ export type ChecklistTemplate = Awaited<
 >;
 
 export type ChecklistTemplateSection = NonNullable<ChecklistTemplate>['checklist_template_sections'][number];
-export type ChecklistTemplateItem = ChecklistTemplateSection['checklist_template_items'][number];
 
 /**
  * Tercera opción de respuesta, para items que no corresponden a la unidad revisada
@@ -382,82 +381,6 @@ export const generateDefaultValues = (
   }
 
   return defaults;
-};
-
-/**
- * Limpia el label eliminando patrones innecesarios como "…../…../……." o "Vto….../…..../….." o "Fecha….../…..../….."
- */
-export const cleanLabel = (label: string): string => {
-  if (!label) return label;
-
-  let cleaned = label;
-
-  // Primero, eliminar solo "Vto" y los puntos/barras que le siguen, preservando el texto descriptivo antes
-  // Ejemplos: "Cert. Anual Vto……/…../…." -> "Cert. Anual", "Cert. Montaje inicial Vto….../…..../……" -> "Cert. Montaje inicial"
-  cleaned = cleaned.replace(/Vto\s*[\.…\/]+/gi, '').trim();
-
-  // Eliminar "Cert. Vto" o "Cert Vto" seguido de puntos/barras (solo cuando no hay texto descriptivo)
-  // Ejemplos: "Cert. Vto..../...../....", "Cert. Vto….../…..../….."
-  cleaned = cleaned.replace(/Cert\.?\s*:?\s*Vto\s*[\.…\/]+/gi, 'Cert.').trim();
-
-  // Eliminar "Fecha" seguido de puntos suspensivos y barras
-  // Ejemplos: "Fecha…../…../…….", "Fecha ….../…..../….."
-  cleaned = cleaned.replace(/Fecha\s*[\.…\/]+/gi, '').trim();
-
-  // Eliminar "Control" seguido de puntos suspensivos y barras
-  // Ejemplos: "Control…./…/…", "Control…/…/…..", "Control …./…../….."
-  cleaned = cleaned.replace(/Control\s*[\.…\/]+/gi, '').trim();
-
-  // Eliminar "Cert" o "Cert." o "Cert:" seguido de puntos suspensivos y barras (sin Vto)
-  // Ejemplos: "Cert …./…/…", "Cert: ………/……/……….", "Cert. …/…/…"
-  cleaned = cleaned.replace(/Cert\.?\s*:?\s*[\.…\/]+/gi, 'Cert.').trim();
-
-  // Eliminar "Vencimiento" seguido de puntos suspensivos y barras
-  // Ejemplo: "Vencimiento…..../…..../…..."
-  cleaned = cleaned.replace(/Vencimiento\s*[\.…\/]+/gi, '').trim();
-
-  // Eliminar cualquier patrón restante de puntos suspensivos con barras (patrón general)
-  // Ejemplos: "…../…../…….", "…..../…..../…...", "…/…/…"
-  cleaned = cleaned.replace(/[\.…]+\/?[\.…]+\/?[\.…]+/g, '');
-
-  // Limpiar "Cert." duplicado o solo "Cert" al final, pero preservar "Cert. Anual", "Cert. Montaje inicial", etc.
-  // Solo eliminar "Cert." si está al final sin texto descriptivo después
-  cleaned = cleaned.replace(/\s*Cert\.?\s*$/gi, '').trim();
-  cleaned = cleaned.replace(/Cert\.\s*Cert\./gi, 'Cert.').trim();
-
-  // Limpiar espacios múltiples y espacios al inicio/final
-  cleaned = cleaned.replace(/\s+/g, ' ').trim();
-
-  // Limpiar espacios antes de puntos, comas, dos puntos, etc.
-  cleaned = cleaned.replace(/\s+([.,:;])/g, '$1');
-
-  return cleaned;
-};
-
-/**
- * Obtiene el label visible para una opción de select
- * Mapea los codigos a su texto legible, manteniendo otros valores sin cambios
- */
-export const getOptionLabel = (option: string): string => {
-  const labelMap: Record<string, string> = {
-    B: 'Bueno',
-    M: 'Malo',
-    [NOT_APPLICABLE_VALUE]: NOT_APPLICABLE_LABEL,
-  };
-  return labelMap[option] || option;
-};
-
-/**
- * Convierte el label visible de vuelta al valor original
- * Mapea el texto legible a su codigo, manteniendo otros valores sin cambios
- */
-export const getOptionValue = (label: string): string => {
-  const valueMap: Record<string, string> = {
-    Bueno: 'B',
-    Malo: 'M',
-    [NOT_APPLICABLE_LABEL]: NOT_APPLICABLE_VALUE,
-  };
-  return valueMap[label] || label;
 };
 
 /**

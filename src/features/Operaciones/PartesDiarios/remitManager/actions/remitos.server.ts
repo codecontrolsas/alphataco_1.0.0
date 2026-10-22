@@ -3,7 +3,7 @@
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { storagePublicUrl, storageRemove, storageDownloadUrls, storageUpload } from '@/shared/lib/storage';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('features/Operaciones/PartesDiarios/remitos');
@@ -59,24 +59,6 @@ export async function getRemitosWithDocuments(dailyReportRowId: string) {
     where: { daily_report_row_id: dailyReportRowId, ...rowScope(companyId) },
     include: { remito_documents: { orderBy: { created_at: 'asc' } } },
     orderBy: { created_at: 'asc' },
-  });
-}
-
-/** Documentos de OTROS remitos de la misma línea, para poder vincularlos. */
-export async function getAvailableDocumentsForLinking(dailyReportRowId: string, currentRemitId?: string) {
-  await requireRemitoPermission('view');
-  const companyId = await getActiveCompanyId();
-
-  return prisma.remito_documents.findMany({
-    where: {
-      remitos: {
-        daily_report_row_id: dailyReportRowId,
-        ...rowScope(companyId),
-        ...(currentRemitId ? { id: { not: currentRemitId } } : {}),
-      },
-    },
-    include: { remitos: { select: { id: true, remit_number: true, daily_report_row_id: true } } },
-    orderBy: { created_at: 'desc' },
   });
 }
 
@@ -340,6 +322,3 @@ export async function getRemitDocumentDownloadUrl(documentPath: string): Promise
 
 export type RemitoWithDocuments = Awaited<ReturnType<typeof getRemitosWithDocuments>>[number];
 export type RemitDocument = RemitoWithDocuments['remito_documents'][number];
-export type AvailableDocument = Awaited<ReturnType<typeof getAvailableDocumentsForLinking>>[number];
-export type AvailableRemito = Awaited<ReturnType<typeof getAvailableRemitosForLinking>>[number];
-export type Remito = Awaited<ReturnType<typeof createRemito>>;

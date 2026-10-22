@@ -1,7 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { StackedCell } from '@/shared/components/common/StackedCell';
 import { formatArgentinaDay, formatDateAr } from '@/shared/lib/argentina-time';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';

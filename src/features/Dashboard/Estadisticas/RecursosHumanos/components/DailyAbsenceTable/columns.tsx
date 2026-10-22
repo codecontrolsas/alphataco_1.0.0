@@ -2,11 +2,8 @@
 
 import { Button } from '@/components/ui/button';
 import { LEVEL_TEXT_CLASS } from '@/features/Dashboard/lib/chart-thresholds';
-import {
-  DataTableColumnHeader,
-  inMemoryDateSortingFn,
-  inMemoryTextFilterFn,
-} from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { inMemoryDateSortingFn, inMemoryTextFilterFn } from '@/shared/components/common/DataTable/in-memory';
 import { ColumnDef } from '@tanstack/react-table';
 import { Users } from 'lucide-react';
 import { DailyAbsenceTimeseriesItem } from '../../actions.server';

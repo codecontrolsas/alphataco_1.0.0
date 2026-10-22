@@ -18,8 +18,6 @@ export const invoiceLineInputSchema = z.object({
   serviceItemId: z.string().uuid().nullable().optional(),
 });
 
-export type InvoiceLineInput = z.infer<typeof invoiceLineInputSchema>;
-
 /**
  * Guardado del borrador: valida FORMATO, no completitud (se puede guardar a medias). La
  * completitud la revisa `validateInvoiceForIssue` antes de emitir.

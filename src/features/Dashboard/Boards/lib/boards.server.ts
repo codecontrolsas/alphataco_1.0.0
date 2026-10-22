@@ -9,7 +9,7 @@ import {
   type BoardTemplateKey,
   type WidgetId,
 } from '@/features/Dashboard/lib/widget-registry';
-import { checkMultiplePermissionsServer } from '@/features/Permissions/actionsServer';
+import { checkMultiplePermissionsServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';

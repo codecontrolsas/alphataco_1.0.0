@@ -2,12 +2,8 @@
 
 import { Button } from '@/components/ui/button';
 import { toggleClothingSizeActive } from '@/features/Clothing/actions/catalog.server';
-import {
-  DataTable,
-  type DataTableFacetedFilterConfig,
-  type DataTableSearchParams,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import moment from 'moment';

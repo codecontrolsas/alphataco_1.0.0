@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { getPurchaseRequestsForMaterialRequest } from '@/features/Purchases/actions/request-queries.server';
 import { RequestDetail } from '@/features/Warehouses/Requests/components/RequestDetail';
 import { getMaterialRequestDetail } from '@/features/Warehouses/actions/requests.server';

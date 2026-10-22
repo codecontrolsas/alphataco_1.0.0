@@ -3,7 +3,7 @@
 import { Badge } from '@/components/ui/badge';
 import { DocumentExpiryCell } from '@/features/Documentacion/shared/components/DocumentCells';
 import { formatArgentinaDay } from '@/features/Treasury/lib/today';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { ColumnDef } from '@tanstack/react-table';
 import { AlertTriangle, CheckCircle2, Truck, XCircle } from 'lucide-react';

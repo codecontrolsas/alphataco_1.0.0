@@ -9,7 +9,7 @@ import { PermissionGuard } from '@/features/Permissions/components/PermissionGua
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, Download, Plus } from 'lucide-react';
 import { useMemo } from 'react';
-import { getModulesWithTabsServer, type ModulesWithTabsData, type RoleWithCount } from '../../actions.server';
+import { getModulesWithTabsServer, type ModulesWithTabsData, type RoleWithCount } from '@/features/Permissions/actions/roles.server';
 import type { useRoleEquipmentTypesDraft } from '../../hooks/useEquipmentTypeVisibility';
 import type { RoleNotificationsDraft } from '../../hooks/useRoleNotificationsDraft';
 import { buildPermissionIndex, diffPermissionSets, permissionKey } from '../../lib/permission-rules';

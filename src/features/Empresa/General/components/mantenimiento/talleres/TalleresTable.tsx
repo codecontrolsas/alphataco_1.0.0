@@ -3,15 +3,12 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
-import {
-  DataTable,
-  DataTableColumnHeader,
-  inMemoryFacetedFilterFn,
-  inMemoryTextFilterFn,
-  useDataTableFilter,
-  type DataTableFacetedFilterConfig,
-  type TablePreferences,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { inMemoryFacetedFilterFn, inMemoryTextFilterFn } from '@/shared/components/common/DataTable/in-memory';
+import { useDataTableFilter } from '@/shared/components/common/DataTable/useDataTableFilter';
+import { type DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable/types';
+import { type TablePreferences } from '@/shared/components/common/DataTable/helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import { Building2, Check, CircleOff, Layers, MapPin, Pencil, Truck, X } from 'lucide-react';

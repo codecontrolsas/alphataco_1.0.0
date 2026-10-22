@@ -1,12 +1,7 @@
 'use client';
 
-import {
-  DataTable,
-  type DataTableExportConfig,
-  type DataTableFacetedFilterConfig,
-  type DataTableSearchParams,
-  type FacetResult,
-} from '@/shared/components/common/DataTable';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { type DataTableExportConfig, type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { destinationTypeIcons } from '@/features/Warehouses/Movements/components/MovementsList/columns';
 import { DESTINATION_TYPE_LABELS } from '@/features/Warehouses/lib/labels';

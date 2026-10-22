@@ -196,50 +196,6 @@ export async function getRequestItemComments(maintenanceRequestId: string | null
   return mapRequestItemComments(items);
 }
 
-// ─── Queries de maintenance_order_items ───────────────────────────────────────
-
-/**
- * Include completo para maintenance_order_items con sus relaciones anidadas.
- * Usado tanto en getMaintenanceOperations como en getOrdersForWorkshop.
- */
-export const MAINTENANCE_ORDER_ITEMS_INCLUDE = {
-  maintenance_request_items: {
-    include: {
-      checklist_deviations: {
-        select: {
-          id: true,
-          item_code: true,
-          item_label: true,
-          section_code: true,
-          driver_comment: true,
-          checklist_answers: {
-            select: {
-              id: true,
-              employees: {
-                select: { id: true, firstname: true, lastname: true },
-              },
-              profile: {
-                select: { id: true, fullname: true, email: true },
-              },
-            },
-          },
-        },
-      },
-    },
-  },
-  types_of_repairs: {
-    select: { id: true, name: true },
-  },
-  maintenance_order_item_repair_types: {
-    select: {
-      repair_type_id: true,
-      types_of_repairs: {
-        select: { id: true, name: true },
-      },
-    },
-  },
-} as const;
-
 // ─── READs ────────────────────────────────────────────────────────────────────
 
 /**

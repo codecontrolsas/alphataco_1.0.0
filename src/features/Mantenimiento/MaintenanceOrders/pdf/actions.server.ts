@@ -12,7 +12,7 @@
  * cliente y recien al hacer clic.
  */
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { getSessionUserId } from '@/shared/lib/session';
 import { assertOrderInActiveCompany } from '../actions/order-perimeter';
 import { buildMaintenanceOrderReportData } from './report-data';

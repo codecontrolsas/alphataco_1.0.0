@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { EmailInfo } from '@/features/Auth/utils/emailTemplates';
 import { renderDocumentEmailTemplate, renderHelpEmailTemplate } from '@/features/Auth/utils/emailTemplates';
-import { sendMail } from '@/shared/lib/mail';
+import { sendMail } from '@/shared/lib/mail/transport';
 
 /**
  * Envío de correo por el SMTP de la empresa.
