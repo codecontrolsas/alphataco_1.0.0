@@ -35,7 +35,7 @@ export default async function EquiposComponent({
           tabSlug: 'vehicles',
           content: (
             <Suspense fallback={<VehicleTableSkeleton />}>
-              <VehicleTabContent searchParams={searchParams} permissions={permissions} />
+              <VehicleTabContent searchParams={searchParams} />
             </Suspense>
           ),
         },

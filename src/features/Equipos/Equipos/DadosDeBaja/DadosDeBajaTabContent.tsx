@@ -32,7 +32,7 @@ export default function DadosDeBajaTabContent({ searchParams, permissions }: Pro
           tabSlug: 'inactive',
           content: (
             <Suspense fallback={<InactiveVehicleTableSkeleton />}>
-              <InactiveVehicleList searchParams={searchParams} permissions={permissions} />
+              <InactiveVehicleList searchParams={searchParams} />
             </Suspense>
           ),
         },

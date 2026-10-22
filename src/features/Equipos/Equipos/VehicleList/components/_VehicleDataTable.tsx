@@ -53,7 +53,6 @@ interface Props {
   totalRows: number;
   searchParams: DataTableSearchParams;
   tableId: string;
-  permissionsMap: Record<string, boolean>;
   initialColumnVisibility: Record<string, boolean>;
   initialFilterVisibility: Record<string, boolean>;
 }
@@ -69,7 +68,6 @@ export function _VehicleDataTable({
   totalRows,
   searchParams,
   tableId,
-  permissionsMap,
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {

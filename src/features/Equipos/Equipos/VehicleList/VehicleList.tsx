@@ -15,14 +15,13 @@ import { getVehicleConditionMetrics } from './metrics.server';
 
 interface VehicleListProps {
   searchParams: Record<string, string | string[] | undefined>;
-  permissions: Record<string, boolean>;
 }
 
 // ============================================================================
 // SERVER COMPONENT
 // ============================================================================
 
-export async function VehicleList({ searchParams, permissions }: VehicleListProps) {
+export async function VehicleList({ searchParams }: VehicleListProps) {
   const tableId = 'vehicles';
 
   // Extraer solo los params de esta tabla (quitar prefijo)
@@ -49,7 +48,6 @@ export async function VehicleList({ searchParams, permissions }: VehicleListProp
             totalRows={total}
             searchParams={tableParams}
             tableId={tableId}
-            permissionsMap={permissions}
             initialColumnVisibility={preferences.columnVisibility ?? {}}
             initialFilterVisibility={preferences.filterVisibility ?? {}}
           />

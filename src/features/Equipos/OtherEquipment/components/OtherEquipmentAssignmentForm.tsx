@@ -176,7 +176,7 @@ export function OtherEquipmentAssignmentForm({
                           <Checkbox
                             id={`contractor-${contractor.id}`}
                             checked={contractors.includes(contractor.id)}
-                            onCheckedChange={(checked) =>
+                            onCheckedChange={() =>
                               handleContractorChange(contractor.id, !contractors.includes(contractor.id))
                             }
                           />
