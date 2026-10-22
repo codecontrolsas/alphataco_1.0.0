@@ -39,10 +39,10 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 | src/features/Notifications          |        9 |    777 | [x]    |
 | src/features/TabsManager            |        7 |    745 | [x]    |
 | src/features/MobileApi              |        6 |    212 | [x]    |
-| src/shared                          |      152 |  16124 | [ ]    |
-| src/components                      |       48 |   4930 | [ ]    |
-| src/lib                             |        6 |    580 | [ ]    |
-| src/app                             |      161 |   5041 | [ ]    |
+| src/shared                          |      152 |  16124 | [x]    |
+| src/components                      |       48 |   4930 | [x]    |
+| src/lib                             |        6 |    580 | [x]    |
+| src/app                             |      161 |   5041 | [x]    |
 | scripts                             |       47 |  10759 | [ ]    |
 
 ## Los 25 archivos más grandes (candidatos a SRP)
@@ -162,6 +162,15 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
   - **Permisos:** las nueve tablas que armaban `{ hasPermission }` a mano con `useMemo` (Indicadores de KPIs, Gomería: tipos, órdenes, catálogo, plantillas y marcas, dueños de equipos, unidades de medida y usuarios de Empresa) usan `usePermissionChecker`. Lógica idéntica, sin cambio de comportamiento.
   - **TabsManager:** `lib/resolve-active.ts` suma `buildEntryHref` (enlace que conserva solo `preserveParams`), copiado en `ViewManagerServer` y `RecordSectionsServer`. `types.ts`: se borraron `TabsManagerServerProps` y `TabsManagerVariant` (del componente `TabsManagerServer`, ya eliminado, con `variant` y `dependentParams`); `SectionManagerServerProps` quedó declarado directo con los mismos campos que antes.
   - Verificación: `check-types` limpio y `npm test` (1494). No se tocó lógica de permisos ni de acciones, por eso no se corrieron las suites de integración.
+- [x] **Base compartida (`src/shared`, `src/components`, `src/lib`, `src/app`):** jscpd sobre los cuatro módulos (sin pruebas): de 16 clones y 219 líneas duplicadas (0,66 %; 2.288 tokens) a 13 y 176 (0,53 %; 1.872 tokens). Los módulos ya estaban cerca del piso: lo que más se ganó fue copias de utilidades que vivían en los features y que jscpd no ve por ser chicas. `knip` sin archivos sin uso (las exportaciones marcadas son de `components/ui`, que no se toca) y `tsc --noUnusedLocals --noUnusedParameters` solo marcó restos que se borraron (ver código muerto).
+  - **Mensajes de tope de exportación:** `export-batches.ts` suma `tooManyRowsMessage(noun)` ("Hay más de N <noun> con los filtros actuales…") y `exportRowLimitMessage(maxRows, label?)` ("La exportación [de X] supera el máximo de N filas…"). Reemplazan ~60 copias en acciones de Tesorería, Almacenes, Compras, Operaciones, Equipos, Mantenimiento (Gomería, pedidos), Empresa (`catalogTooLargeMessage`, `exportTooLargeMessage`), Documentación, Dashboard, Formularios, Selección, Checklists y Empleados. El texto de cada mensaje no cambió.
+  - **CUIT:** `shared/utils/cuit-text.ts` es el único dueño de `isValidCuit`, `normalizeCuit` y `formatCuitText` (acepta texto, número o `bigint`). Se borraron `validarCUIL` (`lib/utils.ts`, igual a `isValidCuit`), el `formatCuit` de Compras (11 usos pasaron a `formatCuitText`), el reexport de `invoice-links.ts` y la copia local de `CheckDetailView`. No se tocaron `formatCuit` de Documentación y de Ropa: limpian o completan el texto de otra manera.
+  - **Otras utilidades unificadas:** `isUuid` (`shared/lib/uuid.ts`; se borraron las copias de `Equipos/EquipoID/lib/table-filters.ts` y `Empresa/Clientes/lib/table-where.ts`), `toFacetMap` (`shared/lib/table-facets.ts`; tres copias locales en Dashboard, Otros equipos y Accesos externos; la prueba pasó con la función), `normalizeSearchText` (`shared/utils/search-text.ts`; cuatro copias: tabla en memoria, opciones de columnas, selector de recursos de Mantenimiento y editor de permisos), `DataTable/facet-results.ts` (`buildEnumFacetResult` y `buildFkFacetResult` de `{ id, name }`: reemplaza `Gomeria/shared/facet-helpers.ts`, la copia de Documentos de empresa y las locales de Solicitudes, Órdenes de mantenimiento y Tareas del taller).
+  - **App:** `app/_lib/company-metadata.ts` (`companyPageMetadata`) reemplaza el `generateMetadata` copiado en 13 páginas del tablero; `shared/hooks/useSendErrorReport.ts` comparte el envío del reporte entre `app/error.tsx` y `dashboard/error.tsx`.
+  - **Barriles quitados:** reexports en `lib/utils.ts` (`getActualRole`, `getAllDocumentsByIdDocumentTypeCientSide`), `Treasury/lib/today.ts`, `Treasury/lib/action-errors.ts` (`NO_PERMISSION`, `firstIssue`, `UUID_RE`), `PartesDiarios/detail/lib/export-batches.ts`, `Documentacion/.../document-conditions.ts`, `compliance/dates.ts` y `Ayuda/Manual/catalog/index.ts` (`COVERAGE_EXCLUSIONS`, `READING_PATHS`, `START_HERE`; también se actualizó `scripts/check-manual.ts`).
+  - **Código muerto:** `shared/actions/company-validation.server.ts` (`isCompanyCuitAvailable`, solo lo usaba un validador sin uso), `validateDuplicatedCuil` y los schemas de empresa de `schemas.ts` (~85 líneas «solo para inferencia de tipos» que nadie leía), `toLegacyEquipment`, `logger` de `shared-users`, `nameOf`/`idOf`/`capitalize` de `legacy-mappers`, `headerRows` de `excel-export`, `startRow`/`endRow` de `DataTablePagination`, el parámetro `get` de `editState`.
+  - **Dentro de un archivo:** `DataTableDateRangeFilter` (`updateParams` común a `updateParam` y `clearFilter`) y `shared/lib/taskapp/client.ts` (`fetchOrThrow` y `readJson` para `request` y `requestPaged`).
+  - Verificación: `check-types` limpio, `npm test` (1494) y `next build` compilando. No se tocó lógica de escritura ni consultas (solo mensajes y utilidades puras), por eso no se corrieron las suites de integración.
 
 ## En curso / siguiente
 
@@ -194,6 +203,8 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 - **Empleados, tabla de empleados y Reportes de novedades:** el `value` del selector de tipo de documento, nacionalidad, país y sexo en `PersonalDataFields` es controlado (`value` + `defaultValue`) y el de `SelectFormField` solo usa `defaultValue`; no se unificaron para no cambiar cuándo se repinta el valor. Pendiente decidir cuál es el correcto.
 - **Comercial, archivos grandes sin partir:** `Facturacion/lib/emission.server.ts` (548; `issueInvoice` ocupa ~230 líneas del flujo fiscal) y `Certificaciones/actions/certifications.server.ts` (512) se dejaron enteros por riesgo (emisión ARCA); partirlos pide pruebas de integración con Postgres.
 - **Comercial, esqueleto de la lista de certificaciones:** `CertificationsTableSkeleton` es casi `TableSkeleton inCard` pero con `aria-busy`/`aria-label` y otro ancho de buscador; se conserva hasta decidir si `TableSkeleton` acepta etiqueta accesible.
+- **App, rutas sin ningún enlace (no se borraron):** `/clothing/thanks` (nada navega ahí: el flujo de entregas ya no redirige) y `/dashboard/configuration/services/[id]` (`ServiceItemsSection`: ningún enlace arma esa ruta). Son páginas válidas por URL; se borran si se confirma que no se usan. `/reset_password/confirm` solo la alcanza Better Auth con `?error=` (ninguna ruta del repo apunta a ella): se dejó.
+- **App, `companyPageMetadata`:** la cookie `actualCompName` vacía ahora cae a la empresa activa en las cuatro páginas que usaban `??` (Empleados, Compras, Tesorería, Almacenes); antes quedaban con el título sin empresa. Es el mismo criterio que ya tenían las otras nueve.
 
 ## Pendiente detectado en Formularios, Checklists, Ayuda y Permisos de usuario
 
@@ -263,3 +274,12 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 - `Permissions/actions/roles.server.ts` (842 líneas) junta las lecturas y el ABM de roles con la asignación de roles a usuarios y los permisos por usuario (desde `assignRoleToUserServer`, ~330 líneas), todos con los mismos `assertCan*`. Hay una costura limpia (`user-permissions.server.ts`), pero toca ~15 importadores de `UserPermissionsManager`, `Empresa` y `app` y la prueba del perímetro; no se hizo por ser código de seguridad. `permissions-map.ts` (1.626) es una tabla de datos.
 - Varios archivos de otros módulos siguen leyendo `permissionsMap['modulo:tab:accion'] === true` suelto (Tesorería, Almacenes, Operaciones, Facturación): no arman un `hasPermission`, así que no entran en `usePermissionChecker`.
 - Los comentarios de `Layout` y `Permissions/lib/tab-visibility.ts` todavía nombran `TabsManagerServer`, un componente que ya no existe (hoy `SectionManagerServer` y `ViewManagerServer`).
+
+## Pendiente detectado en la base compartida
+
+- `app/**/loading.tsx` de Comercial, Documentos, Empleados, Equipos y Operaciones comparten bloques de ~10 líneas (barra de herramientas, tabla, paginación) pero con medidas distintas; unificarlos en `TableSkeleton` cambia el esqueleto. Lo mismo `clothing/thanks` y `maintenance/thanks` (tarjeta de agradecimiento con colores y textos propios).
+- Las páginas de detalle de Compras y Tesorería (`purchases/*/[id]/page.tsx`, 18 líneas cada una) repiten `cache` + `generateMetadata` + `notFound`; una fábrica ocultaría los exports que Next lee de forma estática, por eso no se hizo.
+- `shared/components/common/DataTable/DataTable.tsx` (617 líneas) es un solo componente de ~500 con hooks entrelazados; no tiene costura para partirlo sin riesgo. `components/ui/sidebar.tsx` (677) es shadcn y no se toca.
+- `shared/components/iso/` es un kit vendido (con `LICENSE` y `LEEME.md`): tiene locales sin uso (`fine`, `swatchSvg`, `PAGE_CSS`, `Swatch`, `WireProps`, `PlateProps`) que no se borraron para no divergir del original. `UploadImage` (`style`), `EditModal` (`onClose`, solo en un comentario) y `global-error.tsx` (`reset`) tienen props sin leer que conviene revisar con sus consumidores.
+- Quedan sin unificar `buildFkFacetResult` de `{ value, label }` (Clientes y Equipos con desvíos) y las locales de Pedidos pendientes y Accesos externos, que no agregan "Sin asignar"; igualarlas cambia las opciones de esos filtros. Los que arman `FacetResult` a mano con `createFacetFilters` ya están al día.
+- `formatCuit` de `Documentacion/DetalleDocumento/lib/document-detail.ts` (regex, vacío si no hay valor) y de `Clothing/lib/receipt-format.ts` (limpia no dígitos) siguen aparte de `formatCuitText`.
