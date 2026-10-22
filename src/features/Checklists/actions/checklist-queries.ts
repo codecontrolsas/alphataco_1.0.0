@@ -5,7 +5,6 @@ import { mapEquipmentToChecklistFormat } from '@/lib/utils';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { z } from 'zod';
 
 const logger = new Logger('features/Checklists/queries');
 
@@ -28,15 +27,6 @@ async function resolveCompanyId(equipmentId?: string): Promise<string> {
   }
   return getActiveCompanyId();
 }
-
-const employeeRowSchema = z.object({
-  id: z.string(),
-  firstname: z.string().nullable(),
-  lastname: z.string().nullable(),
-  cuil: z.string().nullable(),
-  file: z.string().nullable(),
-  company_id: z.string().nullable(),
-});
 
 const templateSectionSelect = {
   id: true,
@@ -398,7 +388,9 @@ export const getEquipmentTypeInfo = async (equipmentId: string) => {
   try {
     const vehicle = await prisma.vehicles.findUnique({
       where: { id: equipmentId },
-      select: { type_vehicles_typeTotype: { select: { id: true, name: true, is_tractor_unit: true, has_hitch: true } } },
+      select: {
+        type_vehicles_typeTotype: { select: { id: true, name: true, is_tractor_unit: true, has_hitch: true } },
+      },
     });
 
     const equipmentType = vehicle?.type_vehicles_typeTotype;

@@ -3,20 +3,12 @@ import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 interface PDFPreviewDialogProps {
-  title?: string;
-  description?: string;
   buttonText?: string;
   children: React.ReactNode;
   className?: string;
 }
 
-export function PDFPreviewDialog({
-  title,
-  description,
-  buttonText = 'Ver PDF',
-  children,
-  className,
-}: PDFPreviewDialogProps) {
+export function PDFPreviewDialog({ buttonText = 'Ver PDF', children, className }: PDFPreviewDialogProps) {
   return (
     <Dialog>
       <DialogTrigger asChild>

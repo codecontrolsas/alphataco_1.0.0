@@ -168,11 +168,7 @@ export default async function FormDetailPage({
           </div>
         }
         actions={
-          <PDFPreviewDialog
-            buttonText="Imprimir vacío"
-            title={formName}
-            description="Vista previa del formulario vacío"
-          >
+          <PDFPreviewDialog buttonText="Imprimir vacío">
             <div className="h-full w-full bg-white">{renderForm(formName, companyLogo)}</div>
           </PDFPreviewDialog>
         }

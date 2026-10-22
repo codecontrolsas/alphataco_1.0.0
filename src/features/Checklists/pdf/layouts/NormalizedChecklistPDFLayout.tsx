@@ -53,7 +53,7 @@ interface NormalizedChecklistPDFLayoutProps {
   itemObservations?: Record<string, string>;
 }
 
-import { PARTS_DIAGRAM_HEIGHT, colors, styles } from './normalized-checklist-pdf-styles';
+import { colors, styles } from './normalized-checklist-pdf-styles';
 
 // Interfaz interna para secciones procesadas
 interface ProcessedSection {
