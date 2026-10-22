@@ -1,27 +1,41 @@
 'use server';
 
-import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { AMOUNT_SCALE, formatScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
+import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
-import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError } from '../lib/action-errors';
-import { cents } from '../lib/check-helpers';
+import {
+  NO_PERMISSION,
+  UUID_RE,
+  assertNotFuture,
+  firstIssue,
+  toTreasuryActionError,
+  treasurySession,
+} from '../lib/action-errors';
 import { discountError, discountNet } from '../lib/check-discount';
+import { cents } from '../lib/check-helpers';
 import { CHECK_STATUS_LABELS, type CheckStatus } from '../lib/check-transitions';
 import { assertNotBeforeEntry, createCheck, lockChecks, moveCheck, type LockedCheck } from '../lib/checks';
 import { minCreditDate, rejectionMovementDate } from '../lib/checks-dates';
+import { formatDay as dmy } from '../lib/dates';
 import { nextCheckOperationNumber } from '../lib/document-number';
 import { assertBankAccount, assertPortfolioAccount, cancelMovements, createMovement, dateOnly } from '../lib/movements';
 import { TreasuryError } from '../lib/treasury-errors';
-import { depositSchema, discountSchema, openingChecksSchema, rejectionSchema, type DepositValues, type DiscountValues, type OpeningChecksValues, type RejectionValues } from '../schemas/checks';
+import {
+  depositSchema,
+  discountSchema,
+  openingChecksSchema,
+  rejectionSchema,
+  type DepositValues,
+  type DiscountValues,
+  type OpeningChecksValues,
+  type RejectionValues,
+} from '../schemas/checks';
 import { cancelReasonSchema } from '../schemas/movements';
 import { SESSION_EXPIRED, TRANSACTION_OPTIONS, localToday, revalidateTreasury } from './shared';
-import { formatDay as dmy } from '../lib/dates';
 
 /**
  * Operaciones de la cartera de cheques de terceros (spec Tesorería etapa 3a §3): carga inicial,
@@ -36,22 +50,12 @@ const OPERATION_NOT_FOUND = 'La operación no existe';
 const decimal = (value: bigint) => new Prisma.Decimal(formatScaled(value, AMOUNT_SCALE));
 const statusText = (status: CheckStatus) => CHECK_STATUS_LABELS[status].toLowerCase();
 
-async function session() {
-  const profile = await getServerAuthProfile();
-  if (!profile) return null;
-  return { profile, companyId: await getActiveCompanyId() };
-}
-
-function assertNotFuture(date: string, today: string) {
-  if (date > today) throw new TreasuryError('La fecha no puede ser futura');
-}
-
 /** Carga inicial: cheques que ya estaban en mano, cada uno con su entrada a la cartera. */
 export async function createOpeningChecks(values: OpeningChecksValues): Promise<ActionResult<{ count: number }>> {
   if (!(await checkPermissionServer('tesoreria', 'cheques', 'create'))) return fail(NO_PERMISSION);
   const parsed = openingChecksSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   const v = parsed.data;
@@ -61,7 +65,10 @@ export async function createOpeningChecks(values: OpeningChecksValues): Promise<
       async (tx) => {
         assertNotFuture(v.date, localToday());
         await assertPortfolioAccount(tx, companyId, v.portfolioId);
-        const customer = await tx.customers.findFirst({ where: { id: v.customerId, company_id: companyId }, select: { name: true } });
+        const customer = await tx.customers.findFirst({
+          where: { id: v.customerId, company_id: companyId },
+          select: { name: true },
+        });
         if (!customer) throw new TreasuryError('El cliente no existe');
         const operation = await tx.third_party_check_operations.create({
           data: { kind: 'OPENING', date: dateOnly(v.date), created_by: profile.id },
@@ -106,7 +113,7 @@ export async function depositChecks(values: DepositValues): Promise<ActionResult
   if (!(await checkPermissionServer('tesoreria', 'cheques', 'create'))) return fail(NO_PERMISSION);
   const parsed = depositSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   const v = parsed.data;
@@ -116,13 +123,18 @@ export async function depositChecks(values: DepositValues): Promise<ActionResult
       async (tx) => {
         assertNotFuture(v.date, localToday());
         const bank = await assertBankAccount(tx, companyId, v.bankAccountId);
-        const checks = await lockChecks(tx, companyId, v.items.map((i) => i.checkId));
+        const checks = await lockChecks(
+          tx,
+          companyId,
+          v.items.map((i) => i.checkId)
+        );
         for (const item of v.items) {
           const check = checks.get(item.checkId)!;
           assertExit(check, 'DEPOSIT');
           assertNotBeforeEntry(check, v.date);
           const min = minCreditDate(v.date, check.paymentDate);
-          if (item.creditedOn < min) throw new TreasuryError(`Cheque Nº ${check.number}: la acreditación no puede ser anterior al ${dmy(min)}`);
+          if (item.creditedOn < min)
+            throw new TreasuryError(`Cheque Nº ${check.number}: la acreditación no puede ser anterior al ${dmy(min)}`);
         }
         const number = await nextCheckOperationNumber(tx, companyId, 'DEPOSIT');
         const operation = await tx.third_party_check_operations.create({
@@ -140,12 +152,44 @@ export async function depositChecks(values: DepositValues): Promise<ActionResult
           const check = checks.get(item.checkId)!;
           const amountCents = cents(check.amount);
           await tx.third_party_check_operation_items.create({
-            data: { operation_id: operation.id, check_id: check.id, previous_status: check.status, credited_on: dateOnly(item.creditedOn) },
+            data: {
+              operation_id: operation.id,
+              check_id: check.id,
+              previous_status: check.status,
+              credited_on: dateOnly(item.creditedOn),
+            },
           });
           const description = `${number} — Cheque N° ${check.number} (${check.bank})`;
-          await createMovement(tx, { companyId, accountId: check.portfolioId, date: v.date, amountCents: -amountCents, kind: 'CHECK_OPERATION', checkOperationId: operation.id, thirdPartyCheckId: check.id, description, createdBy: profile.id });
-          await createMovement(tx, { companyId, accountId: bank.id, date: item.creditedOn, amountCents, kind: 'CHECK_OPERATION', checkOperationId: operation.id, thirdPartyCheckId: check.id, description, createdBy: profile.id });
-          await moveCheck(tx, { check, action: 'DEPOSIT', date: v.date, userId: profile.id, origin: { operationId: operation.id }, set: { creditedOn: item.creditedOn, bankAccountId: bank.id } });
+          await createMovement(tx, {
+            companyId,
+            accountId: check.portfolioId,
+            date: v.date,
+            amountCents: -amountCents,
+            kind: 'CHECK_OPERATION',
+            checkOperationId: operation.id,
+            thirdPartyCheckId: check.id,
+            description,
+            createdBy: profile.id,
+          });
+          await createMovement(tx, {
+            companyId,
+            accountId: bank.id,
+            date: item.creditedOn,
+            amountCents,
+            kind: 'CHECK_OPERATION',
+            checkOperationId: operation.id,
+            thirdPartyCheckId: check.id,
+            description,
+            createdBy: profile.id,
+          });
+          await moveCheck(tx, {
+            check,
+            action: 'DEPOSIT',
+            date: v.date,
+            userId: profile.id,
+            origin: { operationId: operation.id },
+            set: { creditedOn: item.creditedOn, bankAccountId: bank.id },
+          });
         }
         return { id: operation.id, number };
       },
@@ -155,16 +199,23 @@ export async function depositChecks(values: DepositValues): Promise<ActionResult
     revalidateTreasury();
     return ok(created);
   } catch (error) {
-    return toTreasuryActionError(error, logger, 'depositar los cheques', 'El número de depósito ya está en uso. Intentá de nuevo');
+    return toTreasuryActionError(
+      error,
+      logger,
+      'depositar los cheques',
+      'El número de depósito ya está en uso. Intentá de nuevo'
+    );
   }
 }
 
 /** Descuento (CL-): salen los cheques de la cartera por su nominal y entra el neto al banco. */
-export async function discountChecks(values: DiscountValues): Promise<ActionResult<{ id: string; number: string; net: string }>> {
+export async function discountChecks(
+  values: DiscountValues
+): Promise<ActionResult<{ id: string; number: string; net: string }>> {
   if (!(await checkPermissionServer('tesoreria', 'cheques', 'create'))) return fail(NO_PERMISSION);
   const parsed = discountSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   const v = parsed.data;
@@ -199,7 +250,9 @@ export async function discountChecks(values: DiscountValues): Promise<ActionResu
           select: { id: true },
         });
         for (const check of checks.values()) {
-          await tx.third_party_check_operation_items.create({ data: { operation_id: operation.id, check_id: check.id, previous_status: check.status } });
+          await tx.third_party_check_operation_items.create({
+            data: { operation_id: operation.id, check_id: check.id, previous_status: check.status },
+          });
           await createMovement(tx, {
             companyId,
             accountId: check.portfolioId,
@@ -211,7 +264,14 @@ export async function discountChecks(values: DiscountValues): Promise<ActionResu
             description: `${number} — Cheque N° ${check.number} (${check.bank})`,
             createdBy: profile.id,
           });
-          await moveCheck(tx, { check, action: 'DISCOUNT', date: v.date, userId: profile.id, origin: { operationId: operation.id }, set: { bankAccountId: bank.id } });
+          await moveCheck(tx, {
+            check,
+            action: 'DISCOUNT',
+            date: v.date,
+            userId: profile.id,
+            origin: { operationId: operation.id },
+            set: { bankAccountId: bank.id },
+          });
         }
         await createMovement(tx, {
           companyId,
@@ -231,19 +291,29 @@ export async function discountChecks(values: DiscountValues): Promise<ActionResu
     revalidateTreasury();
     return ok(created);
   } catch (error) {
-    return toTreasuryActionError(error, logger, 'descontar los cheques', 'El número de liquidación ya está en uso. Intentá de nuevo');
+    return toTreasuryActionError(
+      error,
+      logger,
+      'descontar los cheques',
+      'El número de liquidación ya está en uso. Intentá de nuevo'
+    );
   }
 }
 
 /** Valida que el cheque pueda salir de la cartera con un mensaje que nombra su estado. */
 function assertExit(check: LockedCheck, action: 'DEPOSIT' | 'DISCOUNT') {
   if (check.status !== 'IN_PORTFOLIO') {
-    throw new TreasuryError(`El cheque Nº ${check.number} (${check.bank}) está ${statusText(check.status)}: no se puede ${action === 'DEPOSIT' ? 'depositar' : 'descontar'}`);
+    throw new TreasuryError(
+      `El cheque Nº ${check.number} (${check.bank}) está ${statusText(check.status)}: no se puede ${action === 'DEPOSIT' ? 'depositar' : 'descontar'}`
+    );
   }
 }
 
 /** La operación vigente que sacó el cheque de la cartera (depósito, descuento) o la orden que lo endosó. */
-async function exitOf(tx: Pick<Prisma.TransactionClient, '$queryRaw'>, checkId: string): Promise<{ date: string; label: string } | null> {
+async function exitOf(
+  tx: Pick<Prisma.TransactionClient, '$queryRaw'>,
+  checkId: string
+): Promise<{ date: string; label: string } | null> {
   const rows = await tx.$queryRaw<{ date: string; label: string }[]>`
     SELECT o.date::text AS date,
            (CASE o.kind WHEN 'DEPOSIT' THEN 'depósito ' ELSE 'descuento ' END) || o.number AS label
@@ -266,7 +336,7 @@ export async function rejectCheck(values: RejectionValues): Promise<ActionResult
   if (!(await checkPermissionServer('tesoreria', 'cheques', 'update'))) return fail(NO_PERMISSION);
   const parsed = rejectionSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   const v = parsed.data;
@@ -277,10 +347,13 @@ export async function rejectCheck(values: RejectionValues): Promise<ActionResult
         assertNotFuture(v.date, localToday());
         const check = (await lockChecks(tx, companyId, [v.checkId])).get(v.checkId)!;
         if (!['DEPOSITED', 'ENDORSED', 'DISCOUNTED'].includes(check.status)) {
-          throw new TreasuryError(`El cheque Nº ${check.number} (${check.bank}) está ${statusText(check.status)}: no se puede rechazar`);
+          throw new TreasuryError(
+            `El cheque Nº ${check.number} (${check.bank}) está ${statusText(check.status)}: no se puede rechazar`
+          );
         }
         const exit = await exitOf(tx, check.id);
-        if (exit && v.date < exit.date) throw new TreasuryError(`La fecha del rechazo no puede ser anterior al ${dmy(exit.date)} (${exit.label})`);
+        if (exit && v.date < exit.date)
+          throw new TreasuryError(`La fecha del rechazo no puede ser anterior al ${dmy(exit.date)} (${exit.label})`);
         const number = await nextCheckOperationNumber(tx, companyId, 'REJECTION');
         const operation = await tx.third_party_check_operations.create({
           data: {
@@ -293,7 +366,9 @@ export async function rejectCheck(values: RejectionValues): Promise<ActionResult
           },
           select: { id: true },
         });
-        await tx.third_party_check_operation_items.create({ data: { operation_id: operation.id, check_id: check.id, previous_status: check.status } });
+        await tx.third_party_check_operation_items.create({
+          data: { operation_id: operation.id, check_id: check.id, previous_status: check.status },
+        });
         if ((check.status === 'DEPOSITED' || check.status === 'DISCOUNTED') && check.bankAccountId) {
           await createMovement(tx, {
             companyId,
@@ -307,7 +382,13 @@ export async function rejectCheck(values: RejectionValues): Promise<ActionResult
             createdBy: profile.id,
           });
         }
-        await moveCheck(tx, { check, action: 'REJECT', date: v.date, userId: profile.id, origin: { operationId: operation.id } });
+        await moveCheck(tx, {
+          check,
+          action: 'REJECT',
+          date: v.date,
+          userId: profile.id,
+          origin: { operationId: operation.id },
+        });
         return { id: operation.id, number };
       },
       prisma,
@@ -316,7 +397,12 @@ export async function rejectCheck(values: RejectionValues): Promise<ActionResult
     revalidateTreasury();
     return ok(created);
   } catch (error) {
-    return toTreasuryActionError(error, logger, 'registrar el rechazo', 'El número de rechazo ya está en uso. Intentá de nuevo');
+    return toTreasuryActionError(
+      error,
+      logger,
+      'registrar el rechazo',
+      'El número de rechazo ya está en uso. Intentá de nuevo'
+    );
   }
 }
 
@@ -328,7 +414,8 @@ async function assertDebtNotUsed(tx: Pick<Prisma.TransactionClient, '$queryRaw'>
     ORDER BY (r.status = 'CONFIRMED') DESC LIMIT 1
   `;
   const receipt = receipts[0];
-  if (receipt?.status === 'CONFIRMED') throw new TreasuryError(`La deuda del cheque se cobró en ${receipt.number}: anulá ese recibo primero`);
+  if (receipt?.status === 'CONFIRMED')
+    throw new TreasuryError(`La deuda del cheque se cobró en ${receipt.number}: anulá ese recibo primero`);
   if (receipt) throw new TreasuryError('La deuda del cheque está en un recibo en borrador: quitala de ahí primero');
   const orders = await tx.$queryRaw<{ number: string; status: string }[]>`
     SELECT po.number, po.status::text AS status FROM payment_order_lines l JOIN payment_orders po ON po.id = l.payment_order_id
@@ -336,8 +423,10 @@ async function assertDebtNotUsed(tx: Pick<Prisma.TransactionClient, '$queryRaw'>
     ORDER BY (po.status = 'PAID') DESC LIMIT 1
   `;
   const order = orders[0];
-  if (order?.status === 'PAID') throw new TreasuryError(`La deuda del cheque se pagó en la ${order.number}: anulá esa orden primero`);
-  if (order) throw new TreasuryError(`La deuda del cheque está en la ${order.number}, sin pagar: quitala de ahí primero`);
+  if (order?.status === 'PAID')
+    throw new TreasuryError(`La deuda del cheque se pagó en la ${order.number}: anulá esa orden primero`);
+  if (order)
+    throw new TreasuryError(`La deuda del cheque está en la ${order.number}, sin pagar: quitala de ahí primero`);
 }
 
 /** Anula un depósito, un descuento o un rechazo (completo y con motivo, spec §3.7). */
@@ -346,31 +435,48 @@ export async function cancelCheckOperation(operationId: string, reason: string):
   const motive = cancelReasonSchema.safeParse(reason);
   if (!motive.success) return fail(firstIssue(motive.error));
   if (!UUID_RE.test(operationId)) return fail(OPERATION_NOT_FOUND);
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   try {
     await withActor(
       profile.credentialId,
       async (tx) => {
-        const rows = await tx.$queryRaw<{ id: string; kind: string; number: string | null; cancelled_at: Date | null }[]>`
+        const rows = await tx.$queryRaw<
+          { id: string; kind: string; number: string | null; cancelled_at: Date | null }[]
+        >`
           SELECT id, kind::text AS kind, number, cancelled_at FROM third_party_check_operations
           WHERE id = ${operationId}::uuid AND company_id = ${companyId}::uuid FOR UPDATE
         `;
         const operation = rows[0];
         if (!operation) throw new TreasuryError(OPERATION_NOT_FOUND);
         if (operation.cancelled_at) throw new TreasuryError('La operación ya está anulada');
-        if (operation.kind === 'OPENING') throw new TreasuryError('Una carga inicial se anula cheque por cheque, desde su detalle');
-        const items = await tx.third_party_check_operation_items.findMany({ where: { operation_id: operationId }, select: { check_id: true } });
-        const checks = await lockChecks(tx, companyId, items.map((i) => i.check_id));
+        if (operation.kind === 'OPENING')
+          throw new TreasuryError('Una carga inicial se anula cheque por cheque, desde su detalle');
+        const items = await tx.third_party_check_operation_items.findMany({
+          where: { operation_id: operationId },
+          select: { check_id: true },
+        });
+        const checks = await lockChecks(
+          tx,
+          companyId,
+          items.map((i) => i.check_id)
+        );
         const today = localToday();
         if (operation.kind === 'REJECTION') {
           for (const check of checks.values()) {
-            if (check.status !== 'REJECTED') throw new TreasuryError(`El cheque Nº ${check.number} ya no está rechazado`);
+            if (check.status !== 'REJECTED')
+              throw new TreasuryError(`El cheque Nº ${check.number} ya no está rechazado`);
             await assertDebtNotUsed(tx, check.id);
           }
           for (const check of checks.values()) {
-            await moveCheck(tx, { check, action: 'UNDO_REJECTION', date: today, userId: profile.id, origin: { operationId } });
+            await moveCheck(tx, {
+              check,
+              action: 'UNDO_REJECTION',
+              date: today,
+              userId: profile.id,
+              origin: { operationId },
+            });
           }
         } else {
           const expected: CheckStatus = operation.kind === 'DEPOSIT' ? 'DEPOSITED' : 'DISCOUNTED';
@@ -381,12 +487,22 @@ export async function cancelCheckOperation(operationId: string, reason: string):
                 SELECT o.number FROM third_party_check_operation_items i JOIN third_party_check_operations o ON o.id = i.operation_id
                 WHERE i.check_id = ${check.id}::uuid AND o.kind = 'REJECTION' AND o.cancelled_at IS NULL LIMIT 1
               `;
-              throw new TreasuryError(`El cheque Nº ${check.number} (${check.bank}) está rechazado: anulá primero el rechazo ${rejection[0]?.number ?? ''}`.trim());
+              throw new TreasuryError(
+                `El cheque Nº ${check.number} (${check.bank}) está rechazado: anulá primero el rechazo ${rejection[0]?.number ?? ''}`.trim()
+              );
             }
-            throw new TreasuryError(`El cheque Nº ${check.number} (${check.bank}) está ${statusText(check.status)}: no se puede anular la operación`);
+            throw new TreasuryError(
+              `El cheque Nº ${check.number} (${check.bank}) está ${statusText(check.status)}: no se puede anular la operación`
+            );
           }
           for (const check of checks.values()) {
-            await moveCheck(tx, { check, action: 'UNDO_EXIT', date: today, userId: profile.id, origin: { operationId } });
+            await moveCheck(tx, {
+              check,
+              action: 'UNDO_EXIT',
+              date: today,
+              userId: profile.id,
+              origin: { operationId },
+            });
           }
         }
         const at = new Date();
@@ -411,7 +527,7 @@ export async function cancelOpeningCheck(checkId: string, reason: string): Promi
   if (!(await checkPermissionServer('tesoreria', 'cheques', 'delete'))) return fail(NO_PERMISSION);
   const motive = cancelReasonSchema.safeParse(reason);
   if (!motive.success) return fail(firstIssue(motive.error));
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   try {
@@ -419,16 +535,29 @@ export async function cancelOpeningCheck(checkId: string, reason: string): Promi
       profile.credentialId,
       async (tx) => {
         const check = (await lockChecks(tx, companyId, [checkId])).get(checkId)!;
-        if (!check.openingOperationId) throw new TreasuryError('El cheque vino de un recibo: se anula anulando el recibo');
+        if (!check.openingOperationId)
+          throw new TreasuryError('El cheque vino de un recibo: se anula anulando el recibo');
         if (check.status !== 'IN_PORTFOLIO') {
-          throw new TreasuryError(`El cheque Nº ${check.number} (${check.bank}) está ${statusText(check.status)}: anulá primero la operación que lo sacó de la cartera`);
+          throw new TreasuryError(
+            `El cheque Nº ${check.number} (${check.bank}) está ${statusText(check.status)}: anulá primero la operación que lo sacó de la cartera`
+          );
         }
         const entry = await tx.treasury_movements.findMany({
           where: { check_operation_id: check.openingOperationId, third_party_check_id: check.id, cancelled_at: null },
           select: { id: true },
         });
-        await cancelMovements(tx, { ids: entry.map((m) => m.id) }, { by: profile.id, reason: motive.data, at: new Date() });
-        await moveCheck(tx, { check, action: 'CANCEL_ORIGIN', date: localToday(), userId: profile.id, origin: { operationId: check.openingOperationId } });
+        await cancelMovements(
+          tx,
+          { ids: entry.map((m) => m.id) },
+          { by: profile.id, reason: motive.data, at: new Date() }
+        );
+        await moveCheck(tx, {
+          check,
+          action: 'CANCEL_ORIGIN',
+          date: localToday(),
+          userId: profile.id,
+          origin: { operationId: check.openingOperationId },
+        });
       },
       prisma,
       TRANSACTION_OPTIONS

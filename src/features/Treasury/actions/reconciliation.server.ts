@@ -1,19 +1,27 @@
 'use server';
 
-import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { AMOUNT_SCALE, amountOf, formatScaled, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
+import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
-import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError } from '../lib/action-errors';
+import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError, treasurySession } from '../lib/action-errors';
+import { isoDay } from '../lib/dates';
 import { conceptAllows } from '../lib/movement-rules';
 import { assertBankAccount, cancelMovements, createMovement } from '../lib/movements';
 import { debitOwnCheck, lockOwnChecks } from '../lib/own-checks';
-import { assertPending, autoMatchAccount, lockAccountReconciliation, lockLine, lockMatchableMovement, setLineStatus, statementRange } from '../lib/reconciliation';
+import {
+  assertPending,
+  autoMatchAccount,
+  lockAccountReconciliation,
+  lockLine,
+  lockMatchableMovement,
+  setLineStatus,
+  statementRange,
+} from '../lib/reconciliation';
 import { buildStatementLines } from '../lib/statement-parse';
 import { TreasuryError } from '../lib/treasury-errors';
 import { cancelReasonSchema } from '../schemas/movements';
@@ -32,7 +40,6 @@ import {
   type StatementProfileValues,
 } from '../schemas/reconciliation';
 import { SESSION_EXPIRED, TRANSACTION_OPTIONS, localToday, revalidateTreasury } from './shared';
-import { isoDay } from '../lib/dates';
 
 /**
  * Conciliación bancaria (spec Tesorería etapa 4 §3): importar extractos, conciliar (automática y a
@@ -51,12 +58,6 @@ const addDays = (iso: string, days: number) => {
   return isoDay(d);
 };
 
-async function session() {
-  const profile = await getServerAuthProfile();
-  if (!profile) return null;
-  return { profile, companyId: await getActiveCompanyId() };
-}
-
 const toProfile = (p: StatementProfileValues) => ({
   headerRow: p.headerRow,
   dateColumn: p.dateColumn,
@@ -73,19 +74,25 @@ const toProfile = (p: StatementProfileValues) => ({
  * Importa un extracto: guarda el perfil de la cuenta, vuelve a parsear las filas, rechaza todo si
  * alguna es inválida, saltea las ya importadas y corre la conciliación automática.
  */
-export async function importStatement(values: ImportStatementValues): Promise<ActionResult<{ statementId: string | null; imported: number; skipped: number; matched: number }>> {
+export async function importStatement(
+  values: ImportStatementValues
+): Promise<ActionResult<{ statementId: string | null; imported: number; skipped: number; matched: number }>> {
   if (!(await checkPermissionServer('tesoreria', 'conciliacion', 'create'))) return fail(NO_PERMISSION);
   const parsed = importStatementSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   const v = parsed.data;
   const statementProfile = toProfile(v.profile);
   const { lines, errors } = buildStatementLines(v.rows, statementProfile);
-  if (errors.length > 0) return fail(errors.length > 3 ? `${errors.slice(0, 3).join(' · ')} · y ${errors.length - 3} más` : errors.join(' · '));
+  if (errors.length > 0)
+    return fail(
+      errors.length > 3 ? `${errors.slice(0, 3).join(' · ')} · y ${errors.length - 3} más` : errors.join(' · ')
+    );
   if (lines.length === 0) return fail('El archivo no tiene movimientos con fecha e importe');
-  if (lines.length > MAX_STATEMENT_ROWS) return fail(`El archivo tiene más de ${MAX_STATEMENT_ROWS} movimientos: partilo en varios`);
+  if (lines.length > MAX_STATEMENT_ROWS)
+    return fail(`El archivo tiene más de ${MAX_STATEMENT_ROWS} movimientos: partilo en varios`);
   try {
     const result = await withActor(
       profile.credentialId,
@@ -152,14 +159,19 @@ export async function importStatement(values: ImportStatementValues): Promise<Ac
     revalidateTreasury();
     return ok(result);
   } catch (error) {
-    return toTreasuryActionError(error, logger, 'importar el extracto', 'Ese extracto ya se está importando. Intentá de nuevo');
+    return toTreasuryActionError(
+      error,
+      logger,
+      'importar el extracto',
+      'Ese extracto ya se está importando. Intentá de nuevo'
+    );
   }
 }
 
 /** Vuelve a correr la conciliación automática de una cuenta. */
 export async function autoReconcileAccount(accountId: string): Promise<ActionResult<{ matched: number }>> {
   if (!(await checkPermissionServer('tesoreria', 'conciliacion', 'update'))) return fail(NO_PERMISSION);
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   try {
@@ -185,7 +197,7 @@ export async function matchLine(values: MatchLineValues): Promise<ActionResult> 
   if (!(await checkPermissionServer('tesoreria', 'conciliacion', 'update'))) return fail(NO_PERMISSION);
   const parsed = matchLineSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   try {
@@ -203,7 +215,12 @@ export async function matchLine(values: MatchLineValues): Promise<ActionResult> 
     revalidateTreasury();
     return ok(null);
   } catch (error) {
-    return toTreasuryActionError(error, logger, 'conciliar la línea', 'El movimiento ya está conciliado con otra línea');
+    return toTreasuryActionError(
+      error,
+      logger,
+      'conciliar la línea',
+      'El movimiento ya está conciliado con otra línea'
+    );
   }
 }
 
@@ -212,7 +229,7 @@ export async function registerLine(values: RegisterLineValues): Promise<ActionRe
   if (!(await checkPermissionServer('tesoreria', 'conciliacion', 'update'))) return fail(NO_PERMISSION);
   const parsed = registerLineSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   const v = parsed.data;
@@ -230,7 +247,9 @@ export async function registerLine(values: RegisterLineValues): Promise<ActionRe
         if (!concept.is_active) throw new TreasuryError(`El concepto «${concept.name}» está inactivo`);
         const direction = line.amount.startsWith('-') ? 'OUT' : 'IN';
         if (!conceptAllows(concept.direction, direction)) {
-          throw new TreasuryError(`El concepto «${concept.name}» es solo de ${concept.direction === 'IN' ? 'ingresos' : 'egresos'}`);
+          throw new TreasuryError(
+            `El concepto «${concept.name}» es solo de ${concept.direction === 'IN' ? 'ingresos' : 'egresos'}`
+          );
         }
         const cents = parseScaled(line.amount, AMOUNT_SCALE) ?? BigInt(0);
         const movement = await createMovement(tx, {
@@ -260,7 +279,7 @@ export async function ignoreLine(values: IgnoreLineValues): Promise<ActionResult
   if (!(await checkPermissionServer('tesoreria', 'conciliacion', 'update'))) return fail(NO_PERMISSION);
   const parsed = ignoreLineSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   try {
@@ -287,7 +306,7 @@ export async function debitCheckFromLine(values: DebitCheckLineValues): Promise<
   if (!(await checkPermissionServer('tesoreria', 'cheques-propios', 'update'))) return fail(NO_PERMISSION);
   const parsed = debitCheckLineSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   try {
@@ -299,7 +318,8 @@ export async function debitCheckFromLine(values: DebitCheckLineValues): Promise<
         if (line.date > localToday()) throw new TreasuryError('La fecha de la línea es futura');
         const check = (await lockOwnChecks(tx, companyId, [parsed.data.checkId])).get(parsed.data.checkId)!;
         if (check.accountId !== line.accountId) throw new TreasuryError('El cheque es de otra cuenta');
-        if (amountOf(check.amount ?? '0') !== -amountOf(line.amount)) throw new TreasuryError('El cheque no tiene el importe de la línea');
+        if (amountOf(check.amount ?? '0') !== -amountOf(line.amount))
+          throw new TreasuryError('El cheque no tiene el importe de la línea');
         const { movementId } = await debitOwnCheck(tx, { check, date: line.date, companyId, userId: profile.id });
         await setLineStatus(tx, line.id, 'MATCHED', { userId: profile.id, movementId });
       },
@@ -322,7 +342,7 @@ export async function unmatchLine(lineId: string, reason: string): Promise<Actio
   const motive = cancelReasonSchema.safeParse(reason);
   if (!motive.success) return fail(firstIssue(motive.error));
   if (!UUID_RE.test(lineId)) return fail(LINE_NOT_FOUND);
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   try {
@@ -333,7 +353,11 @@ export async function unmatchLine(lineId: string, reason: string): Promise<Actio
         if (line.status === 'PENDING') throw new TreasuryError('La línea ya está pendiente');
         await setLineStatus(tx, line.id, 'PENDING', { userId: profile.id });
         if (line.status === 'CREATED' && line.movementId) {
-          await cancelMovements(tx, { ids: [line.movementId] }, { by: profile.id, reason: `Desconciliado del extracto: ${motive.data}`, at: new Date() });
+          await cancelMovements(
+            tx,
+            { ids: [line.movementId] },
+            { by: profile.id, reason: `Desconciliado del extracto: ${motive.data}`, at: new Date() }
+          );
         }
       },
       prisma,
@@ -350,18 +374,26 @@ export async function unmatchLine(lineId: string, reason: string): Promise<Actio
 export async function deleteStatement(statementId: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('tesoreria', 'conciliacion', 'delete'))) return fail(NO_PERMISSION);
   if (!UUID_RE.test(statementId)) return fail('La importación no existe');
-  const ctx = await session();
+  const ctx = await treasurySession();
   if (!ctx) return fail(SESSION_EXPIRED);
   const { profile, companyId } = ctx;
   try {
     await withActor(
       profile.credentialId,
       async (tx) => {
-        const statement = await tx.bank_statements.findFirst({ where: { id: statementId, company_id: companyId }, select: { id: true, account_id: true } });
+        const statement = await tx.bank_statements.findFirst({
+          where: { id: statementId, company_id: companyId },
+          select: { id: true, account_id: true },
+        });
         if (!statement) throw new TreasuryError('La importación no existe');
         await lockAccountReconciliation(tx, statement.account_id);
-        const used = await tx.bank_statement_lines.count({ where: { statement_id: statement.id, status: { in: ['MATCHED', 'CREATED'] } } });
-        if (used > 0) throw new TreasuryError(`La importación tiene ${used} ${used === 1 ? 'línea conciliada' : 'líneas conciliadas'}: desconcilialas primero`);
+        const used = await tx.bank_statement_lines.count({
+          where: { statement_id: statement.id, status: { in: ['MATCHED', 'CREATED'] } },
+        });
+        if (used > 0)
+          throw new TreasuryError(
+            `La importación tiene ${used} ${used === 1 ? 'línea conciliada' : 'líneas conciliadas'}: desconcilialas primero`
+          );
         await tx.bank_statements.delete({ where: { id: statement.id } });
       },
       prisma,
@@ -396,14 +428,30 @@ export async function getReconciliationData(accountId: string, options: { showAl
   if (!(await checkPermissionServer('tesoreria', 'conciliacion', 'view'))) return null;
   if (!UUID_RE.test(accountId)) return null;
   const companyId = await getActiveCompanyId();
-  const account = await prisma.treasury_accounts.findFirst({ where: { id: accountId, company_id: companyId, kind: 'BANK' }, select: { id: true, name: true } });
+  const account = await prisma.treasury_accounts.findFirst({
+    where: { id: accountId, company_id: companyId, kind: 'BANK' },
+    select: { id: true, name: true },
+  });
   if (!account) return null;
   const today = localToday();
 
   const lineWhere = { account_id: accountId, ...(options.showAll ? {} : { status: 'PENDING' as const }) };
   const [profile, statements, lineRows, totalLines, pendingAgg] = await Promise.all([
     prisma.bank_statement_profiles.findUnique({ where: { account_id: accountId } }),
-    prisma.$queryRaw<{ id: string; file_name: string; date_from: Date; date_to: Date; line_count: number; skipped_count: number; created_at: Date; creator: string | null; pending: number; used: number }[]>`
+    prisma.$queryRaw<
+      {
+        id: string;
+        file_name: string;
+        date_from: Date;
+        date_to: Date;
+        line_count: number;
+        skipped_count: number;
+        created_at: Date;
+        creator: string | null;
+        pending: number;
+        used: number;
+      }[]
+    >`
       SELECT s.id, s.file_name, s.date_from, s.date_to, s.line_count, s.skipped_count, s.created_at, COALESCE(p.fullname, p.email) AS creator,
              (SELECT COUNT(*)::int FROM bank_statement_lines l WHERE l.statement_id = s.id AND l.status = 'PENDING') AS pending,
              (SELECT COUNT(*)::int FROM bank_statement_lines l WHERE l.statement_id = s.id AND l.status IN ('MATCHED', 'CREATED')) AS used
@@ -444,13 +492,18 @@ export async function getReconciliationData(accountId: string, options: { showAl
     amount: l.amount.toFixed(2),
     status: l.status,
     ignoreReason: l.ignore_reason,
-    movement: l.movement ? { id: l.movement.id, date: isoDay(l.movement.date), kind: l.movement.kind, description: l.movement.description } : null,
+    movement: l.movement
+      ? { id: l.movement.id, date: isoDay(l.movement.date), kind: l.movement.kind, description: l.movement.description }
+      : null,
   }));
 
   // Rango del panel del libro: el de las líneas pendientes (o, sin pendientes, los últimos 30 días) ±5 días.
   const pendingLines = lines.filter((l) => l.status === 'PENDING');
   const agg = pendingAgg[0];
-  const range = agg?.min_date && agg.max_date ? { from: isoDay(agg.min_date), to: isoDay(agg.max_date) } : { from: addDays(today, -30), to: today };
+  const range =
+    agg?.min_date && agg.max_date
+      ? { from: isoDay(agg.min_date), to: isoDay(agg.max_date) }
+      : { from: addDays(today, -30), to: today };
   const from = addDays(range.from, -5);
   const to = addDays(range.to, 5);
   const movements = await prisma.treasury_movements.findMany({
@@ -483,7 +536,12 @@ export async function getReconciliationData(accountId: string, options: { showAl
       const checks = l.amount.startsWith('-')
         ? issuedChecks
             .filter((c) => c.amount && c.amount.toFixed(2) === l.amount.replace('-', ''))
-            .map((c) => ({ id: c.id, number: c.number, supplier: c.supplier?.name ?? null, paymentDate: c.payment_date ? isoDay(c.payment_date) : null }))
+            .map((c) => ({
+              id: c.id,
+              number: c.number,
+              supplier: c.supplier?.name ?? null,
+              paymentDate: c.payment_date ? isoDay(c.payment_date) : null,
+            }))
         : [];
       return [l.id, { movements: sameAmount, checks }];
     })
