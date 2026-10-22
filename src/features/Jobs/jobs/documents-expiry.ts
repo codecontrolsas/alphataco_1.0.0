@@ -5,7 +5,7 @@ import { argentinaDate } from '@/shared/lib/argentina-time';
 import type { SendMail } from '@/shared/lib/mail/transport';
 import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
 import { buildDocumentsExpirySummary } from '../lib/documents-expiry-summary.server';
-import { listCompanies, notifyOutcome, runForEachCompany, runJobWithBitacora } from '../lib/per-company';
+import { notifyOutcome, runJobForEachCompany } from '../lib/per-company';
 import type { JobSummary } from '../lib/types';
 import { renderDocumentsExpiryEmail } from '../templates/documents-expiry';
 
@@ -54,58 +54,53 @@ export async function runDocumentsExpiryJob(deps: DocumentsExpiryJobDeps = {}): 
 
   // Todo va DENTRO de la bitácora: si el `findMany` falla (base caída, pool agotado), la fila
   // `corrida:<fecha>` ya está abierta y el error queda registrado.
-  return runJobWithBitacora(JOB, date, async () => {
-    const companies = await listCompanies();
+  return runJobForEachCompany({
+    job: JOB,
+    date,
+    work: async (company) => {
+      const summary = await buildDocumentsExpirySummary(prisma, {
+        companyId: company.id,
+        daysAhead,
+        detailLimit,
+      });
 
-    return runForEachCompany({
-      job: JOB,
-      date,
-      companies,
-      work: async (company) => {
-        const summary = await buildDocumentsExpirySummary(prisma, {
+      const email = renderDocumentsExpiryEmail({ companyName: company.company_name, data: summary });
+      const expired =
+        summary.expired_counts.employees + summary.expired_counts.equipment + summary.expired_counts.company;
+      const expiringSoon =
+        summary.expiring_soon.employees.total +
+        summary.expiring_soon.equipment.total +
+        summary.expiring_soon.company.total;
+
+      const result = await notify(
+        {
+          event: 'documents.expiry_weekly',
           companyId: company.id,
-          daysAhead,
-          detailLimit,
-        });
+          dedupeKey: `documents.expiry_weekly:${date}`,
+          title: `Vencimientos de la semana: ${expired} vencidos y ${expiringSoon} por vencer`,
+          href: '/dashboard/document',
+          email,
+          metadata: { daysAhead },
+        },
+        { sendMail: deps.sendMail }
+      );
 
-        const email = renderDocumentsExpiryEmail({ companyName: company.company_name, data: summary });
-        const expired =
-          summary.expired_counts.employees + summary.expired_counts.equipment + summary.expired_counts.company;
-        const expiringSoon =
-          summary.expiring_soon.employees.total +
-          summary.expiring_soon.equipment.total +
-          summary.expiring_soon.company.total;
+      if (result.status === 'no_recipients') {
+        // `skipped`: la clave queda reclamable para el mismo día, así cargar destinatarios y
+        // redisparar alcanza. Con `ok` la empresa quedaba afuera hasta el lunes siguiente.
+        return { skipped: true, reason: 'la empresa no tiene destinatarios (roles ni lista fija)' };
+      }
 
-        const result = await notify(
-          {
-            event: 'documents.expiry_weekly',
-            companyId: company.id,
-            dedupeKey: `documents.expiry_weekly:${date}`,
-            title: `Vencimientos de la semana: ${expired} vencidos y ${expiringSoon} por vencer`,
-            href: '/dashboard/document',
-            email,
-            metadata: { daysAhead },
-          },
-          { sendMail: deps.sendMail }
-        );
+      const totals = {
+        expiringSoon,
+        expired,
+        pending: summary.pending_counts.employees + summary.pending_counts.equipment + summary.pending_counts.company,
+      };
 
-        if (result.status === 'no_recipients') {
-          // `skipped`: la clave queda reclamable para el mismo día, así cargar destinatarios y
-          // redisparar alcanza. Con `ok` la empresa quedaba afuera hasta el lunes siguiente.
-          return { skipped: true, reason: 'la empresa no tiene destinatarios (roles ni lista fija)' };
-        }
-
-        const totals = {
-          expiringSoon,
-          expired,
-          pending: summary.pending_counts.employees + summary.pending_counts.equipment + summary.pending_counts.company,
-        };
-
-        return {
-          ...notifyOutcome(result),
-          metadata: { daysAhead, totals },
-        };
-      },
-    });
+      return {
+        ...notifyOutcome(result),
+        metadata: { daysAhead, totals },
+      };
+    },
   });
 }

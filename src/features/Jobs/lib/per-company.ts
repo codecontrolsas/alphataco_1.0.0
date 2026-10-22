@@ -252,3 +252,18 @@ export async function runJobWithBitacora(
 
   return summary;
 }
+
+/**
+ * Corrida completa de un job que hace el mismo trabajo por empresa: bitácora `corrida:<fecha>`, lista de
+ * empresas y `runForEachCompany`. Todo corre DENTRO de la bitácora, incluida la lectura de empresas: si esa
+ * consulta falla (base caída, pool agotado), la fila de la corrida ya está abierta y el error queda registrado.
+ */
+export function runJobForEachCompany(params: {
+  job: JobName;
+  date: string;
+  work: (company: CompanyRef) => Promise<CompanyWorkResult>;
+}): Promise<JobSummary> {
+  return runJobWithBitacora(params.job, params.date, async () =>
+    runForEachCompany({ ...params, companies: await listCompanies() })
+  );
+}
