@@ -1,9 +1,9 @@
 import 'server-only';
 
-import { callVoid } from '@/shared/lib/sql';
-import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
 import { argentinaDate } from '@/shared/lib/argentina-time';
-import { runForEachCompany, runGlobalStep, runJobWithBitacora } from '../lib/per-company';
+import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
+import { callVoid } from '@/shared/lib/sql';
+import { listCompanies, runForEachCompany, runGlobalStep, runJobWithBitacora } from '../lib/per-company';
 import type { JobSummary, JobUnitOutcome } from '../lib/types';
 
 /**
@@ -79,10 +79,7 @@ export async function runDailyIndicatorsJob(deps: DailyIndicatorsDeps = {}): Pro
       })
     );
 
-    const companies = await prisma.company.findMany({
-      select: { id: true, company_name: true },
-      orderBy: { company_name: 'asc' },
-    });
+    const companies = await listCompanies();
 
     units.push(
       ...(await runForEachCompany({

@@ -1,11 +1,11 @@
 import 'server-only';
 
 import { notify } from '@/features/Notifications/lib/dispatch.server';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import type { SendMail } from '@/shared/lib/mail/transport';
 import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
-import { argentinaDate } from '@/shared/lib/argentina-time';
 import { buildDocumentsExpirySummary } from '../lib/documents-expiry-summary.server';
-import { runForEachCompany, runJobWithBitacora } from '../lib/per-company';
+import { listCompanies, notifyOutcome, runForEachCompany, runJobWithBitacora } from '../lib/per-company';
 import type { JobSummary } from '../lib/types';
 import { renderDocumentsExpiryEmail } from '../templates/documents-expiry';
 
@@ -55,10 +55,7 @@ export async function runDocumentsExpiryJob(deps: DocumentsExpiryJobDeps = {}): 
   // Todo va DENTRO de la bitácora: si el `findMany` falla (base caída, pool agotado), la fila
   // `corrida:<fecha>` ya está abierta y el error queda registrado.
   return runJobWithBitacora(JOB, date, async () => {
-    const companies = await prisma.company.findMany({
-      select: { id: true, company_name: true },
-      orderBy: { company_name: 'asc' },
-    });
+    const companies = await listCompanies();
 
     return runForEachCompany({
       job: JOB,
@@ -97,8 +94,6 @@ export async function runDocumentsExpiryJob(deps: DocumentsExpiryJobDeps = {}): 
           // redisparar alcanza. Con `ok` la empresa quedaba afuera hasta el lunes siguiente.
           return { skipped: true, reason: 'la empresa no tiene destinatarios (roles ni lista fija)' };
         }
-        const emailSent = result.emailSent;
-        const recipientCount = result.status === 'sent' ? result.emailRecipients + result.inApp : 0;
 
         const totals = {
           expiringSoon,
@@ -107,9 +102,7 @@ export async function runDocumentsExpiryJob(deps: DocumentsExpiryJobDeps = {}): 
         };
 
         return {
-          reason: emailSent ? 'correo enviado' : 'correo NO enviado (SMTP sin configurar o error de envío)',
-          recipients: recipientCount,
-          emailSent,
+          ...notifyOutcome(result),
           metadata: { daysAhead, totals },
         };
       },

@@ -1,6 +1,8 @@
 import 'server-only';
 
+import type { NotifyResult } from '@/features/Notifications/lib/dispatch.server';
 import { Logger } from '@/lib/logger';
+import { prismaSystem } from '@/shared/lib/prisma-system';
 import { claimRun, finishRun, recordRunStart } from './runs';
 import { summarize, type JobName, type JobSummary, type JobUnitOutcome } from './types';
 
@@ -25,6 +27,26 @@ export interface CompanyWorkResult {
 export interface CompanyRef {
   id: string;
   company_name: string;
+}
+
+/** Todas las empresas, ordenadas por nombre: la lista sobre la que corren los jobs por empresa. */
+export function listCompanies(): Promise<CompanyRef[]> {
+  return prismaSystem.company.findMany({
+    select: { id: true, company_name: true },
+    orderBy: { company_name: 'asc' },
+  });
+}
+
+/**
+ * Resultado de una empresa a partir de un `notify` que SÍ tenía destinatarios: motivo, cantidad
+ * de destinatarios (correos + avisos en la app) y si el correo salió.
+ */
+export function notifyOutcome(result: Exclude<NotifyResult, { status: 'no_recipients' }>): CompanyWorkResult {
+  return {
+    reason: result.emailSent ? 'correo enviado' : 'correo NO enviado (SMTP sin configurar o error de envío)',
+    recipients: result.status === 'sent' ? result.emailRecipients + result.inApp : 0,
+    emailSent: result.emailSent,
+  };
 }
 
 /** `finishRun` nunca debe tumbar el bucle: un fallo de contabilidad no es un fallo del job. */

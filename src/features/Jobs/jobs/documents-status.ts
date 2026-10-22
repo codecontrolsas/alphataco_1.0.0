@@ -1,9 +1,9 @@
 import 'server-only';
 
 import { refreshDocumentStatus } from '@/features/Documentacion/shared/compliance/server/document-status.server';
-import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
 import { argentinaDate } from '@/shared/lib/argentina-time';
-import { runForEachCompany, runJobWithBitacora } from '../lib/per-company';
+import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
+import { listCompanies, runForEachCompany, runJobWithBitacora } from '../lib/per-company';
 import type { JobSummary } from '../lib/types';
 
 /**
@@ -35,10 +35,7 @@ export async function runDocumentsStatusJob(deps: DocumentsStatusJobDeps = {}): 
   const date = deps.date ?? argentinaDate();
 
   return runJobWithBitacora(JOB, date, async () => {
-    const companies = await prisma.company.findMany({
-      select: { id: true, company_name: true },
-      orderBy: { company_name: 'asc' },
-    });
+    const companies = await listCompanies();
 
     return runForEachCompany({
       job: JOB,

@@ -1,13 +1,13 @@
 import 'server-only';
 
 import { notify } from '@/features/Notifications/lib/dispatch.server';
+import { deviationsResultSchema } from '@/features/Operaciones/PartesDiarios/schemas/deviations';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import type { SendMail } from '@/shared/lib/mail/transport';
 import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
 import { callScalar } from '@/shared/lib/sql';
-import { argentinaDate } from '@/shared/lib/argentina-time';
-import { runForEachCompany, runJobWithBitacora } from '../lib/per-company';
+import { listCompanies, notifyOutcome, runForEachCompany, runJobWithBitacora } from '../lib/per-company';
 import type { JobSummary } from '../lib/types';
-import { deviationsResultSchema } from '@/features/Operaciones/PartesDiarios/schemas/deviations';
 import { renderDeviationsEmail } from '../templates/deviations';
 
 /**
@@ -54,10 +54,7 @@ export async function runDailyReportDeviationsJob(deps: DeviationsJobDeps = {}):
   // `corrida:<fecha>` ya está abierta y el error queda registrado. Sin esto, el modo de falla
   // más probable no dejaba ninguna fila en `jobs_runs`.
   return runJobWithBitacora(JOB, date, async () => {
-    const companies = await prisma.company.findMany({
-      select: { id: true, company_name: true },
-      orderBy: { company_name: 'asc' },
-    });
+    const companies = await listCompanies();
 
     return runForEachCompany({
       job: JOB,
@@ -121,12 +118,9 @@ export async function runDailyReportDeviationsJob(deps: DeviationsJobDeps = {}):
             metadata: { dailyReportId: report.id, rowsWithDeviations },
           };
         }
-        const emailSent = result.emailSent;
 
         return {
-          reason: emailSent ? 'correo enviado' : 'correo NO enviado (SMTP sin configurar o error de envío)',
-          recipients: result.status === 'sent' ? result.emailRecipients + result.inApp : 0,
-          emailSent,
+          ...notifyOutcome(result),
           metadata: {
             dailyReportId: report.id,
             rowsWithDeviations: deviations.rows_with_deviations.length,

@@ -3,10 +3,9 @@ import 'server-only';
 import { notify } from '@/features/Notifications/lib/dispatch.server';
 import { EXPIRING_WINDOW_DAYS } from '@/features/Warehouses/lib/batch-expiry';
 import { findExpiringBatches } from '@/features/Warehouses/lib/expiring-batches';
-import type { SendMail } from '@/shared/lib/mail/transport';
-import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
 import { argentinaDate } from '@/shared/lib/argentina-time';
-import { runForEachCompany, runJobWithBitacora } from '../lib/per-company';
+import type { SendMail } from '@/shared/lib/mail/transport';
+import { listCompanies, notifyOutcome, runForEachCompany, runJobWithBitacora } from '../lib/per-company';
 import type { JobSummary } from '../lib/types';
 import { renderWarehouseBatchExpiryEmail } from '../templates/warehouse-batch-expiry';
 
@@ -35,10 +34,7 @@ export async function runWarehouseBatchExpiryJob(deps: WarehouseBatchExpiryJobDe
   const date = deps.date ?? argentinaDate();
 
   return runJobWithBitacora(JOB, date, async () => {
-    const companies = await prisma.company.findMany({
-      select: { id: true, company_name: true },
-      orderBy: { company_name: 'asc' },
-    });
+    const companies = await listCompanies();
 
     return runForEachCompany({
       job: JOB,
@@ -71,14 +67,8 @@ export async function runWarehouseBatchExpiryJob(deps: WarehouseBatchExpiryJobDe
         if (result.status === 'no_recipients') {
           return { skipped: true, reason: 'la empresa no tiene destinatarios (roles ni lista fija)' };
         }
-        const emailSent = result.emailSent;
 
-        return {
-          reason: emailSent ? 'correo enviado' : 'correo NO enviado (SMTP sin configurar o error de envío)',
-          recipients: result.status === 'sent' ? result.emailRecipients + result.inApp : 0,
-          emailSent,
-          metadata: { expired, expiring: items.length - expired },
-        };
+        return { ...notifyOutcome(result), metadata: { expired, expiring: items.length - expired } };
       },
     });
   });
