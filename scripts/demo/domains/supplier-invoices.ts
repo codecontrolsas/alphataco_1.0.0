@@ -14,7 +14,6 @@ import { NEUQUEN_PROVINCE } from './catalogs.ts';
 
 const RATES: Record<number, number> = { 4: 10.5, 5: 21, 6: 27 };
 const LETTERS: Record<number, 'A' | 'B' | 'C'> = { 1: 'A', 2: 'A', 3: 'A', 11: 'C' };
-const LABELS: Record<number, string> = { 1: 'Factura A', 3: 'Nota de Crédito A', 11: 'Factura C' };
 
 const unitCost = new Intl.NumberFormat('es-AR', {
   style: 'currency',
