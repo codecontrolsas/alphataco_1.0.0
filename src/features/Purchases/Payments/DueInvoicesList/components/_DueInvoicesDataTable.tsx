@@ -3,11 +3,16 @@
 import { Button } from '@/components/ui/button';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableExportConfig, type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { AlarmClock, CalendarClock, CalendarOff, CircleOff, FileText, Banknote, Truck, type LucideIcon } from 'lucide-react';
-import { formatDateAr } from '@/shared/lib/argentina-time';
+import { createFacetFilters } from '@/shared/components/common/DataTable/facet-filters';
+import {
+  type DataTableExportConfig,
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+} from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
+import { formatDateOnlyAr } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
+import { AlarmClock, Banknote, CalendarClock, CalendarOff, FileText, Truck, type LucideIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PURCHASES_QUERY_KEYS } from '../../../lib/query-keys';
@@ -36,12 +41,21 @@ interface Props {
   /** Banda de atención resuelta en el servidor; se muestra sobre la tabla. */
   topSlot?: ReactNode;
   initialColumnVisibility?: Record<string, boolean>;
+  /** Preferencia guardada de filtros visibles: esta tabla hoy no la aplica (ver REVISION-CODIGO.md). */
   initialFilterVisibility?: Record<string, boolean>;
 }
 
 const DEFAULT_VISIBLE_FILTERS = ['supplier', 'days', 'due_date'];
 
-const EMPTY_FACET: FacetResult = { options: [], counts: new Map() };
+const facets = createFacetFilters(getDueInvoiceSingleFacet);
+
+const DAYS_OPTIONS = DAYS_VALUES.map((value) => ({ value, label: DAYS_FILTER_LABELS[value], icon: daysIcons[value] }));
+
+const CBTE_TYPE_OPTIONS = DUE_CBTE_TYPE_IDS.map((id) => ({
+  value: String(id),
+  label: cbteTypeLabel(id),
+  icon: FileText,
+}));
 
 const daysIcons: Record<(typeof DAYS_VALUES)[number], LucideIcon> = {
   overdue: AlarmClock,
@@ -50,8 +64,7 @@ const daysIcons: Record<(typeof DAYS_VALUES)[number], LucideIcon> = {
 };
 
 /** Columnas DATE (sin hora): medianoche UTC, se leen como fecha para no correr un día. */
-const dateOnly = (value: unknown) =>
-  value ? formatDateAr(new Date(value as string | Date).toISOString().slice(0, 10)) : '';
+const dateOnly = (value: unknown) => (value ? formatDateOnlyAr(value as string | Date) : '');
 const money = (value: unknown) => formatMoney(value as string);
 
 export function _DueInvoicesDataTable({
@@ -62,11 +75,8 @@ export function _DueInvoicesDataTable({
   canCreate = false,
   topSlot,
   initialColumnVisibility,
-  initialFilterVisibility,
 }: Props) {
   const router = useRouter();
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-  const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getDueInvoicesPaginated(params), []);
 
   // Seleccion: el DataTable entrega los ids (todas las paginas) y las filas de la pagina actual.
@@ -95,57 +105,14 @@ export function _DueInvoicesDataTable({
 
   const columns = useMemo(() => getColumns(), []);
 
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((c) => [c, false]));
-    return { ...defaults, ...initialColumnVisibility };
-  }, [initialColumnVisibility]);
-
-  const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(() => {
-    const fkFacet =
-      (columnId: string, icon: LucideIcon, withNull?: string) =>
-      async (params: DataTableSearchParams): Promise<FacetResult> => {
-        const result = await getDueInvoiceSingleFacet(columnId, params);
-        if (!result) return EMPTY_FACET;
-        return {
-          options: [
-            ...(result.resolvedOptions ?? []).map((o) => ({ value: o.id, label: o.name ?? '', icon })),
-            ...(withNull && result.counts.has(NULL_FILTER_VALUE)
-              ? [{ value: NULL_FILTER_VALUE, label: withNull, icon: CircleOff }]
-              : []),
-          ],
-          counts: result.counts,
-        };
-      };
-
-    return [
-      { columnId: 'supplier', title: 'Proveedor', fetchFacet: fkFacet('supplier', Truck) },
-      {
-        columnId: 'days',
-        title: 'Días',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getDueInvoiceSingleFacet('days', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: DAYS_VALUES.map((value) => ({ value, label: DAYS_FILTER_LABELS[value], icon: daysIcons[value] })),
-            counts: result.counts,
-          };
-        },
-      },
+  const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
+    () => [
+      facets.lookup('supplier', 'Proveedor', Truck),
+      facets.fixed('days', 'Días', DAYS_OPTIONS),
       { columnId: 'due_date', title: 'Vencimiento', type: 'dateRange' as const },
       { columnId: 'issue_date', title: 'Fecha de emisión', type: 'dateRange' as const },
-      {
-        columnId: 'cbte_type',
-        title: 'Tipo de comprobante',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getDueInvoiceSingleFacet('cbte_type', params);
-          if (!result) return EMPTY_FACET;
-          return {
-            options: DUE_CBTE_TYPE_IDS.map((id) => ({ value: String(id), label: cbteTypeLabel(id), icon: FileText })),
-            counts: result.counts,
-          };
-        },
-      },
-      { columnId: 'orders', title: 'Órdenes de pago en curso', fetchFacet: fkFacet('orders', Banknote, NO_ORDER_LABEL) },
+      facets.fixed('cbte_type', 'Tipo de comprobante', CBTE_TYPE_OPTIONS),
+      facets.lookup('orders', 'Órdenes de pago en curso', Banknote, { label: NO_ORDER_LABEL }),
       {
         columnId: 'number',
         title: 'Comprobante',
@@ -154,13 +121,18 @@ export function _DueInvoicesDataTable({
       },
       { columnId: 'total', title: 'Total', type: 'text' as const, placeholder: 'Importe exacto, ej: 1234,56' },
       { columnId: 'pending', title: 'Pendiente', type: 'text' as const, placeholder: 'Importe exacto, ej: 1234,56' },
-    ];
-  }, []);
+    ],
+    []
+  );
 
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) return initialFilterVisibility;
-    return Object.fromEntries(facetedFilters.map((f) => [f.columnId, DEFAULT_VISIBLE_FILTERS.includes(f.columnId)]));
-  }, [initialFilterVisibility, facetedFilters]);
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+  });
 
   const exportConfig: DataTableExportConfig<DueInvoiceListItem> = useMemo(
     () => ({
@@ -201,13 +173,7 @@ export function _DueInvoicesDataTable({
         columns={columns}
         data={data}
         totalRows={totalRows}
-        searchParams={searchParams}
-        tableId={tableId}
-        paramNamespace={tableId}
-        facetedFilters={facetedFilters}
-        initialColumnVisibility={mergedColumnVisibility}
-        initialFilterVisibility={mergedFilterVisibility}
-        showFilterToggle
+        {...tableProps}
         enableRowSelection
         showRowSelection
         onRowSelectionChange={handleSelectionRows}
@@ -215,7 +181,6 @@ export function _DueInvoicesDataTable({
         toolbarActions={toolbarActions}
         queryFn={tableQueryFn}
         queryKey={[...PURCHASES_QUERY_KEYS.dueInvoices]}
-        onStateChange={handleStateChange}
         searchPlaceholder="Buscar por comprobante o proveedor"
         emptyMessage="No hay comprobantes pendientes de pago"
         exportConfig={exportConfig}

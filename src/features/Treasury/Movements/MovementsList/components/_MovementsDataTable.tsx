@@ -2,16 +2,22 @@
 
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableExportConfig, type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
+import { EMPTY_FACET } from '@/shared/components/common/DataTable/facet-filters';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { CircleOff, Landmark, Tag, type LucideIcon } from 'lucide-react';
-import { formatArgentinaDateTime } from '../../../lib/today';
+import {
+  type DataTableExportConfig,
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+  type FacetResult,
+} from '@/shared/components/common/DataTable/types';
 import { unwrapExportResult } from '@/shared/lib/export-result';
-import { MOVEMENT_STATE_UI } from '../../../lib/status-presentation';
+import { CircleOff, Landmark, Tag, type LucideIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import type { TreasuryAccountRow } from '../../../actions/accounts.server';
 import type { TreasuryConceptRow } from '../../../actions/concepts.server';
 import { TREASURY_QUERY_KEYS } from '../../../lib/query-keys';
+import { MOVEMENT_STATE_UI } from '../../../lib/status-presentation';
+import { formatArgentinaDateTime } from '../../../lib/today';
 import { TREASURY_MOVEMENT_KIND_LABELS } from '../../../schemas/movements';
 import {
   getAllTreasuryMovementsForExport,
@@ -41,8 +47,6 @@ interface Props {
 }
 
 const DEFAULT_VISIBLE_FILTERS = ['date', 'account', 'kind'];
-
-const EMPTY_FACET: FacetResult = { options: [], counts: new Map() };
 
 const KIND_VALUES = Object.keys(TREASURY_MOVEMENT_KIND_LABELS) as TreasuryMovementListItem['kind'][];
 const STATE_VALUES = Object.keys(MOVEMENT_STATE_LABELS) as (keyof typeof MOVEMENT_STATE_LABELS)[];
@@ -126,11 +130,26 @@ export function _MovementsDataTable({
         },
       },
       { columnId: 'created_at', title: 'Fecha de alta', type: 'dateRange' as const },
-      { columnId: 'description', title: 'Descripción', type: 'text' as const, placeholder: 'Buscar en la descripción...' },
-      { columnId: 'origin', title: 'Origen', type: 'text' as const, placeholder: 'Número, ej: OP-000012, TR-000003, RE-000001 o CD-000001' },
+      {
+        columnId: 'description',
+        title: 'Descripción',
+        type: 'text' as const,
+        placeholder: 'Buscar en la descripción...',
+      },
+      {
+        columnId: 'origin',
+        title: 'Origen',
+        type: 'text' as const,
+        placeholder: 'Número, ej: OP-000012, TR-000003, RE-000001 o CD-000001',
+      },
       { columnId: 'income', title: 'Ingreso', type: 'text' as const, placeholder: 'Importe exacto, ej: 1234,56' },
       { columnId: 'expense', title: 'Egreso', type: 'text' as const, placeholder: 'Importe exacto, ej: 1234,56' },
-      { columnId: 'cancel_reason', title: 'Motivo de anulación', type: 'text' as const, placeholder: 'Buscar en el motivo...' },
+      {
+        columnId: 'cancel_reason',
+        title: 'Motivo de anulación',
+        type: 'text' as const,
+        placeholder: 'Buscar en el motivo...',
+      },
     ];
   }, []);
 

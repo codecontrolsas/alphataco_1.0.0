@@ -1,16 +1,17 @@
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatMoney } from '@/features/Warehouses/lib/format';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { matchesAnyIdOrNone, matchesId, titled } from '@/shared/components/common/DataTable/column-helpers';
 import { StackedCell } from '@/shared/components/common/StackedCell';
-import { formatDateAr } from '@/shared/lib/argentina-time';
 import { CBTE_TYPES, isCbteTypeId } from '@/shared/lib/arca/catalogs';
+import { formatDateOnlyAr } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import Link from 'next/link';
+import { DocumentLinkList } from '../../components/DocumentLinks';
 import type { DueInvoiceListItem } from './actions.server';
 import { CHECK_DEBT_TYPE_LABEL, NO_DUE_DATE_LABEL, NO_ORDER_LABEL } from './constants';
 
-export const cbteTypeLabel = (id: number | null) => (id == null ? CHECK_DEBT_TYPE_LABEL : isCbteTypeId(id) ? CBTE_TYPES[id].label : String(id));
+export const cbteTypeLabel = (id: number | null) =>
+  id == null ? CHECK_DEBT_TYPE_LABEL : isCbteTypeId(id) ? CBTE_TYPES[id].label : String(id);
 
 /** Texto de la columna "Días": "Vencido hace 3 días", "Vence hoy", "Vence en 5 días". */
 export function daysLabel(days: number | null): string {
@@ -21,8 +22,7 @@ export function daysLabel(days: number | null): string {
 }
 
 /** Columnas DATE (sin hora): llegan como medianoche UTC, se leen como fecha para no correr un día. */
-const formatDateOnly = (value: Date | string | null) =>
-  value ? formatDateAr(new Date(value).toISOString().slice(0, 10)) : '-';
+const formatDateOnly = (value: Date | string | null) => (value ? formatDateOnlyAr(value) : '-');
 
 export function getColumns(): ColumnDef<DueInvoiceListItem>[] {
   return [
@@ -49,20 +49,18 @@ export function getColumns(): ColumnDef<DueInvoiceListItem>[] {
     {
       id: 'supplier',
       accessorFn: (row) => row.supplier.name,
-      meta: { title: 'Proveedor' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Proveedor" />,
+      ...titled('Proveedor'),
       cell: ({ row }) => (
         <Link href={`/dashboard/purchases/suppliers/${row.original.supplier.id}`} className="block hover:underline">
           <StackedCell primary={row.original.supplier.name} secondary={`CUIT ${row.original.supplier.cuit}`} />
         </Link>
       ),
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.supplier.id),
+      filterFn: matchesId((r) => r.supplier.id),
     },
     {
       id: 'number',
       accessorFn: (row) => row.label,
-      meta: { title: 'Comprobante' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Comprobante" />,
+      ...titled('Comprobante'),
       cell: ({ row }) => (
         <Link
           href={
@@ -84,30 +82,27 @@ export function getColumns(): ColumnDef<DueInvoiceListItem>[] {
     {
       id: 'cbte_type',
       accessorFn: (row) => cbteTypeLabel(row.cbte_type),
-      meta: { title: 'Tipo de comprobante' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de comprobante" />,
+      ...titled('Tipo de comprobante'),
       cell: ({ row }) => <span>{cbteTypeLabel(row.original.cbte_type)}</span>,
-      filterFn: (row, _id, value: string[]) => row.original.cbte_type != null && value.includes(String(row.original.cbte_type)),
+      filterFn: (row, _id, value: string[]) =>
+        row.original.cbte_type != null && value.includes(String(row.original.cbte_type)),
     },
     {
       id: 'issue_date',
       accessorKey: 'issue_date',
-      meta: { title: 'Fecha de emisión' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de emisión" />,
+      ...titled('Fecha de emisión'),
       cell: ({ row }) => <span>{formatDateOnly(row.original.issue_date)}</span>,
     },
     {
       id: 'due_date',
       accessorKey: 'due_date',
-      meta: { title: 'Vencimiento' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Vencimiento" />,
+      ...titled('Vencimiento'),
       cell: ({ row }) => <span>{formatDateOnly(row.original.due_date)}</span>,
     },
     {
       id: 'days',
       accessorFn: (row) => daysLabel(row.days_to_due),
-      meta: { title: 'Días' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Días" />,
+      ...titled('Días'),
       cell: ({ row }) => {
         const days = row.original.days_to_due;
         if (days == null) return <span className="text-muted-foreground">{NO_DUE_DATE_LABEL}</span>;
@@ -124,45 +119,28 @@ export function getColumns(): ColumnDef<DueInvoiceListItem>[] {
     {
       id: 'total',
       accessorKey: 'total',
-      meta: { title: 'Total' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Total" />,
+      ...titled('Total'),
       cell: ({ row }) => <span className="tabular-nums">{formatMoney(row.original.total)}</span>,
     },
     {
       id: 'pending',
       accessorKey: 'pending',
-      meta: { title: 'Pendiente' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Pendiente" />,
+      ...titled('Pendiente'),
       cell: ({ row }) => <span className="font-medium tabular-nums">{formatMoney(row.original.pending)}</span>,
     },
     {
       id: 'orders',
       accessorFn: (row) => row.orders.map((o) => o.number).join(', '),
-      meta: { title: 'Órdenes de pago en curso' },
+      ...titled('Órdenes de pago en curso'),
       // M:M: no ordenable.
       enableSorting: false,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Órdenes de pago en curso" />,
       cell: ({ row }) =>
         row.original.orders.length === 0 ? (
           <span className="text-muted-foreground">{NO_ORDER_LABEL}</span>
         ) : (
-          <div className="flex flex-wrap gap-x-2">
-            {row.original.orders.map((o) => (
-              <Link
-                key={o.id}
-                href={`/dashboard/purchases/payments/${o.id}`}
-                className="font-mono text-sm text-brand-ink hover:underline"
-              >
-                {o.number}
-              </Link>
-            ))}
-          </div>
+          <DocumentLinkList items={row.original.orders} basePath="/dashboard/purchases/payments" />
         ),
-      filterFn: (row, _id, value: string[]) => {
-        const orders = row.original.orders;
-        if (orders.length === 0) return value.includes(NULL_FILTER_VALUE);
-        return orders.some((o) => value.includes(o.id));
-      },
+      filterFn: matchesAnyIdOrNone((r) => r.orders.map((o) => o.id)),
     },
   ];
 }

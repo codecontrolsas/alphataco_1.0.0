@@ -2,13 +2,19 @@
 
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableExportConfig, type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
-import { Landmark } from 'lucide-react';
+import { EMPTY_FACET } from '@/shared/components/common/DataTable/facet-filters';
+import {
+  type DataTableExportConfig,
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+  type FacetResult,
+} from '@/shared/components/common/DataTable/types';
 import { unwrapExportResult } from '@/shared/lib/export-result';
-import { formatArgentinaDateTime } from '../../../lib/today';
-import { TRANSFER_STATE_UI } from '../../../lib/status-presentation';
+import { Landmark } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { TREASURY_QUERY_KEYS } from '../../../lib/query-keys';
+import { TRANSFER_STATE_UI } from '../../../lib/status-presentation';
+import { formatArgentinaDateTime } from '../../../lib/today';
 import {
   getAllTreasuryTransfersForExport,
   getTreasuryTransferSingleFacet,
@@ -29,8 +35,6 @@ interface Props {
 }
 
 const DEFAULT_VISIBLE_FILTERS = ['date', 'from_account', 'to_account'];
-
-const EMPTY_FACET: FacetResult = { options: [], counts: new Map() };
 
 const STATE_VALUES = Object.keys(TRANSFER_STATE_LABELS) as (keyof typeof TRANSFER_STATE_LABELS)[];
 
@@ -90,7 +94,12 @@ export function _TransfersDataTable({
       { columnId: 'number', title: 'Número', type: 'text' as const, placeholder: 'Buscar por número...' },
       { columnId: 'amount', title: 'Importe', type: 'text' as const, placeholder: 'Importe exacto, ej: 1234,56' },
       { columnId: 'notes', title: 'Notas', type: 'text' as const, placeholder: 'Buscar en las notas...' },
-      { columnId: 'cancel_reason', title: 'Motivo de anulación', type: 'text' as const, placeholder: 'Buscar en el motivo...' },
+      {
+        columnId: 'cancel_reason',
+        title: 'Motivo de anulación',
+        type: 'text' as const,
+        placeholder: 'Buscar en el motivo...',
+      },
     ];
   }, []);
 

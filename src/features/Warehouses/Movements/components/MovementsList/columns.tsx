@@ -3,15 +3,15 @@
 import { Badge } from '@/components/ui/badge';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDateTime, formatDateOnlyAr } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import { formatArgentinaDateTime, formatDateAr } from '@/shared/lib/argentina-time';
 import { Building2, ClipboardList, ExternalLink, Truck, User, Wrench, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { WarehouseStatusBadge } from '../../../components/WarehouseStatusBadge';
-import { DESTINATION_TYPE_LABELS } from '../../../lib/labels';
-import { MOVEMENT_TYPE_UI, REVERSAL_STATUS_UI } from '../../../lib/status-presentation';
-import type { StockDestinationTypeValue } from '../../../schemas/stock-movement';
 import { formatMoney } from '../../../lib/format';
+import { DESTINATION_TYPE_LABELS } from '../../../lib/labels';
+import { REVERSAL_STATUS_UI } from '../../../lib/status-presentation';
+import type { StockDestinationTypeValue } from '../../../schemas/stock-movement';
 import type { MovementListItem, MovementReversalStatus } from './actions.server';
 
 // Iconos de tipo de destino compartidos entre celdas y filtros (consistencia)
@@ -39,7 +39,7 @@ interface MovementColumnsOptions {
 }
 
 /** `occurred_on` es `@db.Date`: llega como medianoche UTC, se toma el día calendario tal cual. */
-export const formatOccurredOn = (value: string | Date) => formatDateAr(new Date(value).toISOString().slice(0, 10));
+export const formatOccurredOn = (value: string | Date) => formatDateOnlyAr(value);
 
 export function getColumns({ canViewPrices, onOpenDetail }: MovementColumnsOptions): ColumnDef<MovementListItem>[] {
   const columns: ColumnDef<MovementListItem>[] = [

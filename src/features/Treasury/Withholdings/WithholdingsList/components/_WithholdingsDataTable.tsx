@@ -1,8 +1,14 @@
 'use client';
 
-import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableExportConfig, type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
 import { formatMoney } from '@/features/Warehouses/lib/format';
+import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { EMPTY_FACET } from '@/shared/components/common/DataTable/facet-filters';
+import {
+  type DataTableExportConfig,
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+  type FacetResult,
+} from '@/shared/components/common/DataTable/types';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Users } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
@@ -35,8 +41,6 @@ interface Props {
 }
 
 const DEFAULT_VISIBLE_FILTERS = ['certificate_date', 'tax', 'customer'];
-
-const EMPTY_FACET: FacetResult = { options: [], counts: new Map() };
 
 const TAX_VALUES = Object.keys(CUSTOMER_WITHHOLDING_TAX_LABELS) as WithholdingListItem['tax'][];
 const CERTIFICATE_VALUES = Object.keys(CERTIFICATE_FILTER_LABELS) as CertificateFilterValue[];
@@ -108,7 +112,12 @@ export function _WithholdingsDataTable({
           };
         },
       },
-      { columnId: 'jurisdiction', title: 'Jurisdicción', type: 'text' as const, placeholder: 'Buscar en la jurisdicción...' },
+      {
+        columnId: 'jurisdiction',
+        title: 'Jurisdicción',
+        type: 'text' as const,
+        placeholder: 'Buscar en la jurisdicción...',
+      },
       { columnId: 'certificate_number', title: 'Número', type: 'text' as const, placeholder: 'Número de certificado' },
       { columnId: 'cuit', title: 'CUIT', type: 'text' as const, placeholder: 'CUIT o parte de él' },
       { columnId: 'receipt', title: 'Recibo', type: 'text' as const, placeholder: 'Número, ej: RE-000001' },

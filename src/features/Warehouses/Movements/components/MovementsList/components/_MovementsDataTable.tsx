@@ -1,20 +1,28 @@
 'use client';
 
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableExportConfig, type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
+import { EMPTY_FACET } from '@/shared/components/common/DataTable/facet-filters';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import {
+  type DataTableExportConfig,
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+  type FacetResult,
+} from '@/shared/components/common/DataTable/types';
 import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { CircleOff, User } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useCallback, useMemo, useState } from 'react';
-import { ALL_MOVEMENT_TYPES, DESTINATION_TYPE_LABELS, MOVEMENT_TYPE_LABELS, type MovementKind } from '../../../../lib/labels';
+import {
+  ALL_MOVEMENT_TYPES,
+  DESTINATION_TYPE_LABELS,
+  MOVEMENT_TYPE_LABELS,
+  type MovementKind,
+} from '../../../../lib/labels';
 import { WAREHOUSE_QUERY_KEYS } from '../../../../lib/query-keys';
 import { MOVEMENT_TYPE_UI, REVERSAL_STATUS_UI } from '../../../../lib/status-presentation';
-import {
-  STOCK_DESTINATION_TYPES,
-  type StockDestinationTypeValue,
-} from '../../../../schemas/stock-movement';
+import { STOCK_DESTINATION_TYPES, type StockDestinationTypeValue } from '../../../../schemas/stock-movement';
 import {
   getAllMovementsForExport,
   getMovementSingleFacet,
@@ -31,10 +39,9 @@ import {
 } from '../columns';
 
 // El detalle solo se necesita al abrirlo: no entra en el bundle de la lista.
-const MovementDetailSheet = dynamic(
-  () => import('../../MovementDetailSheet').then((m) => m.MovementDetailSheet),
-  { ssr: false }
-);
+const MovementDetailSheet = dynamic(() => import('../../MovementDetailSheet').then((m) => m.MovementDetailSheet), {
+  ssr: false,
+});
 
 interface Props {
   data: MovementListItem[];
@@ -48,8 +55,6 @@ interface Props {
 
 const DEFAULT_VISIBLE_FILTERS = ['type', 'occurred_on', 'status'];
 const REVERSAL_STATUSES: MovementReversalStatus[] = ['VALID', 'REVERSED', 'REVERSAL'];
-
-const EMPTY_FACET: FacetResult = { options: [], counts: new Map() };
 
 export function _MovementsDataTable({
   data,
@@ -188,7 +193,7 @@ export function _MovementsDataTable({
         type: (value) => MOVEMENT_TYPE_LABELS[value as MovementKind] ?? String(value),
         occurred_on: (value) => (value ? formatOccurredOn(value as string | Date) : ''),
         destination_type: (value) =>
-          value ? (DESTINATION_TYPE_LABELS[value as StockDestinationTypeValue] ?? String(value)) : '',
+          value ? DESTINATION_TYPE_LABELS[value as StockDestinationTypeValue] ?? String(value) : '',
         reference: (value) => (value ? String(value) : ''),
         notes: (value) => (value ? String(value) : ''),
         status: (value) => REVERSAL_STATUS_LABELS[value as MovementReversalStatus] ?? String(value),

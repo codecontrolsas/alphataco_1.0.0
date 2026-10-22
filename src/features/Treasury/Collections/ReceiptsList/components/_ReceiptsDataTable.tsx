@@ -2,13 +2,24 @@
 
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableExportConfig, type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
+import { EMPTY_FACET } from '@/shared/components/common/DataTable/facet-filters';
+import {
+  type DataTableExportConfig,
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+  type FacetResult,
+} from '@/shared/components/common/DataTable/types';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Users } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { TREASURY_QUERY_KEYS } from '../../../lib/query-keys';
 import { RECEIPT_STATUS_LABELS } from '../../../lib/receipt-rules';
-import { getAllReceiptsForExport, getReceiptSingleFacet, getReceiptsPaginated, type ReceiptListItem } from '../actions.server';
+import {
+  getAllReceiptsForExport,
+  getReceiptSingleFacet,
+  getReceiptsPaginated,
+  type ReceiptListItem,
+} from '../actions.server';
 import { HIDDEN_COLUMNS_BY_DEFAULT, formatValueDate, getColumns, receiptStatusIcons, sentIcons } from '../columns';
 import { RECEIPT_STATUS_VALUES, SENT_LABELS, type SentValue } from '../constants';
 
@@ -22,8 +33,6 @@ interface Props {
 }
 
 const DEFAULT_VISIBLE_FILTERS = ['customer', 'status', 'date'];
-
-const EMPTY_FACET: FacetResult = { options: [], counts: new Map() };
 
 const SENT_VALUES = Object.keys(SENT_LABELS) as SentValue[];
 
@@ -91,8 +100,18 @@ export function _ReceiptsDataTable({
       },
       { columnId: 'number', title: 'Número', type: 'text' as const, placeholder: 'Número, ej: RE-000001' },
       { columnId: 'invoices_count', title: 'Comprobantes', type: 'text' as const, placeholder: 'Cantidad exacta' },
-      { columnId: 'withholdings_total', title: 'Retenciones', type: 'text' as const, placeholder: 'Importe exacto, ej: 1234,56' },
-      { columnId: 'received_total', title: 'Total recibido', type: 'text' as const, placeholder: 'Importe exacto, ej: 1234,56' },
+      {
+        columnId: 'withholdings_total',
+        title: 'Retenciones',
+        type: 'text' as const,
+        placeholder: 'Importe exacto, ej: 1234,56',
+      },
+      {
+        columnId: 'received_total',
+        title: 'Total recibido',
+        type: 'text' as const,
+        placeholder: 'Importe exacto, ej: 1234,56',
+      },
     ],
     []
   );

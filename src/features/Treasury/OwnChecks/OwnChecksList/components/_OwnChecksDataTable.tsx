@@ -3,16 +3,33 @@
 import { Button } from '@/components/ui/button';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableExportConfig, type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
+import { EMPTY_FACET } from '@/shared/components/common/DataTable/facet-filters';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import {
+  type DataTableExportConfig,
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+  type FacetResult,
+} from '@/shared/components/common/DataTable/types';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Building2, CheckCircle2, CircleOff, Landmark } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { OWN_CHECK_KIND_LABELS, OWN_CHECK_STATUS_LABELS } from '../../../lib/own-check-transitions';
 import { TREASURY_QUERY_KEYS } from '../../../lib/query-keys';
 import { DebitOwnChecksDialog, type DebitableOwnCheck } from '../../components/DebitOwnChecksDialog';
-import { unwrapExportResult } from '@/shared/lib/export-result';
-import { getAllOwnChecksForExport, getOwnCheckSingleFacet, getOwnChecksPaginated, type OwnCheckListItem } from '../actions.server';
-import { HIDDEN_COLUMNS_BY_DEFAULT, formatValueDate, getColumns, ownCheckKindIcons, ownCheckStatusIcons } from '../columns';
+import {
+  getAllOwnChecksForExport,
+  getOwnCheckSingleFacet,
+  getOwnChecksPaginated,
+  type OwnCheckListItem,
+} from '../actions.server';
+import {
+  HIDDEN_COLUMNS_BY_DEFAULT,
+  formatValueDate,
+  getColumns,
+  ownCheckKindIcons,
+  ownCheckStatusIcons,
+} from '../columns';
 import { OWN_CHECK_KIND_VALUES, OWN_CHECK_STATUS_VALUES } from '../constants';
 
 interface Props {
@@ -26,8 +43,6 @@ interface Props {
 }
 
 const DEFAULT_VISIBLE_FILTERS = ['status', 'account', 'supplier'];
-
-const EMPTY_FACET: FacetResult = { options: [], counts: new Map() };
 
 export function _OwnChecksDataTable({
   data,
@@ -61,7 +76,17 @@ export function _OwnChecksDataTable({
     () =>
       selectedIds.flatMap((id) => {
         const row = rowCache[id];
-        return row ? [{ id: row.id, number: row.number, amount: row.amount ?? '0', paymentDate: row.paymentDate, accountName: row.account.name }] : [];
+        return row
+          ? [
+              {
+                id: row.id,
+                number: row.number,
+                amount: row.amount ?? '0',
+                paymentDate: row.paymentDate,
+                accountName: row.account.name,
+              },
+            ]
+          : [];
       }),
     [selectedIds, rowCache]
   );
@@ -109,7 +134,11 @@ export function _OwnChecksDataTable({
         fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
           const result = await getOwnCheckSingleFacet('supplier', params);
           if (!result) return EMPTY_FACET;
-          const options = (result.resolvedOptions ?? []).map((o) => ({ value: o.id, label: o.name ?? '', icon: Building2 }));
+          const options = (result.resolvedOptions ?? []).map((o) => ({
+            value: o.id,
+            label: o.name ?? '',
+            icon: Building2,
+          }));
           if ((result.counts.get(NULL_FILTER_VALUE) ?? 0) > 0) {
             options.push({ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff });
           }
@@ -136,7 +165,12 @@ export function _OwnChecksDataTable({
       { columnId: 'payment_date', title: 'Fecha de pago', type: 'dateRange' as const },
       { columnId: 'debited_on', title: 'Débito', type: 'dateRange' as const },
       { columnId: 'number', title: 'Número', type: 'text' as const, placeholder: 'Número de cheque' },
-      { columnId: 'payment_order', title: 'Orden de pago', type: 'text' as const, placeholder: 'Número de orden de pago' },
+      {
+        columnId: 'payment_order',
+        title: 'Orden de pago',
+        type: 'text' as const,
+        placeholder: 'Número de orden de pago',
+      },
       { columnId: 'amount', title: 'Importe', type: 'text' as const, placeholder: 'Importe exacto, ej: 1234,56' },
     ],
     []

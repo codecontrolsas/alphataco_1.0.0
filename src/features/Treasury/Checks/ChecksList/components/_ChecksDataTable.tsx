@@ -3,8 +3,14 @@
 import { Button } from '@/components/ui/button';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableExportConfig, type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
+import { EMPTY_FACET } from '@/shared/components/common/DataTable/facet-filters';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import {
+  type DataTableExportConfig,
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+  type FacetResult,
+} from '@/shared/components/common/DataTable/types';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { CircleOff, Landmark, Percent, Users, Wallet } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
@@ -27,8 +33,6 @@ interface Props {
 }
 
 const DEFAULT_VISIBLE_FILTERS = ['status', 'portfolio', 'deposit_deadline'];
-
-const EMPTY_FACET: FacetResult = { options: [], counts: new Map() };
 
 export function _ChecksDataTable({
   data,
@@ -109,7 +113,11 @@ export function _ChecksDataTable({
           const result = await getCheckSingleFacet('kind', params);
           if (!result) return EMPTY_FACET;
           return {
-            options: CHECK_KIND_VALUES.map((value) => ({ value, label: CHECK_KIND_LABELS[value], icon: checkKindIcons[value] })),
+            options: CHECK_KIND_VALUES.map((value) => ({
+              value,
+              label: CHECK_KIND_LABELS[value],
+              icon: checkKindIcons[value],
+            })),
             counts: result.counts,
           };
         },
@@ -120,7 +128,11 @@ export function _ChecksDataTable({
         fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
           const result = await getCheckSingleFacet('destination', params);
           if (!result) return EMPTY_FACET;
-          const options = (result.resolvedOptions ?? []).map((o) => ({ value: o.id, label: o.name ?? '', icon: Landmark }));
+          const options = (result.resolvedOptions ?? []).map((o) => ({
+            value: o.id,
+            label: o.name ?? '',
+            icon: Landmark,
+          }));
           if ((result.counts.get(NULL_FILTER_VALUE) ?? 0) > 0) {
             options.push({ value: NULL_FILTER_VALUE, label: 'Sin destino', icon: CircleOff });
           }

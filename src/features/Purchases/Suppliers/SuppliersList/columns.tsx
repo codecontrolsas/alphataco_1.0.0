@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { matchesId, titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { StackedCell } from '@/shared/components/common/StackedCell';
 import { formatArgentinaDay, formatDateAr } from '@/shared/lib/argentina-time';
@@ -37,8 +37,7 @@ export function getColumns(): ColumnDef<SupplierListItem>[] {
     {
       id: 'name',
       accessorKey: 'name',
-      meta: { title: 'Razón social' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Razón social" />,
+      ...titled('Razón social'),
       cell: ({ row }) => (
         <StackedCell
           maxWidthClass="max-w-[280px]"
@@ -55,8 +54,7 @@ export function getColumns(): ColumnDef<SupplierListItem>[] {
     {
       id: 'cuit',
       accessorKey: 'cuit',
-      meta: { title: 'CUIT' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="CUIT" />,
+      ...titled('CUIT'),
       cell: ({ row }) => (
         <span className={cn('font-mono text-sm tabular-nums', !row.original.is_active && 'opacity-60')}>
           {row.original.cuit}
@@ -66,18 +64,16 @@ export function getColumns(): ColumnDef<SupplierListItem>[] {
     {
       id: 'vat_condition',
       accessorFn: (row) => row.vat_condition,
-      meta: { title: 'Condición de IVA' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Condición de IVA" />,
+      ...titled('Condición de IVA'),
       cell: ({ row }) => <span>{row.original.vat_condition}</span>,
-      filterFn: (row, _id, value: string[]) => value.includes(String(row.original.vat_condition_id)),
+      filterFn: matchesId((r) => r.vat_condition_id),
     },
     {
       id: 'categories',
       accessorFn: (row) => row.categories.map((c) => c.name).join(', '),
-      meta: { title: 'Rubros' },
+      ...titled('Rubros'),
       // M:M: no ordenable
       enableSorting: false,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Rubros" />,
       cell: ({ row }) =>
         row.original.categories.length === 0 ? (
           <span className="text-muted-foreground">-</span>
@@ -100,10 +96,9 @@ export function getColumns(): ColumnDef<SupplierListItem>[] {
       id: 'contact',
       accessorFn: (row) =>
         row.contact ? [row.contact.name, row.contact.email ?? row.contact.phone].filter(Boolean).join(' · ') : '',
-      meta: { title: 'Contacto principal' },
+      ...titled('Contacto principal'),
       // Sale de una relacion 1:N (el principal): no ordenable.
       enableSorting: false,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Contacto principal" />,
       cell: ({ row }) => {
         const c = row.original.contact;
         if (!c) return <span className="text-muted-foreground">-</span>;
@@ -113,10 +108,9 @@ export function getColumns(): ColumnDef<SupplierListItem>[] {
     {
       id: 'documents',
       accessorFn: (row) => SUPPLIER_DOCUMENT_STATE_LABELS[row.documents.state],
-      meta: { title: 'Documentos' },
+      ...titled('Documentos'),
       // Estado derivado de los documentos vigentes (no es un campo de la base): no ordenable.
       enableSorting: false,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Documentos" />,
       cell: ({ row }) => {
         const { state, nextExpiry } = row.original.documents;
         const ui = SUPPLIER_DOCUMENT_STATE_UI[state];
@@ -132,13 +126,12 @@ export function getColumns(): ColumnDef<SupplierListItem>[] {
           </Badge>
         );
       },
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.documents.state),
+      filterFn: matchesId((r) => r.documents.state),
     },
     {
       id: 'is_active',
       accessorFn: (row) => (row.is_active ? 'Activo' : 'Inactivo'),
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) =>
         row.original.is_active ? (
           <Badge variant="success" className="gap-1 whitespace-nowrap">
@@ -151,13 +144,12 @@ export function getColumns(): ColumnDef<SupplierListItem>[] {
             Inactivo
           </Badge>
         ),
-      filterFn: (row, _id, value: string[]) => value.includes(String(row.original.is_active)),
+      filterFn: matchesId((r) => r.is_active),
     },
     {
       id: 'created_at',
       accessorKey: 'created_at',
-      meta: { title: 'Fecha de alta' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de alta" />,
+      ...titled('Fecha de alta'),
       cell: ({ row }) => <span>{formatArgentinaDay(row.original.created_at)}</span>,
     },
   ];

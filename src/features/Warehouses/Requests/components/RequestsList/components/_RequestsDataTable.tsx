@@ -1,25 +1,31 @@
 'use client';
 
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableExportConfig, type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
+import { EMPTY_FACET } from '@/shared/components/common/DataTable/facet-filters';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import {
+  type DataTableExportConfig,
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+  type FacetResult,
+} from '@/shared/components/common/DataTable/types';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { CircleOff, User } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { destinationTypeIcons } from '../../../../Movements/components/MovementsList/columns';
 import { DESTINATION_TYPE_LABELS, REQUEST_STATUS_LABELS } from '../../../../lib/labels';
 import { WAREHOUSE_QUERY_KEYS } from '../../../../lib/query-keys';
 import { MATERIAL_REQUEST_STATUSES, type MaterialRequestStatus } from '../../../../lib/request-state-machine';
 import { STOCK_DESTINATION_TYPES, type StockDestinationTypeValue } from '../../../../schemas/stock-movement';
-import { destinationTypeIcons } from '../../../../Movements/components/MovementsList/columns';
+import { requestStatusIcons } from '../../RequestStatusBadge';
 import {
   getAllRequestsForExport,
   getRequestSingleFacet,
   getRequestsPaginated,
   type RequestListItem,
 } from '../actions.server';
-import { requestStatusIcons } from '../../RequestStatusBadge';
 import { HIDDEN_COLUMNS_BY_DEFAULT, getColumns } from '../columns';
 
 // El detalle solo se necesita al abrirlo: no entra en el bundle de la lista.
@@ -40,8 +46,6 @@ interface Props {
 }
 
 const DEFAULT_VISIBLE_FILTERS = ['status', 'destination_type', 'created_at'];
-
-const EMPTY_FACET: FacetResult = { options: [], counts: new Map() };
 
 export function _RequestsDataTable({
   data,
@@ -155,7 +159,7 @@ export function _RequestsDataTable({
       formatters: {
         status: (value) => REQUEST_STATUS_LABELS[value as MaterialRequestStatus] ?? String(value),
         destination_type: (value) =>
-          value ? (DESTINATION_TYPE_LABELS[value as StockDestinationTypeValue] ?? String(value)) : '',
+          value ? DESTINATION_TYPE_LABELS[value as StockDestinationTypeValue] ?? String(value) : '',
         created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : ''),
       },
     }),
