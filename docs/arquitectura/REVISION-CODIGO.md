@@ -24,12 +24,12 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 | src/features/Warehouses             |      121 |  16050 | [x]    |
 | src/features/Employees              |      107 |  15103 | [x]    |
 | src/features/Comercial              |       95 |  12176 | [x]    |
-| src/features/Ayuda                  |      137 |  10967 | [ ]    |
+| src/features/Ayuda                  |      137 |  10967 | [x]    |
 | src/features/Clothing               |       69 |  10858 | [x]    |
-| src/features/Checklists             |       28 |   6175 | [ ]    |
-| src/features/UserPermissionsManager |       39 |   5229 | [ ]    |
+| src/features/Checklists             |       28 |   6175 | [x]    |
+| src/features/UserPermissionsManager |       39 |   5229 | [x]    |
 | src/features/OperatorPanel          |       25 |   4673 | [ ]    |
-| src/features/Formularios            |       21 |   3874 | [ ]    |
+| src/features/Formularios            |       21 |   3874 | [x]    |
 | src/features/Seleccion              |       32 |   3823 | [ ]    |
 | src/features/Permissions            |       12 |   3456 | [ ]    |
 | src/features/Auth                   |       18 |   2463 | [ ]    |
@@ -137,11 +137,20 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
   - **Archivos partidos:** `Preparte/actions/mutations.server.ts` 573 → 321 (`lib/preparte-references.ts`: validación de perímetro y traducción de sector/área; `actions/move-preparte-file.server.ts`: la imagen del pedido, la prueba de integración apunta al archivo nuevo); `HistoryDialog.tsx` 567 → 116 (`history/history-helpers.tsx` y `history/HistoryEntry.tsx`). Ningún archivo del módulo supera las 520 líneas.
   - Verificación: `check-types` limpio, `npm test` (1494) y `next build` compilando. No se tocó lógica de escritura de los casos de uso (solo se movieron funciones de Preparte), por eso no se corrieron las suites de integración (la única del módulo, `move-preparte-file`, necesita RustFS).
 - [x] **Empleados y Comercial (`src/features/Employees`, `src/features/Comercial`):** jscpd sobre ambos módulos (sin pruebas): de 17 clones y 187 líneas duplicadas (0,59 %) a 13 y 135 (0,39 %); 341.016 → 333.962 tokens. `knip` sin hallazgos en los dos módulos; `tsc --noUnusedLocals --noUnusedParameters` solo marcó `MassiveFormDataBase` (borrado). Las pasadas previas ya habían unificado casi todo lo que cruzaba módulos.
+
   - **Tablas:** `_EmployeeDataTable`, `_DiagramReportsDataTable`, `_CertificationsDataTable` y `_InvoicesDataTable` pasan a `createFacetFilters` (`fixed`/`lookup`), `enumFilterOptions`, `textFilter`, `dateRangeFilter` y `useServerTableView`; la de empleados usa además `usePermissionChecker`. Se borraron los `makeEnumFetchFacet`/`makeFkFetchFacet`/`build*FacetResult` locales y la fusión manual de visibilidad (~350 líneas).
   - **Exports:** las acciones de export de certificaciones y comprobantes usan `exportFailure`.
   - **Formularios:** `SelectFormField` en `shared/components/common/form-fields.tsx` (selector de catálogo `{ id, name }` con skeleton, `disabled` y `onValueChange`); lo usa el formulario de datos laborales del legajo (9 selectores, 560 → 385 líneas).
   - **Archivos partidos:** `Diagrams/Reports/actions.server.ts` 597 → 342 (`Reports/lib/report-query.ts`: filtros permitidos, orden, select, `buildWhereClause` y `toReportRow`). Solo se movieron funciones.
   - Verificación: `check-types` limpio, `npm test` (1494) y `next build` compilando. No se tocó lógica de escritura ni firmas de casos de uso; por eso no se corrieron las suites de integración.
+
+- [x] **Formularios, Checklists, Ayuda y Permisos de usuario (`src/features/Formularios`, `Checklists`, `Ayuda`, `UserPermissionsManager`):** jscpd sobre los cuatro módulos (sin pruebas): de 29 clones y 562 líneas duplicadas (1,73 %) a 6 y 90 (0,29 %); 5.587 → 921 tokens duplicados. `knip` sin hallazgos en los módulos; `tsc --noUnusedLocals --noUnusedParameters` marcó cuatro cosas realmente muertas (se borraron: `employeeRowSchema`, el import `PARTS_DIAGRAM_HEIGHT`, `filteredCount` de `RoleManager` y las props `title`/`description` de `PDFPreviewDialog`) y otras cuatro que NO son muertas (ver «Decisiones de producto pendientes», acordeón de secciones del checklist).
+  - **Checklists, PDF:** `components/ChecklistPdfDialog.tsx` (vista previa, descarga y nombre de archivo) reemplaza `checklist-pdf-preview-dialog.tsx` (borrado) y el cuerpo de `ChecklistPDFDownloadButton`; `ChecklistPDFButton` queda como configuración. `shared/components/common/PdfFileIcon.tsx` lo usan este y `PDFPreviewDialog` de Formularios. `pdf/layouts/normalized-checklist-pdf-data.ts` (funciones puras: procesar y distribuir secciones, formateo de respuestas, códigos y diagramas del formulario en papel) saca 270 líneas de `NormalizedChecklistPDFLayout` (720 → 451); `TEMPLATES_WITH_ITEM_OBSERVATIONS` es la única constante de plantillas con observaciones (el PDF tenía una copia).
+  - **Checklists, consultas:** `checklist-queries.ts` 567 → 323: `checklist-answer-queries.ts` (`fetchChecklistAnswerById`), `checklist-equipment-templates.ts` (plantillas por equipo del flujo QR) y `lib/template-section-select.ts` (el `select` de secciones, que antes no se podía compartir desde un archivo `'use server'`).
+  - **Formularios:** `_FormsDataTable` pasa a `createFacetFilters` (`fixed`), `enumFilterOptions`, `textFilter`, `dateRangeFilter`, `useServerTableView` y `usePermissionChecker` (−60 líneas); `columns.tsx` usa `PermissionChecker`; `_ChecklistAnswersDataTable` usa el `EMPTY_FACET` compartido. `pdf/components/PdfDocumentPreview.tsx` (encabezado, botón de descarga y visor) reemplaza la misma cola de los tres generadores `TransporteSPANAYCHKHYS01/03/04`; `pdf/layouts/PdfSignature.tsx` el bloque de firma de los tres layouts y cada layout tiene un helper local para sus filas de datos. Las tres tablas de la vieja `components/tables/` (columna, paginación y opciones de vista) solo las usa el detalle de diagramas de Empleados: se movieron a `Employees/Diagrams/table`.
+  - **Ayuda:** `hooks/useApprovalDecision.ts` unifica `useApproveTicket` y `useRejectTicket` (ya estaban modificados respecto de la instalación de `taskapp-cli`). `ConfirmDialog` y `TicketCloseProposalDialog` repiten ~45 líneas del `<dialog>` nativo (apertura, foco y bloqueo de scroll) pero NO se tocaron: coinciden con el hash de `.taskapp-cli-manifest.json` y editarlos haría que la próxima actualización del CLI deje un `.new`. El contenido del manual no se tocó.
+  - **Permisos de usuario:** `hooks/usePermissionIndex.ts` (módulos con tabs e índice de permisos) lo comparten el editor de un usuario y el de roles.
+  - Verificación: `check-types` limpio, `npm test` (1494) y `next build` compilando. No se tocó lógica de escritura; las lecturas de Checklists que se movieron (`fetchChecklistAnswerById`, `fetchChecklistTemplatesForEquipment`) no tienen pruebas de integración, por eso no se corrieron esas suites.
 
 ## En curso / siguiente
 
@@ -174,6 +183,16 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 - **Empleados, tabla de empleados y Reportes de novedades:** el `value` del selector de tipo de documento, nacionalidad, país y sexo en `PersonalDataFields` es controlado (`value` + `defaultValue`) y el de `SelectFormField` solo usa `defaultValue`; no se unificaron para no cambiar cuándo se repinta el valor. Pendiente decidir cuál es el correcto.
 - **Comercial, archivos grandes sin partir:** `Facturacion/lib/emission.server.ts` (548; `issueInvoice` ocupa ~230 líneas del flujo fiscal) y `Certificaciones/actions/certifications.server.ts` (512) se dejaron enteros por riesgo (emisión ARCA); partirlos pide pruebas de integración con Postgres.
 - **Comercial, esqueleto de la lista de certificaciones:** `CertificationsTableSkeleton` es casi `TableSkeleton inCard` pero con `aria-busy`/`aria-label` y otro ancho de buscador; se conserva hasta decidir si `TableSkeleton` acepta etiqueta accesible.
+
+## Pendiente detectado en Formularios, Checklists, Ayuda y Permisos de usuario
+
+- `UserPermissionsManager/components/RoleManager.tsx` (583 líneas) mezcla unos 20 estados del editor, cuatro mutaciones y el render; no tiene una costura limpia (las mutaciones llaman a casi todos los setters). Partirlo pide primero agrupar el estado del editor en un hook propio.
+- `Checklists/actions/actionsServer.ts` (501) junta `CreateChecklistAnswer` con las lecturas de clientes, empleados y supervisores; `ChecklistGeneralInfoSection.tsx` (474) es un solo formulario largo.
+- Los tres layouts de PDF de Formularios (`Base`, `Maintenance`, `VehicleInspection`) repiten el encabezado, el pie de observaciones y ~25 estilos con valores casi iguales; unificarlos cambiaría márgenes y tamaños, por eso solo se compartió la firma.
+- `FormsTableSkeleton` y `ChecklistAnswersTableSkeleton` se parecen a `TableSkeleton` pero con otras medidas; no se reemplazaron para no cambiar el esqueleto. `_ChecklistAnswersDataTable` conserva su `fetchFacet` propio porque ordena las opciones de las FK en el cliente (`createFacetFilters.lookup` no ordena).
+- `Ayuda` es el módulo del portal de soporte instalado por `taskapp-cli` (`.taskapp-cli-manifest.json`): `ConfirmDialog` y `Tabs` usan `<dialog>` y botones propios a propósito para no depender del host, y los archivos que siguen idénticos a la instalación (los dos diálogos, `Tabs`) no se editan. Un `useNativeModal` compartido por los dos diálogos solo conviene si se acepta que el CLI deje `.new` en la próxima actualización.
+
+- **Checklists, el acordeón de secciones del formulario está comentado (defecto previo, urgente):** en `NormalizedChecklistForm.tsx` (≈ línea 291) el comentario JSX que explica el `type="multiple"` perdió su cierre `*/}` en el commit `1f96cd6b` (también está así en `main`): todo lo que sigue hasta `{/* Botones de acción */}` queda comentado, o sea `<ChecklistSectionsAccordion>` y `<ChecklistPartsDiagramDialog>`. El formulario muestra datos generales y botones pero ningún ítem. Para empeorar, la pasada 3 de código muerto borró `sections/ChecklistSectionsAccordion.tsx`, `ChecklistItemField.tsx` y `ChecklistPartsDiagramDialog.tsx` por «huérfanos» (solo los referenciaba ese código comentado). Se conservaron las variables que ese bloque usa (`showItemObservations`, `showPartsDiagram`, `openSections`/`setOpenSections`), aunque `tsc --noUnusedLocals` las marque. Corrección: cerrar el comentario con `*/}` y restaurar los tres archivos con `git show main:src/features/Checklists/components/sections/<archivo>`; antes revisar `git show 092dde5a --stat -- src/features/Checklists` por si esa pasada borró también exportaciones que esos archivos usan, y correr `tsc`.
 
 ## Pendiente detectado en Compras (para las pasadas de Almacenes, Tesorería y otros)
 
