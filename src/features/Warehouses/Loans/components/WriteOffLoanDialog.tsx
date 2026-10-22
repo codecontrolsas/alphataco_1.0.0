@@ -11,10 +11,11 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
@@ -23,7 +24,6 @@ import { toast } from 'sonner';
 import { writeOffLoanedUnitAction } from '../../actions/loans.server';
 import { WRITE_OFF_REASON_LABELS } from '../../lib/labels';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
-import { unwrapAction } from '../../lib/unwrap-action';
 import { writeOffLoanSchema, type WriteOffLoanFormValues } from '../../schemas/loans';
 
 const logger = new Logger('Warehouses/WriteOffLoanDialog');
@@ -41,7 +41,14 @@ interface WriteOffLoanDialogProps {
  * Baja de una herramienta prestada que no vuelve. No mueve stock: la herramienta ya habia
  * salido y su costo queda imputado a quien la tenia.
  */
-export function WriteOffLoanDialog({ open, onOpenChange, unitId, serialNumber, materialName, holder }: WriteOffLoanDialogProps) {
+export function WriteOffLoanDialog({
+  open,
+  onOpenChange,
+  unitId,
+  serialNumber,
+  materialName,
+  holder,
+}: WriteOffLoanDialogProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
 

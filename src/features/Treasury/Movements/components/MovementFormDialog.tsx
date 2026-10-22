@@ -1,14 +1,21 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import moment from 'moment';
@@ -24,9 +31,13 @@ import { NegativeCashConfirm } from '../../components/NegativeCashConfirm';
 import { useBalanceAfter } from '../../hooks/useBalanceAfter';
 import { invalidateTreasury } from '../../lib/invalidate';
 import { conceptAllows, signedCents } from '../../lib/movement-rules';
-import { MOVEMENT_DIRECTION_LABELS, manualMovementFormSchema, type ManualMovementFormValues } from '../../schemas/movements';
-import { isPositiveAmount } from '../../schemas/shared';
 import { treasuryToday } from '../../lib/today';
+import {
+  MOVEMENT_DIRECTION_LABELS,
+  manualMovementFormSchema,
+  type ManualMovementFormValues,
+} from '../../schemas/movements';
+import { isPositiveAmount } from '../../schemas/shared';
 
 const logger = new Logger('Treasury/MovementFormDialog');
 
@@ -57,7 +68,14 @@ const emptyValues = (accountId: string): ManualMovementFormValues => ({
  *
  * Se monta al abrirse (`{open && <MovementFormDialog … />}`): así cada apertura arranca limpia.
  */
-export function MovementFormDialog({ open, onOpenChange, accounts, concepts, editing, defaultAccountId }: MovementFormDialogProps) {
+export function MovementFormDialog({
+  open,
+  onOpenChange,
+  accounts,
+  concepts,
+  editing,
+  defaultAccountId,
+}: MovementFormDialogProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [confirmNegative, setConfirmNegative] = useState<ManualMovementFormValues | null>(null);
@@ -76,12 +94,19 @@ export function MovementFormDialog({ open, onOpenChange, accounts, concepts, edi
       : emptyValues(defaultAccountId ?? ''),
   });
 
-  const [accountId, date, direction, amount] = useWatch({ control: form.control, name: ['accountId', 'date', 'direction', 'amount'] });
+  const [accountId, date, direction, amount] = useWatch({
+    control: form.control,
+    name: ['accountId', 'date', 'direction', 'amount'],
+  });
   // Una cuenta inactiva solo aparece si es la del movimiento que se edita (puede conservarla).
-  const accountOptions: Pick<TreasuryAccountRow, 'id' | 'name' | 'kind' | 'is_active'>[] = accounts.filter((a) => a.is_active);
+  const accountOptions: Pick<TreasuryAccountRow, 'id' | 'name' | 'kind' | 'is_active'>[] = accounts.filter(
+    (a) => a.is_active
+  );
   if (editing && !accountOptions.some((a) => a.id === editing.accountId)) accountOptions.push(editing.account);
   const account = accountOptions.find((a) => a.id === accountId);
-  const conceptOptions = concepts.filter((c) => (c.is_active || c.id === editing?.conceptId) && conceptAllows(c.direction, direction));
+  const conceptOptions = concepts.filter(
+    (c) => (c.is_active || c.id === editing?.conceptId) && conceptAllows(c.direction, direction)
+  );
 
   const delta = isPositiveAmount(amount) ? signedCents(direction, amount) : null;
   const preview = useBalanceAfter(accountId, date, delta, editing?.id);
@@ -117,7 +142,9 @@ export function MovementFormDialog({ open, onOpenChange, accounts, concepts, edi
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editing ? 'Editar movimiento' : 'Nuevo movimiento'}</DialogTitle>
-            <DialogDescription>Ingresos y egresos que no salen de otro documento: gastos bancarios, aportes, retiros…</DialogDescription>
+            <DialogDescription>
+              Ingresos y egresos que no salen de otro documento: gastos bancarios, aportes, retiros…
+            </DialogDescription>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -217,7 +244,11 @@ export function MovementFormDialog({ open, onOpenChange, accounts, concepts, edi
                       <Select value={field.value} onValueChange={field.onChange}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder={conceptOptions.length ? 'Elegí el concepto' : 'Sin conceptos para este sentido'} />
+                            <SelectValue
+                              placeholder={
+                                conceptOptions.length ? 'Elegí el concepto' : 'Sin conceptos para este sentido'
+                              }
+                            />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>

@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import type { ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
@@ -22,11 +23,7 @@ import { useState } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { SearchCombobox, type SearchOption } from '../../components/SearchCombobox';
-import { unwrapAction } from '../../lib/unwrap-action';
-import {
-  maintenanceMaterialRequestSchema,
-  type MaintenanceMaterialRequestFormValues,
-} from '../../schemas/requests';
+import { maintenanceMaterialRequestSchema, type MaintenanceMaterialRequestFormValues } from '../../schemas/requests';
 
 const logger = new Logger('Warehouses/MaintenanceMaterialRequestDialog');
 
@@ -115,7 +112,10 @@ export function MaintenanceMaterialRequestDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Orden de trabajo</FormLabel>
-                    <Select value={field.value || ORDER_LEVEL} onValueChange={(v) => field.onChange(v === ORDER_LEVEL ? '' : v)}>
+                    <Select
+                      value={field.value || ORDER_LEVEL}
+                      onValueChange={(v) => field.onChange(v === ORDER_LEVEL ? '' : v)}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue />

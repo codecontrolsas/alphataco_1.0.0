@@ -1,12 +1,19 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
@@ -62,10 +69,14 @@ export function NewCheckbookDialog() {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Nueva chequera</DialogTitle>
-          <DialogDescription>Los números de los cheques físicos que te entregó el banco. Al pagar con cheque se propone el próximo libre.</DialogDescription>
+          <DialogDescription>
+            Los números de los cheques físicos que te entregó el banco. Al pagar con cheque se propone el próximo libre.
+          </DialogDescription>
         </DialogHeader>
         {!isLoading && accounts.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No hay cuentas bancarias activas: creala en Tesorería → Configuración.</p>
+          <p className="text-sm text-muted-foreground">
+            No hay cuentas bancarias activas: creala en Tesorería → Configuración.
+          </p>
         ) : (
           <Form {...form}>
             <form onSubmit={form.handleSubmit((values) => save.mutate(values))} className="space-y-4">
@@ -75,7 +86,12 @@ export function NewCheckbookDialog() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Cuenta bancaria</FormLabel>
-                    <Select key={accounts.length} value={field.value} onValueChange={field.onChange} disabled={isLoading}>
+                    <Select
+                      key={accounts.length}
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      disabled={isLoading}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder={isLoading ? 'Cargando cuentas…' : 'Elegí la cuenta'} />

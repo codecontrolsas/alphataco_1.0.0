@@ -1,13 +1,20 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { amountOf, AMOUNT_SCALE, formatScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
+import { AMOUNT_SCALE, amountOf, formatScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import moment from 'moment';
@@ -16,16 +23,22 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { debitOwnChecks } from '../../actions/own-checks.server';
 import { formatInCurrency } from '../../lib/currency-format';
+import { formatDay } from '../../lib/dates';
 import { invalidateTreasury } from '../../lib/invalidate';
 import { treasuryToday } from '../../lib/today';
 import { debitOwnChecksSchema, type DebitOwnChecksValues } from '../../schemas/own-checks';
-import { formatDay } from '../../lib/dates';
 
 const logger = new Logger('Treasury/DebitOwnChecksDialog');
 
 const dmy = (value: string | null) => formatDay(value) || '—';
 
-export type DebitableOwnCheck = { id: string; number: string; amount: string; paymentDate: string | null; accountName: string };
+export type DebitableOwnCheck = {
+  id: string;
+  number: string;
+  amount: string;
+  paymentDate: string | null;
+  accountName: string;
+};
 
 interface DebitOwnChecksDialogProps {
   open: boolean;
@@ -74,7 +87,11 @@ export function DebitOwnChecksDialog({ open, onOpenChange, checks, onDone }: Deb
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{single ? `Confirmar el débito del cheque Nº ${single.number}` : `Confirmar el débito de ${checks.length} cheques`}</DialogTitle>
+          <DialogTitle>
+            {single
+              ? `Confirmar el débito del cheque Nº ${single.number}`
+              : `Confirmar el débito de ${checks.length} cheques`}
+          </DialogTitle>
           <DialogDescription>
             El importe sale de la cuenta en la fecha del débito. Si el banco todavía no lo pagó, dejalo emitido.
           </DialogDescription>

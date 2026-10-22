@@ -1,12 +1,19 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import moment from 'moment';
@@ -15,8 +22,8 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { createOpeningBalance, updateOpeningBalance } from '../../actions/movements.server';
 import { invalidateTreasury } from '../../lib/invalidate';
-import { openingBalanceFormSchema, type OpeningBalanceFormValues } from '../../schemas/movements';
 import { treasuryToday } from '../../lib/today';
+import { openingBalanceFormSchema, type OpeningBalanceFormValues } from '../../schemas/movements';
 
 const logger = new Logger('Treasury/OpeningBalanceDialog');
 
@@ -60,7 +67,9 @@ export function OpeningBalanceDialog({ open, onOpenChange, account, current }: O
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Saldo inicial · {account.name}</DialogTitle>
-          <DialogDescription>Lo que había en la cuenta o caja el día que se empieza a usar Tesorería.</DialogDescription>
+          <DialogDescription>
+            Lo que había en la cuenta o caja el día que se empieza a usar Tesorería.
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((v) => save.mutate(v))} className="space-y-4">

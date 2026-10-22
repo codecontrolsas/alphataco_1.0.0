@@ -5,8 +5,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { tireStatusLabels, tireTreadTypeLabels } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
-import { SectionCard } from '@/shared/components/common/SectionCard';
 import { Logger } from '@/lib/logger';
+import { SectionCard } from '@/shared/components/common/SectionCard';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
@@ -14,7 +15,6 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { registerInitialTireInventoryAction, type TiresWithoutStockGroup } from '../../actions/tire-inventory.server';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
-import { unwrapAction } from '../../lib/unwrap-action';
 import { tireInventorySchema, type TireInventoryFormValues } from '../../schemas/tire-inventory';
 
 const logger = new Logger('Warehouses/TireInventorySection');
@@ -41,9 +41,12 @@ export function TireInventorySection({ groups, warehouses }: TireInventorySectio
   });
 
   const mutation = useMutation({
-    mutationFn: async (values: TireInventoryFormValues) => unwrapAction(await registerInitialTireInventoryAction(values)),
+    mutationFn: async (values: TireInventoryFormValues) =>
+      unwrapAction(await registerInitialTireInventoryAction(values)),
     onSuccess: (result) => {
-      const exits = result.exits.length ? ` y ${result.exits.length} salida(s) a los equipos (${result.exits.join(', ')})` : '';
+      const exits = result.exits.length
+        ? ` y ${result.exits.length} salida(s) a los equipos (${result.exits.join(', ')})`
+        : '';
       const kept =
         result.keptInWarehouse === 1
           ? '. Quedó en el depósito 1 cubierta sin equipo conocido'
@@ -75,69 +78,74 @@ export function TireInventorySection({ groups, warehouses }: TireInventorySectio
         </>
       }
     >
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit((values) => mutation.mutate(values))} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="warehouseId"
-              render={({ field }) => (
-                <FormItem className="max-w-xs">
-                  <FormLabel>Depósito</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Elegí el depósito" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {warehouses.map((w) => (
-                        <SelectItem key={w.id} value={w.id}>
-                          {w.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit((values) => mutation.mutate(values))} className="space-y-4">
+          <FormField
+            control={form.control}
+            name="warehouseId"
+            render={({ field }) => (
+              <FormItem className="max-w-xs">
+                <FormLabel>Depósito</FormLabel>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Elegí el depósito" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {warehouses.map((w) => (
+                      <SelectItem key={w.id} value={w.id}>
+                        {w.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-            <div className="divide-y rounded-md border">
-              {groups.map((group, index) => (
-                <div key={`${group.tireTypeId}|${group.brandId}`} className="flex flex-wrap items-start gap-3 p-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">
-                      {group.size} {tireTreadTypeLabels[group.treadType] ?? group.treadType} · {group.brandName}
-                    </p>
-                    <p className="text-xs text-muted-foreground tabular-nums">
-                      {group.total} cubiertas:{' '}
-                      {Object.entries(group.byStatus)
-                        .map(([status, count]) => `${count} ${(tireStatusLabels[status] ?? status).toLowerCase()}`)
-                        .join(', ')}
-                    </p>
-                  </div>
-                  <FormField
-                    control={form.control}
-                    name={`costs.${index}.unitCost`}
-                    render={({ field }) => (
-                      <FormItem className="w-44">
-                        <FormLabel className="sr-only">Costo unitario</FormLabel>
-                        <FormControl>
-                          <Input inputMode="decimal" placeholder="Costo unitario ($)" className="tabular-nums" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+          <div className="divide-y rounded-md border">
+            {groups.map((group, index) => (
+              <div key={`${group.tireTypeId}|${group.brandId}`} className="flex flex-wrap items-start gap-3 p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">
+                    {group.size} {tireTreadTypeLabels[group.treadType] ?? group.treadType} · {group.brandName}
+                  </p>
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    {group.total} cubiertas:{' '}
+                    {Object.entries(group.byStatus)
+                      .map(([status, count]) => `${count} ${(tireStatusLabels[status] ?? status).toLowerCase()}`)
+                      .join(', ')}
+                  </p>
                 </div>
-              ))}
-            </div>
+                <FormField
+                  control={form.control}
+                  name={`costs.${index}.unitCost`}
+                  render={({ field }) => (
+                    <FormItem className="w-44">
+                      <FormLabel className="sr-only">Costo unitario</FormLabel>
+                      <FormControl>
+                        <Input
+                          inputMode="decimal"
+                          placeholder="Costo unitario ($)"
+                          className="tabular-nums"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            ))}
+          </div>
 
-            <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Cargando…' : `Cargar ${total} cubiertas al stock`}
-            </Button>
-          </form>
-        </Form>
+          <Button type="submit" disabled={mutation.isPending}>
+            {mutation.isPending ? 'Cargando…' : `Cargar ${total} cubiertas al stock`}
+          </Button>
+        </form>
+      </Form>
     </SectionCard>
   );
 }

@@ -7,8 +7,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AMOUNT_SCALE, formatScaled, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import moment from 'moment';
@@ -16,13 +16,13 @@ import { useRouter } from 'next/navigation';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { discountChecks } from '../../actions/checks.server';
-import type { CheckOperationFormData } from '../../lib/check-types';
 import { discountError, discountNet } from '../../lib/check-discount';
+import type { CheckOperationFormData } from '../../lib/check-types';
 import { formatInCurrency } from '../../lib/currency-format';
+import { formatDay } from '../../lib/dates';
 import { invalidateTreasury } from '../../lib/invalidate';
 import { discountSchema, type DiscountValues } from '../../schemas/checks';
 import { CheckOperationShell } from './CheckOperationShell';
-import { formatDay } from '../../lib/dates';
 
 const logger = new Logger('Treasury/DiscountChecksDialog');
 
@@ -47,12 +47,27 @@ export function DiscountChecksDialog({ open, onOpenChange, checkIds, onDone }: D
       title="Descontar cheques"
       description="Salen de la cartera por su nominal y entra al banco el neto de intereses y comisión."
     >
-      {(data) => <DiscountForm key={data.checks.map((c) => c.id).join(',')} data={data} onClose={() => onOpenChange(false)} onDone={onDone} />}
+      {(data) => (
+        <DiscountForm
+          key={data.checks.map((c) => c.id).join(',')}
+          data={data}
+          onClose={() => onOpenChange(false)}
+          onDone={onDone}
+        />
+      )}
     </CheckOperationShell>
   );
 }
 
-function DiscountForm({ data, onClose, onDone }: { data: CheckOperationFormData; onClose: () => void; onDone?: () => void }) {
+function DiscountForm({
+  data,
+  onClose,
+  onDone,
+}: {
+  data: CheckOperationFormData;
+  onClose: () => void;
+  onDone?: () => void;
+}) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const form = useForm<DiscountValues>({
@@ -173,7 +188,8 @@ function DiscountForm({ data, onClose, onDone }: { data: CheckOperationFormData;
           {data.checks.map((c) => (
             <li key={c.id} className="flex items-center justify-between gap-2 px-3 py-2">
               <span className="min-w-0">
-                Nº {c.number} · {c.bank} <span className="text-xs text-muted-foreground">· pago {formatDay(c.paymentDate)}</span>
+                Nº {c.number} · {c.bank}{' '}
+                <span className="text-xs text-muted-foreground">· pago {formatDay(c.paymentDate)}</span>
               </span>
               <span className="tabular-nums">{formatInCurrency(c.amount, 'ARS')}</span>
             </li>

@@ -2,12 +2,20 @@
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
@@ -23,7 +31,6 @@ import {
 } from '../../actions/catalog.server';
 import { TRACKING_TYPE_LABELS } from '../../lib/labels';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
-import { unwrapAction } from '../../lib/unwrap-action';
 import { materialFormSchema, type MaterialFormValues } from '../../schemas/catalog';
 import { MATERIAL_TRACKING_TYPES } from '../../schemas/stock-movement';
 
@@ -53,7 +60,12 @@ interface MaterialFormDialogProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-export function MaterialFormDialog({ lookups, material = null, open: controlledOpen, onOpenChange }: MaterialFormDialogProps) {
+export function MaterialFormDialog({
+  lookups,
+  material = null,
+  open: controlledOpen,
+  onOpenChange,
+}: MaterialFormDialogProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [internalOpen, setInternalOpen] = useState(false);
@@ -177,7 +189,11 @@ export function MaterialFormDialog({ lookups, material = null, open: controlledO
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Unidad de medida</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange} disabled={material?.hasMovements || isManaged}>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        disabled={material?.hasMovements || isManaged}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Elegí una unidad" />
@@ -204,7 +220,11 @@ export function MaterialFormDialog({ lookups, material = null, open: controlledO
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Control de stock</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange} disabled={material?.hasMovements || isManaged}>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        disabled={material?.hasMovements || isManaged}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue />
@@ -268,7 +288,8 @@ export function MaterialFormDialog({ lookups, material = null, open: controlledO
                     <div className="space-y-1">
                       <FormLabel>Requiere aprobación</FormLabel>
                       <FormDescription>
-                        Las salidas de este material van a necesitar un pedido aprobado (cuando se habiliten los pedidos).
+                        Las salidas de este material van a necesitar un pedido aprobado (cuando se habiliten los
+                        pedidos).
                       </FormDescription>
                     </div>
                   </FormItem>

@@ -1,12 +1,19 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Mail } from 'lucide-react';
@@ -24,12 +31,23 @@ const logger = new Logger('Treasury/SendReceiptDialog');
  * Envía el recibo al cliente por mail con el PDF adjunto. Propone el mail del cliente; se pueden
  * cargar varios separados por coma. Si el mail no sale, el recibo no queda como enviado.
  */
-export function SendReceiptDialog({ receiptId, number, defaultEmail }: { receiptId: string; number: string; defaultEmail: string | null }) {
+export function SendReceiptDialog({
+  receiptId,
+  number,
+  defaultEmail,
+}: {
+  receiptId: string;
+  number: string;
+  defaultEmail: string | null;
+}) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const defaults = { to: defaultEmail ?? '', message: '' };
-  const form = useForm<SendReceiptFormValues>({ resolver: zodResolver(sendReceiptFormSchema), defaultValues: defaults });
+  const form = useForm<SendReceiptFormValues>({
+    resolver: zodResolver(sendReceiptFormSchema),
+    defaultValues: defaults,
+  });
 
   const send = useMutation({
     mutationFn: async (values: SendReceiptFormValues) => {
@@ -64,7 +82,9 @@ export function SendReceiptDialog({ receiptId, number, defaultEmail }: { receipt
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Enviar {number} al cliente</DialogTitle>
-          <DialogDescription>Se manda por mail con el PDF adjunto. Recién cuando el mail sale queda como enviado.</DialogDescription>
+          <DialogDescription>
+            Se manda por mail con el PDF adjunto. Recién cuando el mail sale queda como enviado.
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((values) => send.mutate(values))} className="space-y-4">

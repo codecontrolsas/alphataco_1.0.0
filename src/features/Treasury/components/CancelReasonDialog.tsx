@@ -13,8 +13,8 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import type { ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useId, useState } from 'react';
@@ -35,7 +35,15 @@ interface CancelReasonDialogProps {
 }
 
 /** Anulación con motivo obligatorio (movimientos manuales, saldos iniciales y transferencias). */
-export function CancelReasonDialog({ open, onOpenChange, title, description, successMessage, run, confirmLabel = 'Anular' }: CancelReasonDialogProps) {
+export function CancelReasonDialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  successMessage,
+  run,
+  confirmLabel = 'Anular',
+}: CancelReasonDialogProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const reasonId = useId();
@@ -65,7 +73,13 @@ export function CancelReasonDialog({ open, onOpenChange, title, description, suc
         </AlertDialogHeader>
         <div className="space-y-2">
           <Label htmlFor={reasonId}>Motivo</Label>
-          <Textarea id={reasonId} rows={3} value={reason} placeholder="Por qué se anula" onChange={(e) => setReason(e.target.value)} />
+          <Textarea
+            id={reasonId}
+            rows={3}
+            value={reason}
+            placeholder="Por qué se anula"
+            onChange={(e) => setReason(e.target.value)}
+          />
         </div>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={mutation.isPending}>Volver</AlertDialogCancel>

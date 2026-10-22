@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -16,7 +17,6 @@ import { toast } from 'sonner';
 import { getDepotForEdit, reactivateWarehouse, removeWarehouse } from '../../actions/catalog.server';
 import { ConfirmRemovalDialog } from '../../components/ConfirmRemovalDialog';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
-import { unwrapAction } from '../../lib/unwrap-action';
 import { DepotFormDialog } from './DepotFormDialog';
 
 const logger = new Logger('Warehouses/DepotRowActions');
@@ -35,7 +35,11 @@ export function DepotRowActions({ warehouseId, isActive, canUpdate, canDelete }:
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState(false);
 
-  const { data: depot, isFetching: loadingEdit, dataUpdatedAt } = useQuery({
+  const {
+    data: depot,
+    isFetching: loadingEdit,
+    dataUpdatedAt,
+  } = useQuery({
     queryKey: ['warehouse-depot-edit', warehouseId],
     queryFn: async () => {
       const found = await getDepotForEdit(warehouseId);
@@ -55,7 +59,9 @@ export function DepotRowActions({ warehouseId, isActive, canUpdate, canDelete }:
   const remove = useMutation({
     mutationFn: async () => unwrapAction(await removeWarehouse(warehouseId)),
     onSuccess: ({ mode }) => {
-      toast.success(mode === 'delete' ? 'Depósito eliminado' : 'Depósito desactivado: ya no se ofrece en los movimientos');
+      toast.success(
+        mode === 'delete' ? 'Depósito eliminado' : 'Depósito desactivado: ya no se ofrece en los movimientos'
+      );
       setRemoving(false);
       refresh();
     },
@@ -81,7 +87,11 @@ export function DepotRowActions({ warehouseId, isActive, canUpdate, canDelete }:
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Acciones del depósito">
-            {loadingEdit || reactivate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
+            {loadingEdit || reactivate.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <MoreHorizontal className="h-4 w-4" />
+            )}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">

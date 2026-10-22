@@ -1,7 +1,14 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,24 +16,23 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
+import { AMOUNT_SCALE, formatScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { FileUp } from 'lucide-react';
-import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useId, useMemo, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { importStatement } from '../../actions/reconciliation.server';
-import { AMOUNT_SCALE, formatScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { formatInCurrency } from '../../lib/currency-format';
+import { formatDay } from '../../lib/dates';
 import { invalidateTreasury } from '../../lib/invalidate';
 import { STATEMENT_DATE_FORMATS, buildStatementLines, columnLetter } from '../../lib/statement-parse';
 import { MAX_STATEMENT_ROWS, statementProfileSchema, type StatementProfileValues } from '../../schemas/reconciliation';
 import { readStatementFile, rowsAsText, type RawRows } from './read-statement-file';
-import { formatDay } from '../../lib/dates';
 
 const logger = new Logger('Treasury/ImportStatementDialog');
 
@@ -43,12 +49,17 @@ const DEFAULT_PROFILE: StatementProfileValues = {
   decimalSeparator: ',',
 };
 
-
 /**
  * Importar un extracto (spec Tesorería etapa 4 §3.1): un solo diálogo con el archivo, el perfil de
  * columnas de la cuenta (se recuerda) y la vista previa de las líneas tal como van a quedar.
  */
-export function ImportStatementDialog({ account, profile }: { account: { id: string; name: string }; profile: StatementProfileValues | null }) {
+export function ImportStatementDialog({
+  account,
+  profile,
+}: {
+  account: { id: string; name: string };
+  profile: StatementProfileValues | null;
+}) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const fileId = useId();
@@ -89,7 +100,8 @@ export function ImportStatementDialog({ account, profile }: { account: { id: str
     setReading(true);
     try {
       const rows = await readStatementFile(selected);
-      if (rows.length > MAX_STATEMENT_ROWS + 100) throw new Error(`El archivo tiene más de ${MAX_STATEMENT_ROWS} filas: partilo en varios`);
+      if (rows.length > MAX_STATEMENT_ROWS + 100)
+        throw new Error(`El archivo tiene más de ${MAX_STATEMENT_ROWS} filas: partilo en varios`);
       setFile({ name: selected.name, rows });
     } catch (error) {
       logger.error('Error al leer el extracto', { data: { error } });
@@ -103,7 +115,14 @@ export function ImportStatementDialog({ account, profile }: { account: { id: str
   const save = useMutation({
     mutationFn: async (p: StatementProfileValues) => {
       if (!file) throw new Error('Elegí el archivo');
-      return unwrapAction(await importStatement({ accountId: account.id, fileName: file.name, profile: p, rows: rowsAsText(file.rows, p.decimalSeparator) }));
+      return unwrapAction(
+        await importStatement({
+          accountId: account.id,
+          fileName: file.name,
+          profile: p,
+          rows: rowsAsText(file.rows, p.decimalSeparator),
+        })
+      );
     },
     onSuccess: (result) => {
       const parts = [`${result.imported} ${result.imported === 1 ? 'línea importada' : 'líneas importadas'}`];
@@ -121,7 +140,10 @@ export function ImportStatementDialog({ account, profile }: { account: { id: str
     },
   });
 
-  const columnField = (name: 'dateColumn' | 'descriptionColumn' | 'referenceColumn' | 'amountColumn' | 'debitColumn' | 'creditColumn', label: string) => (
+  const columnField = (
+    name: 'dateColumn' | 'descriptionColumn' | 'referenceColumn' | 'amountColumn' | 'debitColumn' | 'creditColumn',
+    label: string
+  ) => (
     <FormField
       control={form.control}
       name={name}
@@ -148,11 +170,19 @@ export function ImportStatementDialog({ account, profile }: { account: { id: str
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Importar extracto · {account.name}</DialogTitle>
-          <DialogDescription>Subí el Excel (.xlsx) o CSV que bajaste del home banking. El archivo se lee en tu navegador y no se guarda.</DialogDescription>
+          <DialogDescription>
+            Subí el Excel (.xlsx) o CSV que bajaste del home banking. El archivo se lee en tu navegador y no se guarda.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
           <Label htmlFor={fileId}>Archivo</Label>
-          <Input id={fileId} type="file" accept=".xlsx,.csv,.txt" disabled={reading} onChange={(e) => void chooseFile(e.target.files?.[0])} />
+          <Input
+            id={fileId}
+            type="file"
+            accept=".xlsx,.csv,.txt"
+            disabled={reading}
+            onChange={(e) => void chooseFile(e.target.files?.[0])}
+          />
           {reading && <p className="text-sm text-muted-foreground">Leyendo el archivo…</p>}
         </div>
 
@@ -303,7 +333,9 @@ export function ImportStatementDialog({ account, profile }: { account: { id: str
                     {preview.errors.slice(0, 5).map((e) => (
                       <p key={e}>{e}</p>
                     ))}
-                    {preview.errors.length > 5 && <p>y {preview.errors.length - 5} errores más. Revisá las columnas y el formato.</p>}
+                    {preview.errors.length > 5 && (
+                      <p>y {preview.errors.length - 5} errores más. Revisá las columnas y el formato.</p>
+                    )}
                   </div>
                 ) : (
                   <p role="status" className="text-sm text-muted-foreground tabular-nums">
@@ -327,7 +359,9 @@ export function ImportStatementDialog({ account, profile }: { account: { id: str
                             <TableCell className="tabular-nums">{formatDay(l.date)}</TableCell>
                             <TableCell>{l.description}</TableCell>
                             <TableCell>{l.reference}</TableCell>
-                            <TableCell className={`text-right tabular-nums ${l.amountCents < BigInt(0) ? 'text-danger' : ''}`}>
+                            <TableCell
+                              className={`text-right tabular-nums ${l.amountCents < BigInt(0) ? 'text-danger' : ''}`}
+                            >
                               {formatInCurrency(formatScaled(l.amountCents, AMOUNT_SCALE), 'ARS')}
                             </TableCell>
                           </TableRow>

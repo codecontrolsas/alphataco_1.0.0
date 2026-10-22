@@ -1,12 +1,20 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
@@ -14,7 +22,6 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { getReturnWarehouses, returnLoanedUnitsAction } from '../../actions/loans.server';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
-import { unwrapAction } from '../../lib/unwrap-action';
 import { returnLoanSchema, type ReturnLoanFormValues } from '../../schemas/loans';
 
 const logger = new Logger('Warehouses/ReturnLoanDialog');

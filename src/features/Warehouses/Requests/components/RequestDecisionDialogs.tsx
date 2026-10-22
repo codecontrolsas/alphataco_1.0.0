@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import type { ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ban, Check, Lock, PackageOpen, X, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
@@ -29,7 +30,6 @@ import {
   type MaterialRequestDetail,
 } from '../../actions/requests.server';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
-import { unwrapAction } from '../../lib/unwrap-action';
 
 const logger = new Logger('Warehouses/RequestDecisionDialogs');
 

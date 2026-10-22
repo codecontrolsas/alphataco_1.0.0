@@ -8,18 +8,18 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { toast } from 'sonner';
+import { BatchOptions, UnitPicker } from '../../Movements/components/StockPickers';
 import { getMaterialAvailability, type MovementFormLookups } from '../../actions/options.server';
 import { deliverRequestAction, type MaterialRequestDetail } from '../../actions/requests.server';
 import { formatQuantity } from '../../lib/format';
 import { REQUEST_STATUS_LABELS } from '../../lib/labels';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
-import { unwrapAction } from '../../lib/unwrap-action';
-import { BatchOptions, UnitPicker } from '../../Movements/components/StockPickers';
 import { deliverRequestSchema, type DeliverRequestFormValues } from '../../schemas/requests';
 
 const logger = new Logger('Warehouses/DeliverRequestForm');
@@ -63,7 +63,9 @@ export function DeliverRequestForm({
   const mutation = useMutation({
     mutationFn: async (values: DeliverRequestFormValues) => unwrapAction(await deliverRequestAction(values)),
     onSuccess: (result) => {
-      toast.success(`${result.number}: entrega de ${request.number} registrada. Estado: ${REQUEST_STATUS_LABELS[result.status]}`);
+      toast.success(
+        `${result.number}: entrega de ${request.number} registrada. Estado: ${REQUEST_STATUS_LABELS[result.status]}`
+      );
       queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.requests });
       queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.movements });
       queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.stock });
@@ -286,7 +288,9 @@ function DeliveryLineRow({
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue
-                          placeholder={available?.batches.length ? 'Elegí el lote' : 'Sin lotes con stock en el depósito'}
+                          placeholder={
+                            available?.batches.length ? 'Elegí el lote' : 'Sin lotes con stock en el depósito'
+                          }
                         />
                       </SelectTrigger>
                     </FormControl>

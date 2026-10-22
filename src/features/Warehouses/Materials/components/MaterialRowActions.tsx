@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -21,7 +22,6 @@ import {
 } from '../../actions/catalog.server';
 import { ConfirmRemovalDialog } from '../../components/ConfirmRemovalDialog';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
-import { unwrapAction } from '../../lib/unwrap-action';
 import { MaterialFormDialog } from './MaterialFormDialog';
 
 const logger = new Logger('Warehouses/MaterialRowActions');
@@ -40,7 +40,11 @@ export function MaterialRowActions({ materialId, isActive, canUpdate, canDelete 
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState(false);
 
-  const { data: editData, isFetching: loadingEdit, dataUpdatedAt } = useQuery({
+  const {
+    data: editData,
+    isFetching: loadingEdit,
+    dataUpdatedAt,
+  } = useQuery({
     queryKey: ['warehouse-material-edit', materialId],
     queryFn: async () => {
       const [material, lookups] = await Promise.all([getMaterialForEdit(materialId), getMaterialFormLookups()]);
@@ -60,7 +64,9 @@ export function MaterialRowActions({ materialId, isActive, canUpdate, canDelete 
   const remove = useMutation({
     mutationFn: async () => unwrapAction(await removeMaterial(materialId)),
     onSuccess: ({ mode }) => {
-      toast.success(mode === 'delete' ? 'Material eliminado' : 'Material desactivado: ya no se ofrece en los movimientos');
+      toast.success(
+        mode === 'delete' ? 'Material eliminado' : 'Material desactivado: ya no se ofrece en los movimientos'
+      );
       setRemoving(false);
       refresh();
     },
@@ -86,7 +92,11 @@ export function MaterialRowActions({ materialId, isActive, canUpdate, canDelete 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Acciones del material">
-            {loadingEdit || reactivate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
+            {loadingEdit || reactivate.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <MoreHorizontal className="h-4 w-4" />
+            )}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">

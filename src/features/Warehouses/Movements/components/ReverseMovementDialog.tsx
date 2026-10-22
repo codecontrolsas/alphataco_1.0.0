@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Undo2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -22,7 +23,6 @@ import { toast } from 'sonner';
 import { reverseStockMovementAction } from '../../actions/movements.server';
 import { formatMoney } from '../../lib/format';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
-import { unwrapAction } from '../../lib/unwrap-action';
 
 const logger = new Logger('Warehouses/ReverseMovementDialog');
 
@@ -66,7 +66,12 @@ export function ReverseMovementDialog({ movementId, number }: { movementId: stri
         if (!next) setReason('');
       }}
     >
-      <Button type="button" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setOpen(true)}>
+      <Button
+        type="button"
+        variant="outline"
+        className="text-destructive hover:text-destructive"
+        onClick={() => setOpen(true)}
+      >
         <Undo2 className="mr-2 h-4 w-4" aria-hidden="true" />
         Anular
       </Button>
@@ -74,7 +79,8 @@ export function ReverseMovementDialog({ movementId, number }: { movementId: stri
         <AlertDialogHeader>
           <AlertDialogTitle>¿Anular {number}?</AlertDialogTitle>
           <AlertDialogDescription>
-            Se registra un movimiento inverso al mismo costo, y el original queda marcado como anulado. No se puede deshacer.
+            Se registra un movimiento inverso al mismo costo, y el original queda marcado como anulado. No se puede
+            deshacer.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="space-y-2">

@@ -1,12 +1,19 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
@@ -53,8 +60,8 @@ export function VoidCheckNumberDialog({ open, onOpenChange, checkbook }: VoidChe
         <DialogHeader>
           <DialogTitle>Inutilizar un número</DialogTitle>
           <DialogDescription>
-            Chequera {checkbook.account.name}, del {checkbook.firstNumber} al {checkbook.lastNumber}. El número queda anulado y no se
-            vuelve a ofrecer.
+            Chequera {checkbook.account.name}, del {checkbook.firstNumber} al {checkbook.lastNumber}. El número queda
+            anulado y no se vuelve a ofrecer.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>

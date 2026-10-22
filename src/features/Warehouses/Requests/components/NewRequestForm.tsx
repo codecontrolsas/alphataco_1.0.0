@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
@@ -14,14 +15,13 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useFieldArray, useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { toast } from 'sonner';
-import type { MovementFormLookups, MaterialOption } from '../../actions/options.server';
+import { DestinationFields } from '../../Movements/components/DestinationFields';
+import type { MaterialOption, MovementFormLookups } from '../../actions/options.server';
 import { searchMaterialOptions } from '../../actions/options.server';
 import { createMaterialRequestAction, getRequestEstimateCosts } from '../../actions/requests.server';
 import { SearchCombobox } from '../../components/SearchCombobox';
 import { formatMoney } from '../../lib/format';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
-import { unwrapAction } from '../../lib/unwrap-action';
-import { DestinationFields } from '../../Movements/components/DestinationFields';
 import { materialRequestSchema, type MaterialRequestFormValues } from '../../schemas/requests';
 import { normalizeDecimal } from '../../schemas/stock-movement';
 
@@ -30,7 +30,13 @@ const logger = new Logger('Warehouses/NewRequestForm');
 const emptyLine = () => ({ materialId: '', quantity: '' });
 
 /** Pedido de materiales: a quien se imputa, que materiales y cuanto. Lote y serie los elige quien entrega. */
-export function NewRequestForm({ customers, canViewPrices }: { customers: MovementFormLookups['customers']; canViewPrices: boolean }) {
+export function NewRequestForm({
+  customers,
+  canViewPrices,
+}: {
+  customers: MovementFormLookups['customers'];
+  canViewPrices: boolean;
+}) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [materials, setMaterials] = useState<Record<string, MaterialOption>>({});

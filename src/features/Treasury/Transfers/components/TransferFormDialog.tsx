@@ -1,14 +1,21 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AMOUNT_SCALE, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import moment from 'moment';
@@ -22,8 +29,8 @@ import { BalancePreview } from '../../components/BalancePreview';
 import { NegativeCashConfirm } from '../../components/NegativeCashConfirm';
 import { useBalanceAfter } from '../../hooks/useBalanceAfter';
 import { invalidateTreasury } from '../../lib/invalidate';
-import { transferFormSchema, type TransferFormValues } from '../../schemas/transfers';
 import { treasuryToday } from '../../lib/today';
+import { transferFormSchema, type TransferFormValues } from '../../schemas/transfers';
 
 const logger = new Logger('Treasury/TransferFormDialog');
 
@@ -47,10 +54,19 @@ export function TransferFormDialog({ open, onOpenChange, accounts, defaultFromAc
 
   const form = useForm<TransferFormValues>({
     resolver: zodResolver(transferFormSchema),
-    defaultValues: { fromAccountId: defaultFromAccountId ?? '', toAccountId: '', date: treasuryToday(), amount: '', notes: '' },
+    defaultValues: {
+      fromAccountId: defaultFromAccountId ?? '',
+      toAccountId: '',
+      date: treasuryToday(),
+      amount: '',
+      notes: '',
+    },
   });
 
-  const [fromId, toId, date, amount] = useWatch({ control: form.control, name: ['fromAccountId', 'toAccountId', 'date', 'amount'] });
+  const [fromId, toId, date, amount] = useWatch({
+    control: form.control,
+    name: ['fromAccountId', 'toAccountId', 'date', 'amount'],
+  });
   const from = accounts.find((a) => a.id === fromId);
   const to = accounts.find((a) => a.id === toId);
   const cents = parseScaled(amount, AMOUNT_SCALE);
@@ -122,7 +138,9 @@ export function TransferFormDialog({ open, onOpenChange, accounts, defaultFromAc
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Nueva transferencia</DialogTitle>
-            <DialogDescription>Pasa plata de una cuenta o caja a otra. Genera un egreso en el origen y un ingreso en el destino.</DialogDescription>
+            <DialogDescription>
+              Pasa plata de una cuenta o caja a otra. Genera un egreso en el origen y un ingreso en el destino.
+            </DialogDescription>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

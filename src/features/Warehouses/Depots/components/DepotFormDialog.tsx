@@ -1,10 +1,18 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
@@ -12,10 +20,14 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { createWarehouse, searchDepotManagerOptions, updateWarehouse, type DepotForEdit } from '../../actions/catalog.server';
+import {
+  createWarehouse,
+  searchDepotManagerOptions,
+  updateWarehouse,
+  type DepotForEdit,
+} from '../../actions/catalog.server';
 import { SearchCombobox } from '../../components/SearchCombobox';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
-import { unwrapAction } from '../../lib/unwrap-action';
 import { warehouseFormSchema, type WarehouseFormValues } from '../../schemas/catalog';
 
 const logger = new Logger('Warehouses/DepotFormDialog');
@@ -86,7 +98,9 @@ export function DepotFormDialog({ depot = null, open: controlledOpen, onOpenChan
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{isEdit ? `Editar ${depot.name}` : 'Nuevo depósito'}</DialogTitle>
-            <DialogDescription>Un lugar físico donde se guarda material: base, obra, pañol, camioneta.</DialogDescription>
+            <DialogDescription>
+              Un lugar físico donde se guarda material: base, obra, pañol, camioneta.
+            </DialogDescription>
           </DialogHeader>
 
           <Form {...form}>
