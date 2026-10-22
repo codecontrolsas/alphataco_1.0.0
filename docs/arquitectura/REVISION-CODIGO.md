@@ -19,13 +19,13 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 | src/features/Operaciones            |      212 |  28069 | [ ]    |
 | src/features/Equipos                |      135 |  21875 | [x]    |
 | src/features/Treasury               |      183 |  21596 | [x]    |
-| src/features/Dashboard              |      173 |  21093 | [ ]    |
+| src/features/Dashboard              |      173 |  21093 | [x]    |
 | src/features/Documentacion          |      143 |  17428 | [x]    |
 | src/features/Warehouses             |      121 |  16050 | [x]    |
 | src/features/Employees              |      107 |  15103 | [ ]    |
 | src/features/Comercial              |       95 |  12176 | [ ]    |
 | src/features/Ayuda                  |      137 |  10967 | [ ]    |
-| src/features/Clothing               |       69 |  10858 | [ ]    |
+| src/features/Clothing               |       69 |  10858 | [x]    |
 | src/features/Checklists             |       28 |   6175 | [ ]    |
 | src/features/UserPermissionsManager |       39 |   5229 | [ ]    |
 | src/features/OperatorPanel          |       25 |   4673 | [ ]    |
@@ -122,6 +122,14 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
   - **Empresa:** `components/catalog-columns.tsx` (`nameColumn`, `activeStatusColumn`, `createdAtColumn`, `editActionColumn`, `RowLinkButton`) en 12 `columns.tsx` de catálogos; 11 clientes `_XDataTable` pasan a `useServerTableView` y al nuevo `Permissions/hooks/usePermissionChecker.ts`; `titled` reemplaza 161 encabezados repetidos en Empresa y Documentación.
   - **Código muerto:** props `expires` (Eliminar/Reemplazar documento) e `id` (Reemplazar), `CLIENT_SELECT`, `nameMap`, variables y estado sin uso (`banWithEmployee`, `watch`, `setValue`, `reset`, `checklistsError`, `logger`).
   - Verificación: `check-types` limpio, `npm test` (1494) y `next build` compilando. No se tocó lógica de acciones de escritura, por eso no se corrieron las suites de integración.
+- [x] **Ropa y Dashboard (`src/features/Clothing`, `src/features/Dashboard`):** jscpd sobre ambos módulos (sin pruebas): de 123 clones y 2.611 líneas duplicadas (6,42 %) a 35 y 508 (1,36 %); 26.714 → 4.813 tokens duplicados. `knip` sin hallazgos y `tsc --noUnusedLocals --noUnusedParameters` solo marcó un `import { prisma }` sin uso (`Clothing/actions/session.server.ts`, borrado).
+  - **Ropa, tablas de entregas (historial del empleado, todas las entregas y reportes):** `components/delivery-columns.tsx` (selección, fecha, tipo, estado, personas y legajos, artículos, depósito, costo, firma, notas y acciones: ~600 líneas copiadas en tres `columns.tsx`), `lib/delivery-list-query.ts` (select de personas y artículos, filtros por persona y legajo, facetas de tipo, estado, depósito y persona), `lib/delivery-table-config.ts` (opciones de tipo, filtro de firma y formateadores de exportación) y `components/DeliveriesTable.tsx` (`DataTable` con buscador, selección y barra de descarga masiva). Las tres tablas pasan a `createFacetFilters` + `useServerTableView` + `usePermissionChecker`, y las acciones a `resolveSorts`, `toFacetMap` y el nuevo `createCrossWhere` de `shared/lib/table-facets.ts` (el cross-filter de las facetas, copiado en cada `*SingleFacet`).
+  - **Ropa, catálogo (marcas, artículos, talles):** `components/catalog-columns.tsx` (nombre, estado, fecha de creación y acciones editar / activar), `hooks/useCatalogTable.ts` (permisos, diálogo y activar/desactivar), `lib/catalog-list-query.ts` (el `where` por empresa y la faceta de estado) y `components/ClothingNameFormDialog.tsx` (los formularios de marca y talle quedan como configuración). Cinco skeletons idénticos pasan a `fallback/ClothingTableSkeleton.tsx`. `CancelDeliveryDialog` usa `ConfirmReasonDialog`.
+  - **Dashboard, documentos por vencer:** `Documentacion/components/expiring-doc-columns.tsx` (tipo de documento, vencimiento, estado, fecha de carga, enlace y filtros comunes) y `ExpiringDocsDataTable.tsx`: las tablas de empleados y equipos quedan en ~60 líneas cada una.
+  - **Dashboard, Estadísticas:** `shared/charts/period-controls.tsx` (`getBucketKey`, `getDataWindow` y el selector de mes y agrupación) reemplaza lo copiado en "Histórico de servicios" (Operaciones) y "Gestión de pedidos" (Sala de Control): cada gráfico conserva su ventana (`MONTHS_BACK`). `RecursosHumanos/components/absence-cells.tsx` (porcentaje de ausentismo y botón "Ver ausentes").
+  - **Dashboard, Principal:** `components/VehicleListDialog.tsx` (los diálogos de equipos disponibles y fuera de servicio), `shared/charts/DonutCenter.tsx` (total en el centro de las tres donas), `AvailableEmployeesDialog` con `createFacetFilters`.
+  - **Archivos partidos:** `Boards/components/_DashboardBoard.tsx` 619 → 490 (`_SortableWidget.tsx`), `Principal/actions/fleet.server.ts` 547 → 103 (+ `fleet-lists.server.ts` con las tablas de los diálogos y `lib/today-report-vehicles.ts`) y `rrhh.server.ts` 575 → 153 (+ `rrhh-lists.server.ts`). No se cambió ningún cálculo, ventana ni consulta de los gráficos y KPIs.
+  - Verificación: `check-types` limpio, `npm test` (1494), `next build` compilando y, contra un Postgres descartable, una prueba temporal (no se conserva) que ejecutó las listas, exportaciones y facetas de entregas y catálogo con filtros, búsqueda y orden.
 
 ## En curso / siguiente
 
@@ -141,6 +149,12 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 - **Equipos y Mantenimiento, presentación distinta por tabla (conservada):** el tooltip de afectaciones es negro (`bg-black`) en los otros equipos y con el estilo por defecto en los vehículos; el texto vacío es "Sin afectar" en Otros equipos activos y "-" en el resto; el "Año" es monoespaciado en vehículos activos y texto plano en las demás tablas; el badge de "Motivo de baja" es `secondary` en vehículos activos y texto plano en las bajas. `ContractorsCell` conserva esas diferencias con props (`emptyText`, `tooltipClassName`); se unifican si se decide un criterio.
 - **Mantenimiento, descripciones del asistente de órdenes:** `pendingChanges.descriptionUpdates` de `useWizardItems` se sigue enviando al guardar pero ya no hay quien lo llene (nadie llamaba a `handleDescriptionChange`). Se puede borrar el camino completo si se confirma que la descripción de la tarea ya no es editable.
 - **Mantenimiento, `getItemComments(item, source, …)`:** el parámetro `source` no se lee; lo pasan 3 llamadores y la prop `source` de `ItemComments` que consumen ~8 diálogos. Se puede quitar en cascada.
+
+- **Ropa y Dashboard, filtro "Estado" de marcas, artículos y talles:** `is_active` llega como texto (`'true'`/`'false'`) a `buildFiltersWhere` y Prisma lo rechaza ("Expected Boolean, provided String"): elegir un estado en esas tres tablas falla. Es un defecto previo que se conservó; se corrige convirtiendo `is_active` a booleano en `buildClothingCatalogWhere` (`Clothing/lib/catalog-list-query.ts`).
+- **Ropa, presentación distinta por tabla (conservada):** el badge de "Inactivo" es gris con `opacity-60` en marcas y artículos y rojo en talles; el nombre inactivo va tachado en marcas y artículos y en negrita en talles; el filtro "Estado" de talles no lleva íconos y solo muestra ese filtro por defecto; la tabla de talles no tiene buscador. Los parámetros de `catalogNameColumn` y `catalogActiveColumn` guardan esas diferencias.
+- **Ropa, facetas si la consulta falla:** al unificar con `createFacetFilters`, una faceta de estado, tipo de entrega o firma que falla en el servidor muestra la lista vacía (antes mostraba las opciones sin conteos). Solo cambia el caso de error.
+- **Dashboard, Estadísticas:** "Histórico de servicios" abre las vistas semanal y mensual con 2 meses previos y "Gestión de pedidos" con 0 y 5; los rótulos de período usan guion "-" en uno y raya "–" en el otro. Se conservaron; se unifican si se decide un criterio.
+- **Ropa, el filtro de firma cuenta solo la página visible** en el historial del empleado y en todas las entregas (se calcula con las filas cargadas, no en el servidor, como en reportes).
 
 ## Pendiente detectado en Compras (para las pasadas de Almacenes, Tesorería y otros)
 
@@ -172,3 +186,12 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 - Clientes `_XDataTable` de Empresa que no se migraron a `useServerTableView`: `EquipmentOwner`, `VehiclesByOwner`, `Customers`, `ExternalApiClients`, `Users`, `CustomerEmployees` y `CustomerEquipment` (calculan la visibilidad de filtros desde los filtros o con lista propia).
 - Formularios de catálogo de Empresa (`EquipmentBrandForm`, `CostCenterForm`, `ContractTypeForm`, `DiagramTypeForm`, `TalleresForm`, `SectoresForm`: 40 a 78 líneas repetidas cada par), acciones `*.server.ts` de catálogos (`CostCenter`, `Hierarchy`, `Positions`, `WorkDiagrams`, 20 a 27 líneas), modales `Add*Modal` de CCT y skeletons de tabla de RRHH/Equipos: sin extraer.
 - Skeletons de Documentación (`Monthly*`/`*Permanent*DocumentsSkeleton`) y `_EmployeeConditions`/`_EquipmentConditions` repiten 20 a 30 líneas; `_DocumentTypeFormModal.tsx` (627) y `documentConditions.ts` (599) siguen sin partir.
+
+## Pendiente detectado en Ropa y Dashboard
+
+- `Dashboard/Estadisticas/Mantenimiento/actions/actions.server.ts` (559 líneas) agrupa cinco acciones independientes (resumen, categoría, por tipo, origen y clase): se partiría por tarjeta, con sus importadores.
+- `RecursosHumanos/components/AbsenteeismTrendChart.tsx` y `HeadcountTrendChart.tsx` (y sus `charts/*-trend-chart.tsx`) repiten el marco (tarjeta, rango, carga y error, ~20 líneas) pero el cálculo de tendencia difiere: no se tocó.
+- `Dashboard/Estadisticas/Operaciones/components/ClientRankingChart.tsx` y `SalaDeControl/components/OrderManagementBarChart.tsx` comparten ~26 líneas de gráfico de barras; los botones de métricas de los dos clientes (`OperacionesChartsClient`, `OrderManagementClient`) difieren en el diseño, por eso no se unificaron.
+- `Clothing/actions/session.server.ts` y `OperatorPanel/actions/session.server.ts` repiten el login por correo y empleado (~30 líneas) con reglas distintas (sector de taller vs. empleado).
+- `Dashboard/Estadisticas/KPIs/Indicadores/actions.server.ts` repite ~40 líneas de la consulta de listas con las de Ropa, Selección y Operaciones (`where` + orden + faceta); entra en el helper de listas de acciones pendiente de la sección de Compras.
+- Archivos de más de 500 líneas que quedan: `Dashboard/lib/widget-registry.ts` (537, tabla de configuración de widgets) y `Dashboard/Estadisticas/Mantenimiento/actions/actions.server.ts` (559).
