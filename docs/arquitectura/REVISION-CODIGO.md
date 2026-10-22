@@ -18,10 +18,10 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 | src/features/Purchases              |      219 |  30336 | [x]    |
 | src/features/Operaciones            |      212 |  28069 | [ ]    |
 | src/features/Equipos                |      135 |  21875 | [ ]    |
-| src/features/Treasury               |      183 |  21596 | [ ]    |
+| src/features/Treasury               |      183 |  21596 | [x]    |
 | src/features/Dashboard              |      173 |  21093 | [ ]    |
 | src/features/Documentacion          |      143 |  17428 | [ ]    |
-| src/features/Warehouses             |      121 |  16050 | [ ]    |
+| src/features/Warehouses             |      121 |  16050 | [x]    |
 | src/features/Employees              |      107 |  15103 | [ ]    |
 | src/features/Comercial              |       95 |  12176 | [ ]    |
 | src/features/Ayuda                  |      137 |  10967 | [ ]    |
@@ -102,6 +102,12 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
   - **Otros:** `unwrapAction` pasó a `shared/lib/unwrap-action.ts` (69 importadores; Compras ya no depende de Almacenes), `Permissions/lib/view-scope.server.ts` (alcance de solicitudes y pedidos), `Warehouses/lib/destination-search.ts` (búsqueda de destino en 4 listas) y `PURCHASES_PATH`, `SESSION_EXPIRED` y `TRANSACTION_OPTIONS` en `action-errors.ts`.
   - **Archivos partidos (todos los de Compras quedan bajo 425 líneas):** `lib/payments.ts` 642 → 332 (`payment-locks`, `payment-auto-withholdings`, `payment-revalidation`), `lib/due-invoices.ts` 517 → 230 (`-debts`, `-unified`), `actions/orders.server.ts` 744 → 404 (`order-writes`, `approval-notifications.server`, `order-send.server`), `requests.server.ts` 565 → 280 (`request-writes`, `request-from-material.server`), `receipts.server.ts` 626 → 423 (`receipt-queries.server`), `invoices.server.ts` 579 → 329 (`invoice-build`, `invoice-arca.server`), `invoice-queries.server.ts` 451 → ~220 (`invoice-detail.server`), `suppliers.server.ts` 424 → 282 (`supplier-queries.server`), `quotes.server.ts` 411 → 328 (`quote-send.server`), `PaymentOrderForm` 572 → 370, `RegisterPaymentDialog` 503 → 282, `PurchaseRequestForm` 447 → 237 y `PurchaseOrderForm` 431 → 281 (las filas de línea en archivos propios).
   - Verificación: `check-types` limpio, `npm test` (1494), las suites de integración de Compras, Tesorería y Almacenes contra un Postgres descartable (en serie: en paralelo se pisan entre sí) y `next build` compilando.
+- [x] **Almacenes y Tesorería (`src/features/Warehouses`, `src/features/Treasury`):** jscpd sobre ambos módulos (sin pruebas): de 140 clones y 1.905 líneas duplicadas (4,22 %) a 96 y 1.374 (3,01 %); 483.957 → 476.986 tokens. `knip` no encontró archivos ni exportaciones sin uso en estos módulos; solo se borraron un import (`moment`) y un helper (`contains`) sin lectura que reportó `tsc --noUnusedLocals`.
+  - **Tablas `_XDataTable` (13):** pasan a `createFacetFilters` (`fixed`/`lookup`, incluida la opción "Sin asignar") y `useServerTableView` (estado de vista, visibilidad inicial y props comunes); las 13 listas de columnas usan `titled` y `matchesId` en lugar de repetir encabezado y filtro. Las listas de acciones usan `toFacetMap` de `shared/lib/table-facets` (5 copias locales borradas).
+  - **Almacenes:** `components/CatalogRowActions.tsx` (acciones de fila de depósitos y materiales) y `Settings/components/MaterialCatalogSection.tsx` (categorías y unidades) reemplazan cuatro componentes casi idénticos. `lib/action-errors.ts` suma `WAREHOUSE_PATH`, `NO_PERMISSION`, `firstIssue`, `nullable` e `isForeignKeyError` (la constante de la ruta estaba copiada en 5 acciones).
+  - **Tesorería:** `lib/use-treasury-mutation.ts` (`useTreasuryMutation`: ejecuta la acción, invalida las queries del módulo, refresca la ruta y avisa el error) en 12 diálogos; `lib/action-errors.ts` suma `treasurySession` y `assertNotFuture` (copiadas en cheques, cheques propios y conciliación).
+  - **Archivos partidos:** `lib/stock-engine.ts` 1.200 → 733 (`stock-locks.ts`: lecturas con lock y escritura de saldos; `stock-loans.ts`: devolución y baja de préstamos; `stock-destination.ts`: validación del destino). Solo se movieron funciones: el orden de locks documentado en `stock-engine.ts` no cambió (se verificó que el conjunto de líneas es el mismo) y las pruebas de integración del motor pasan. `actions/catalog.server.ts` 610 → `depots.server.ts` (196), `materials.server.ts` (251) y `catalog-settings.server.ts` (212). `actions/reconciliation.server.ts` 561 → 398 + `reconciliation-reads.server.ts` (255).
+  - Verificación: `check-types` limpio, `npm test` (1494), suites de integración de Almacenes, Tesorería, Compras y Ropa contra un Postgres descartable (en serie) y `next build` compilando.
 
 ## En curso / siguiente
 
@@ -116,9 +122,17 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 - **Compras, filtros visibles guardados:** las tablas de Recepciones, Solicitudes, Proveedores, Órdenes de pago y Vencimientos ignoran la preferencia guardada de filtros visibles (`initialFilterVisibility` llega y no se usa); Órdenes, Cotizaciones y Facturas sí la aplican. Es un defecto previo que se conservó para no cambiar el comportamiento: se corrige pasando `savedFilterVisibility` a `useServerTableView` en esas cinco tablas.
 - **Compras, búsqueda de comprobante en Vencimientos:** al unificar `voucherNumberWhere`, un punto de venta o número fuera de rango en Vencimientos ahora devuelve una lista vacía (como ya hacía Facturas) en vez de un error.
 
+- **Almacenes, `companyId` sin uso:** `createMaterialCategory` y `createMeasurementUnit` (`actions/catalog-settings.server.ts`) llaman a `getActiveCompanyId()` y no usan el resultado. Se dejó la llamada (puede lanzar si no hay empresa activa); se puede borrar si se confirma que no hace falta.
+
 ## Pendiente detectado en Compras (para las pasadas de Almacenes, Tesorería y otros)
 
 - Las tablas de Almacenes y Tesorería pueden adoptar `createFacetFilters` y `useServerTableView` (hoy solo cambiaron su `EMPTY_FACET`); Equipos, Formularios y Checklists también copian `EMPTY_FACET`.
 - Acciones `*.server.ts` con la misma cabecera (permiso, `isUuid`, `safeParse`, empresa, try/catch con `toPurchaseActionError`): quedan sin envoltorio común porque cambiarían ~60 acciones a la vez; conviene hacerlo junto con el caso de uso por módulo de la arquitectura de instancias.
 - `createPurchaseReceipt` (~220 líneas) y `registerPayment` (~180) siguen siendo funciones largas: se parten en pasos junto con sus pruebas de integración.
 - `sendPurchaseOrder`, `sendPurchaseQuote` y `sendPaymentOrder` repiten "mail y después marcar enviada"; un `sendThenMark` común exige decidir si el estado de la orden de pago también se marca.
+
+## Pendiente detectado en Almacenes y Tesorería
+
+- `tire-stock.ts` (569 líneas), `ReconciliationView.tsx` (527) y las acciones de cheques (441 y 439) siguen por encima de ~430 líneas: se partirían con sus pruebas de integración.
+- `OwnChecksList/columns.tsx` y `ChecksList/columns.tsx` repiten celdas (número, banco, importe, fechas); `MovementDetailSheet` y `RequestDetailSheet` repiten la escalera cargando/error/vacío; `DepositChecksDialog` y `DiscountChecksDialog` repiten el campo de cuenta bancaria. Cada caso es chico (10 a 30 líneas); no se extrajo.
+- Acciones `*.server.ts` de Tesorería y Almacenes: la cabecera permiso + `safeParse` + sesión + try/catch sigue sin envoltorio común (no se aplicó para no cambiar ~60 acciones a la vez; ver la nota de Compras).
