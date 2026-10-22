@@ -70,7 +70,8 @@ export async function runDailyReportDeviationsJob(deps: DeviationsJobDeps = {}):
       const deviations = await callScalar(
         'get_daily_report_deviations',
         [{ uuid: report.id }, { date }],
-        deviationsResultSchema
+        deviationsResultSchema,
+        prisma
       );
 
       if (deviations.rows_with_deviations.length === 0) {
