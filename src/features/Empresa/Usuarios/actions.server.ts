@@ -8,6 +8,7 @@ import { ExportTooLargeError, fetchExportRowsInBatches, tooManyRowsMessage } fro
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { assertCompanyAccess } from '@/shared/lib/tenant';
+import { runInCompanyScope } from '@/shared/lib/tenant-context';
 import { cacheLife, cacheTag } from 'next/cache';
 import { CATALOG_EXPORT_MAX_ROWS, catalogExportFailure } from '../lib/catalog-table.server';
 import { USERS_VIEW_DENIED_MESSAGE, assertCanViewCompanyUsers, canViewCompanyUsers } from './lib/users-access';
@@ -26,9 +27,10 @@ import type { CompanyUserRow } from './lib/users-types';
  * Las mutaciones (ban/unban, vincular legajo, nombre) viven en `mutations.server.ts`; las facetas en
  * `facets.server.ts` y los selectores auxiliares en `lookups.server.ts`.
  *
- * Perímetro sin RLS: las funciones `'use cache'` no pueden leer la sesión, así que reciben
- * `companyId` ya validado; el export público exige el permiso `view` y llama `assertCompanyAccess(companyId)`
- * ANTES de entrar al caché.
+ * Perímetro: las funciones `'use cache'` no pueden leer la sesión, así que reciben `companyId` ya validado; el
+ * export público exige el permiso `view` y llama `assertCompanyAccess(companyId)` ANTES de entrar al caché. Adentro,
+ * el cuerpo corre con `runInCompanyScope`: sin la empresa fijada, con el rol de la app la RLS devolvía cero filas y
+ * la tab Usuarios quedaba vacía (esas cero filas, además, se cacheaban).
  */
 const logger = new Logger('Empresa/Usuarios');
 
@@ -37,7 +39,11 @@ async function getCompanyUsersPaginatedCached(companyId: string, searchParams: D
   'use cache';
   cacheTag(CACHE_TAGS.COMPANY_USERS);
   cacheLife({ expire: CACHE_TTL.PAGINATED_LIST, revalidate: CACHE_TTL.PAGINATED_LIST, stale: 30 });
+  return runInCompanyScope(companyId, () => getCompanyUsersPaginatedQuery(companyId, searchParams));
+}
 
+/** Cuerpo de `getCompanyUsersPaginatedCached`: corre dentro de `runInCompanyScope` (la RLS necesita la empresa). */
+async function getCompanyUsersPaginatedQuery(companyId: string, searchParams: DataTableSearchParams) {
   logger.debug('Obteniendo usuarios de empresa paginados');
 
   try {
@@ -95,7 +101,14 @@ async function getAllCompanyUsersForExportCached(
   'use cache';
   cacheTag(CACHE_TAGS.COMPANY_USERS);
   cacheLife({ expire: CACHE_TTL.EXPORT, revalidate: CACHE_TTL.EXPORT, stale: 30 });
+  return runInCompanyScope(companyId, () => getAllCompanyUsersForExportQuery(companyId, searchParams));
+}
 
+/** Cuerpo de `getAllCompanyUsersForExportCached`: corre dentro de `runInCompanyScope` (la RLS necesita la empresa). */
+async function getAllCompanyUsersForExportQuery(
+  companyId: string,
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<CompanyUserRow[]>> {
   logger.debug('Exportando usuarios de empresa');
 
   try {

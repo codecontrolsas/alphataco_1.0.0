@@ -1,11 +1,12 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { CACHE_TAGS, CACHE_TTL } from '@/shared/constants/cache';
 import { prisma } from '@/shared/lib/prisma';
 import { assertCompanyAccess } from '@/shared/lib/tenant';
+import { runInCompanyScope } from '@/shared/lib/tenant-context';
 import { cacheLife, cacheTag } from 'next/cache';
 import { assertCanViewCompanyUsers } from './lib/users-access';
 import { buildUsersWhere, parseUsersState } from './lib/users-query';
@@ -25,7 +26,15 @@ async function getCompanyUserSingleFacetCached(
   'use cache';
   cacheTag(CACHE_TAGS.COMPANY_USERS);
   cacheLife({ expire: CACHE_TTL.FACETS, revalidate: CACHE_TTL.FACETS, stale: 30 });
+  return runInCompanyScope(companyId, () => getCompanyUserSingleFacetQuery(columnId, companyId, searchParams));
+}
 
+/** Cuerpo de `getCompanyUserSingleFacetCached`: corre dentro de `runInCompanyScope` (la RLS necesita la empresa). */
+async function getCompanyUserSingleFacetQuery(
+  columnId: string,
+  companyId: string,
+  searchParams: DataTableSearchParams
+): Promise<CompanyUserFacetResult | null> {
   logger.debug('Obteniendo faceta individual', { data: { columnId } });
 
   try {
