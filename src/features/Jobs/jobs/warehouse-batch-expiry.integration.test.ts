@@ -1,5 +1,7 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { PrismaClient } from '@/generated/prisma/client';
 import type { MailMessage } from '@/shared/lib/mail/transport';
+import { RUN_RLS, assertAppRoleConnection, connectAsAppRoles } from '@/test/rls-roles';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 /**
  * Integracion del mail semanal de lotes por vencer (Almacenes etapa 2) contra el Postgres del
@@ -30,7 +32,8 @@ const BATCHES = {
   empty: { id: '77777777-7777-4777-8777-777777770013', number: 'LOTE-SIN-SALDO', expires: '2099-03-05', qty: 0 },
 };
 
-type Prisma = typeof import('@/shared/lib/prisma')['prisma'];
+// Cliente sin extensiones: el del dueño (bajo RLS) o `prismaBase` (sin request, igual que el contextual).
+type Prisma = PrismaClient;
 let prisma: Prisma;
 
 async function cleanup() {
@@ -54,7 +57,14 @@ describe.skipIf(!RUN)('job warehouse-batch-expiry (integracion)', () => {
   };
 
   beforeAll(async () => {
-    prisma = (await import('@/shared/lib/prisma')).prisma;
+    // Con los roles reales (scripts/test-jobs.sh): datos con el dueño, el job con `alphataco_app`/`alphataco_system`.
+    // Así se vio que `findExpiringBatches` (cliente de la app, sin request) devolvía cero lotes bajo RLS.
+    if (RUN_RLS) {
+      prisma = connectAsAppRoles();
+      await assertAppRoleConnection();
+    } else {
+      prisma = (await import('@/shared/lib/prisma')).prismaBase;
+    }
     await cleanup();
     const city = await prisma.cities.findFirstOrThrow({ select: { id: true } });
     for (const [id, name, cuit, recipient] of [
@@ -80,17 +90,38 @@ describe.skipIf(!RUN)('job warehouse-batch-expiry (integracion)', () => {
       });
     }
 
-    await prisma.measurement_units.create({ data: { id: UNIT, company_id: COMPANY_A, name: 'Litro', abbreviation: 'l' } });
+    await prisma.measurement_units.create({
+      data: { id: UNIT, company_id: COMPANY_A, name: 'Litro', abbreviation: 'l' },
+    });
     await prisma.warehouses.create({ data: { id: WAREHOUSE, company_id: COMPANY_A, code: 'B', name: 'Base A' } });
     await prisma.materials.create({
-      data: { id: MATERIAL, company_id: COMPANY_A, code: 'DES', name: 'Desengrasante', unit_id: UNIT, tracking_type: 'BATCH' },
+      data: {
+        id: MATERIAL,
+        company_id: COMPANY_A,
+        code: 'DES',
+        name: 'Desengrasante',
+        unit_id: UNIT,
+        tracking_type: 'BATCH',
+      },
     });
     for (const b of Object.values(BATCHES)) {
       await prisma.material_batches.create({
-        data: { id: b.id, company_id: COMPANY_A, material_id: MATERIAL, batch_number: b.number, expires_at: new Date(`${b.expires}T00:00:00Z`) },
+        data: {
+          id: b.id,
+          company_id: COMPANY_A,
+          material_id: MATERIAL,
+          batch_number: b.number,
+          expires_at: new Date(`${b.expires}T00:00:00Z`),
+        },
       });
       await prisma.stock_balances.create({
-        data: { company_id: COMPANY_A, material_id: MATERIAL, warehouse_id: WAREHOUSE, batch_id: b.id, quantity: b.qty },
+        data: {
+          company_id: COMPANY_A,
+          material_id: MATERIAL,
+          warehouse_id: WAREHOUSE,
+          batch_id: b.id,
+          quantity: b.qty,
+        },
       });
     }
   }, 30_000);
@@ -105,7 +136,12 @@ describe.skipIf(!RUN)('job warehouse-batch-expiry (integracion)', () => {
 
     const unitA = summary.units.find((u) => u.companyId === COMPANY_A);
     const unitB = summary.units.find((u) => u.companyId === COMPANY_B);
-    expect(unitA).toMatchObject({ status: 'ok', emailSent: true, recipients: 1, metadata: { expired: 1, expiring: 1 } });
+    expect(unitA).toMatchObject({
+      status: 'ok',
+      emailSent: true,
+      recipients: 1,
+      metadata: { expired: 1, expiring: 1 },
+    });
     expect(unitB).toMatchObject({ status: 'skipped', reason: 'sin lotes vencidos ni por vencer' });
 
     const mailsA = sent.filter((m) => [m.to].flat().includes(RECIPIENT_A));

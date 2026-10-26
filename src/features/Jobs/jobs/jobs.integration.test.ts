@@ -1,4 +1,6 @@
+import type { PrismaClient } from '@/generated/prisma/client';
 import type { MailMessage } from '@/shared/lib/mail/transport';
+import { RUN_RLS, assertAppRoleConnection, connectAsAppRoles } from '@/test/rls-roles';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 /**
@@ -13,6 +15,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  *   npx vitest run src/features/Jobs/jobs/jobs.integration.test.ts
  *
  * O directamente `npm run test:jobs`.
+ *
+ * Con `RLS_APP_DATABASE_URL`/`RLS_SYSTEM_DATABASE_URL` (los exporta `scripts/test-jobs.sh`) los jobs corren con los
+ * roles REALES (`alphataco_app` sin BYPASSRLS y `alphataco_system`), como la demo: así se vio que los avisos de los
+ * jobs (`notify`, con el cliente de la app y sin request) violaban la RLS. Los datos de prueba los crea el dueño.
  *
  * Lo único que se sustituye es el emisor de correo (`sendMail` inyectado), para capturar lo
  * que saldría sin depender de un SMTP. Todo lo demás corre de verdad: las funciones SQL, el
@@ -52,7 +58,8 @@ const COUNTRY_ID = '66666666-6666-4666-8666-666666666666';
 const TEST_DATE = '2026-06-15';
 const TEST_DATE_UTC = new Date(`${TEST_DATE}T00:00:00Z`);
 
-type Prisma = (typeof import('@/shared/lib/prisma'))['prisma'];
+// Cliente sin extensiones: el del dueño (bajo RLS) o `prismaBase` (sin request, igual que el contextual).
+type Prisma = PrismaClient;
 let prisma: Prisma;
 
 /**
@@ -243,7 +250,13 @@ async function seedCompany(params: {
 describe.skipIf(!RUN)('jobs de P5 (integración contra el compose)', () => {
   beforeAll(async () => {
     process.env.JOBS_TOKEN = TOKEN;
-    ({ prisma } = await import('@/shared/lib/prisma'));
+    if (RUN_RLS) {
+      // Datos de prueba con el dueño; los jobs, con los roles de la app y del sistema.
+      prisma = connectAsAppRoles();
+      await assertAppRoleConnection();
+    } else {
+      prisma = (await import('@/shared/lib/prisma')).prismaBase;
+    }
 
     await cleanup();
 
@@ -412,9 +425,13 @@ describe.skipIf(!RUN)('jobs de P5 (integración contra el compose)', () => {
       // una corrida en `error`, el SQL tiene que aguantar el reingreso. Es exactamente lo
       // que NO pasaba antes de `20260923180000_daily_indicators_idempotent`.
       const { callVoid } = await import('@/shared/lib/sql');
+      // Con el cliente de sistema, como el job (con el de la app y sin empresa, la RLS rechaza la escritura).
+      const { prismaSystem } = await import('@/shared/lib/prisma-system');
 
       const before = await prisma.daily_indicators.count({ where: { company_id: COMPANY_A } });
-      await expect(callVoid('run_daily_indicators_for_company', [{ uuid: COMPANY_A }])).resolves.toBeUndefined();
+      await expect(
+        callVoid('run_daily_indicators_for_company', [{ uuid: COMPANY_A }], prismaSystem)
+      ).resolves.toBeUndefined();
       const after = await prisma.daily_indicators.count({ where: { company_id: COMPANY_A } });
 
       expect(after).toBe(before);

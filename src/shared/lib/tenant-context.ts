@@ -104,11 +104,20 @@ const companyScope = (globalForScope.tenantCompanyScope ??= new AsyncLocalStorag
  * la consulta corre sin `app.company_id` y, con el rol de aplicación (sin BYPASSRLS), la RLS devuelve CERO filas, que
  * además quedan cacheadas (ticket 800: "En mantenimiento" mostraba 9 en el contador y la tabla vacía). La empresa
  * llega por parámetro y ya forma parte de la clave del cache. Sin usuario: las lecturas solo filtran por empresa.
+ *
+ * También lo usan los jobs (`kind: 'job'`) para que el cliente `prisma` de las funciones que reutilizan (avisos,
+ * consultas de stock) corra con la empresa que se está procesando: sin request no hay otra forma de resolverla.
  */
-export function runInCompanyScope<T>(companyId: string, fn: () => Promise<T>): Promise<T> {
-  const ctx: TenantContext = { companyId, userId: null, kind: 'guest' };
+export function runInCompanyScope<T>(
+  companyId: string,
+  fn: () => Promise<T>,
+  kind: Extract<TenantActorKind, 'guest' | 'job'> = 'guest'
+): Promise<T> {
+  const ctx: TenantContext = { companyId, userId: null, kind };
   assertContext(ctx);
-  return companyScope.run(ctx, fn);
+  // `await` DENTRO del scope: una consulta de Prisma es perezosa (corre al hacerle `.then`). Con `run(ctx, fn)` a
+  // secas, `() => prisma.x.findMany()` devolvía la consulta sin ejecutar, se ejecutaba afuera y sin empresa.
+  return companyScope.run(ctx, async () => await fn());
 }
 
 /** Contexto fijado con `runInCompanyScope`, si la operación corre dentro de uno. */

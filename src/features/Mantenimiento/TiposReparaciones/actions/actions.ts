@@ -88,8 +88,15 @@ export async function createTypeOfRepair(rawBody: TypeOfRepairInput) {
     const companyId = await getActiveCompanyId();
     const name = body.name;
 
+    // Sin el tipo DIAGNÓSTICO: es interno y no se lista, así que no puede bloquear un tipo que el usuario llame igual.
     const existing = await prisma.types_of_repairs.findFirst({
-      where: withCompany({ name: { equals: name, mode: Prisma.QueryMode.insensitive } }, companyId),
+      where: withCompany(
+        {
+          name: { equals: name, mode: Prisma.QueryMode.insensitive },
+          id: { not: getDiagnosticRepairTypeId(companyId) },
+        },
+        companyId
+      ),
       select: { id: true, name: true },
     });
 
@@ -132,7 +139,10 @@ export async function updateTypeOfRepair(rawBody: Partial<TypeOfRepairInput>, id
     const body = parsed.data;
     const companyId = await getActiveCompanyId();
 
-    // Perímetro: el tipo tiene que ser de la empresa activa.
+    // Perímetro: el tipo tiene que ser de la empresa activa. El DIAGNÓSTICO es del sistema: no se edita.
+    if (id === getDiagnosticRepairTypeId(companyId)) {
+      return { ok: false, error: 'El tipo de reparación no existe o no pertenece a la empresa activa' } as const;
+    }
     const { count } = await prisma.types_of_repairs.updateMany({
       where: withCompany({ id }, companyId),
       data: {
@@ -180,6 +190,10 @@ export async function deleteTypeOfRepair(id: string) {
     await requireConfigPermission('type_of_repair', 'delete');
     uuidSchema.parse(id);
     const companyId = await getActiveCompanyId();
+    // El DIAGNÓSTICO es del sistema (lo usa cada OT generada): no se borra desde la configuración.
+    if (id === getDiagnosticRepairTypeId(companyId)) {
+      return { ok: false, error: 'El tipo de reparación no existe o no pertenece a la empresa activa' } as const;
+    }
 
     let count: number;
     try {
