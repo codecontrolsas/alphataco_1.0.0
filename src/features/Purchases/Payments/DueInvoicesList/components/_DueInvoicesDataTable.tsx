@@ -49,6 +49,14 @@ const DEFAULT_VISIBLE_FILTERS = ['supplier', 'days', 'due_date'];
 
 const facets = createFacetFilters(getDueInvoiceSingleFacet);
 
+const daysIcons: Record<(typeof DAYS_VALUES)[number], LucideIcon> = {
+  overdue: AlarmClock,
+  upcoming: CalendarClock,
+  none: CalendarOff,
+};
+
+// Va DESPUÉS de `daysIcons`: se evalúa al cargar el módulo y, antes, leía la constante sin inicializar
+// ("Cannot access before initialization") y la pantalla de Pagos no cargaba (ticket 801).
 const DAYS_OPTIONS = DAYS_VALUES.map((value) => ({ value, label: DAYS_FILTER_LABELS[value], icon: daysIcons[value] }));
 
 const CBTE_TYPE_OPTIONS = DUE_CBTE_TYPE_IDS.map((id) => ({
@@ -56,12 +64,6 @@ const CBTE_TYPE_OPTIONS = DUE_CBTE_TYPE_IDS.map((id) => ({
   label: cbteTypeLabel(id),
   icon: FileText,
 }));
-
-const daysIcons: Record<(typeof DAYS_VALUES)[number], LucideIcon> = {
-  overdue: AlarmClock,
-  upcoming: CalendarClock,
-  none: CalendarOff,
-};
 
 /** Columnas DATE (sin hora): medianoche UTC, se leen como fecha para no correr un día. */
 const dateOnly = (value: unknown) => (value ? formatDateOnlyAr(value as string | Date) : '');
