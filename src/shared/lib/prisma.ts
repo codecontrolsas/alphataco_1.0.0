@@ -1,7 +1,7 @@
 import { Prisma, PrismaClient } from '@/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { prismaPgConfig } from './prisma-pg-config';
-import { createContextualClient } from './tenant-context';
+import { createContextualClient, getCompanyScopeContext } from './tenant-context';
 
 /**
  * El tipo es `Prisma.TransactionClient` mas los metodos de conexion a proposito: muchos helpers piden
@@ -45,6 +45,9 @@ export const prismaBase = globalForPrisma.prisma ?? createPrismaClient();
 export const prisma: TenantPrismaClient =
   globalForPrisma.prismaContextual ??
   (createContextualClient(prismaBase, async () => {
+    // Dentro de una funcion `'use cache'` no hay request: manda la empresa que fijo `runInCompanyScope`.
+    const scoped = getCompanyScopeContext();
+    if (scoped) return scoped;
     // Import dinamico: tenant-db trae `next/headers` y la sesion, que solo existen dentro de un request.
     const { getTenantContextOrNull } = await import('./tenant-db');
     return getTenantContextOrNull();

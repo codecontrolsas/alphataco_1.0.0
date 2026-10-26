@@ -5,6 +5,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { z } from 'zod';
+import { getDiagnosticRepairTypeId } from '../../utils/diagnostic-repair-type';
 import { ConfigPermissionError, failureMessage, requireConfigPermission } from '../lib/access';
 import {
   idDeltaSchema,
@@ -192,7 +193,7 @@ export const fetchTypesOfRepairAction = async () => {
     const companyId = await getActiveCompanyId();
 
     const data = await prisma.types_of_repairs.findMany({
-      where: withCompany({}, companyId),
+      where: withCompany({ id: { not: getDiagnosticRepairTypeId(companyId) } }, companyId),
       select: { id: true, name: true },
       orderBy: { created_at: 'desc' },
     });

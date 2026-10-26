@@ -18,6 +18,7 @@ import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { sanitizeFilters } from '@/shared/lib/table-filters';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { runInCompanyScope } from '@/shared/lib/tenant-context';
 import { cacheLife, cacheTag } from 'next/cache';
 import { isDeviationAttentionKey, matchesDeviationAttention, type DeviationAggregate } from './deviation-attention';
 
@@ -139,7 +140,11 @@ async function getPendingDeviationsAggregateCached(companyId: string): Promise<P
     revalidate: CACHE_TTL.EQUIPMENTS_DEVIATIONS_AGGREGATE,
     stale: 30,
   });
+  return runInCompanyScope(companyId, () => getPendingDeviationsAggregateCachedQuery(companyId));
+}
 
+/** Cuerpo de `getPendingDeviationsAggregateCached`: corre dentro de `runInCompanyScope` (la RLS necesita la empresa). */
+async function getPendingDeviationsAggregateCachedQuery(companyId: string): Promise<PendingDeviationAggEntry[]> {
   logger.debug('Calculando agregación de desvíos pendientes por vehículo (cacheable)', { data: { companyId } });
 
   const deviations = await prisma.checklist_deviations.findMany({

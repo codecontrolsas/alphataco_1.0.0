@@ -6,6 +6,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { z } from 'zod';
+import { getDiagnosticRepairTypeId } from '../../utils/diagnostic-repair-type';
 import { ConfigPermissionError, failureMessage, requireConfigPermission } from '../lib/access';
 import {
   idDeltaSchema,
@@ -29,7 +30,8 @@ export async function fetchAllTypesOfRepairs() {
     const companyId = await getActiveCompanyId();
 
     return await prisma.types_of_repairs.findMany({
-      where: withCompany({}, companyId),
+      // Sin el tipo DIAGNÓSTICO: lo usa solo la tarea automática de cada OT
+      where: withCompany({ id: { not: getDiagnosticRepairTypeId(companyId) } }, companyId),
       orderBy: { created_at: 'desc' },
     });
   } catch (error) {
@@ -52,7 +54,7 @@ export async function fetchRepairTypesForConfig() {
     const companyId = await getActiveCompanyId();
 
     const types = await prisma.types_of_repairs.findMany({
-      where: withCompany({}, companyId),
+      where: withCompany({ id: { not: getDiagnosticRepairTypeId(companyId) } }, companyId),
       orderBy: { created_at: 'desc' },
     });
     return { types, forbidden: false, error: null };

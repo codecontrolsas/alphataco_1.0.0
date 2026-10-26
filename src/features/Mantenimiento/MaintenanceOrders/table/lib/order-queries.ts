@@ -7,6 +7,7 @@ import { CACHE_TAGS, CACHE_TTL } from '@/shared/constants/cache';
 import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap } from '@/shared/lib/table-facets';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
+import { runInCompanyScope } from '@/shared/lib/tenant-context';
 import { cacheLife, cacheTag } from 'next/cache';
 import { MAINTENANCE_ORDERS_SELECT } from './order-select';
 import { buildOrdersWhere, getOrdersWithCurrentSector } from './order-where';
@@ -39,7 +40,15 @@ export async function getOrdersPaginatedCached(
   'use cache';
   cacheTag(CACHE_TAGS.TAB_IN_WORKSHOP, CACHE_TAGS.MAINTENANCE_ORDERS);
   cacheLife({ expire: CACHE_TTL.PAGINATED_LIST, revalidate: CACHE_TTL.PAGINATED_LIST, stale: 30 });
+  return runInCompanyScope(companyId, () => getOrdersPaginatedCachedQuery(companyId, hiddenTypeIds, searchParams));
+}
 
+/** Cuerpo de `getOrdersPaginatedCached`: corre dentro de `runInCompanyScope` (la RLS necesita la empresa). */
+async function getOrdersPaginatedCachedQuery(
+  companyId: string,
+  hiddenTypeIds: readonly string[],
+  searchParams: DataTableSearchParams
+) {
   try {
     const state = parseSearchParams(searchParams);
     const { skip, take } = clampedPageParams(state);
@@ -57,7 +66,13 @@ export async function getOrdersPaginatedCached(
     const where = await buildOrdersWhere(state, { companyId, hiddenTypeIds });
 
     const [data, total] = await Promise.all([
-      prisma.maintenance_orders.findMany({ where, skip, take, orderBy: safeOrderBy, select: MAINTENANCE_ORDERS_SELECT }),
+      prisma.maintenance_orders.findMany({
+        where,
+        skip,
+        take,
+        orderBy: safeOrderBy,
+        select: MAINTENANCE_ORDERS_SELECT,
+      }),
       prisma.maintenance_orders.count({ where }),
     ]);
 
@@ -80,7 +95,18 @@ export async function getOrdersSingleFacetCached(
   'use cache';
   cacheTag(CACHE_TAGS.TAB_IN_WORKSHOP, CACHE_TAGS.MAINTENANCE_ORDERS);
   cacheLife({ expire: CACHE_TTL.FACETS, revalidate: CACHE_TTL.FACETS, stale: 30 });
+  return runInCompanyScope(companyId, () =>
+    getOrdersSingleFacetCachedQuery(companyId, hiddenTypeIds, columnId, searchParams)
+  );
+}
 
+/** Cuerpo de `getOrdersSingleFacetCached`: corre dentro de `runInCompanyScope` (la RLS necesita la empresa). */
+async function getOrdersSingleFacetCachedQuery(
+  companyId: string,
+  hiddenTypeIds: readonly string[],
+  columnId: string,
+  searchParams: DataTableSearchParams
+): Promise<FacetPayload | null> {
   try {
     const state = parseSearchParams(searchParams);
     const ctx = { companyId, hiddenTypeIds };
@@ -126,7 +152,10 @@ export async function getOrdersSingleFacetCached(
           })),
           ...equipment.map((e) => ({
             id: e.id,
-            name: withIntern(e.serial_number ?? e.intern_number ?? 'Sin identificar', e.serial_number ? e.intern_number : null),
+            name: withIntern(
+              e.serial_number ?? e.intern_number ?? 'Sin identificar',
+              e.serial_number ? e.intern_number : null
+            ),
           })),
         ].sort((a, b) => a.name.localeCompare(b.name));
 

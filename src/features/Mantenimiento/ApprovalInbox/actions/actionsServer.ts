@@ -9,6 +9,7 @@ import { CACHE_TAGS, CACHE_TTL } from '@/shared/constants/cache';
 import { INVALIDATION_MAP } from '@/shared/constants/cache-invalidation-map';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { runInCompanyScope } from '@/shared/lib/tenant-context';
 import { invalidateCacheTags } from '@/shared/utils/cache-invalidation';
 import { cacheLife, cacheTag } from 'next/cache';
 import { assertSectorInCompany } from '../../OrderManagement/actions/perimeter';
@@ -46,7 +47,11 @@ async function getPendingApprovalTasksCached(companyId: string, hiddenTypeIds: r
   'use cache';
   cacheTag(CACHE_TAGS.TAB_APPROVALS, CACHE_TAGS.WORK_ORDER_REPAIRS);
   cacheLife({ expire: CACHE_TTL.PAGINATED_LIST, revalidate: CACHE_TTL.PAGINATED_LIST, stale: 30 });
+  return runInCompanyScope(companyId, () => getPendingApprovalTasksCachedQuery(companyId, hiddenTypeIds));
+}
 
+/** Cuerpo de `getPendingApprovalTasksCached`: corre dentro de `runInCompanyScope` (la RLS necesita la empresa). */
+async function getPendingApprovalTasksCachedQuery(companyId: string, hiddenTypeIds: readonly string[]) {
   logger.debug('Obteniendo tareas pendientes de aprobacion');
 
   try {
@@ -149,7 +154,11 @@ async function getReturnedTasksCached(companyId: string, hiddenTypeIds: readonly
   'use cache';
   cacheTag(CACHE_TAGS.TAB_APPROVALS, CACHE_TAGS.WORK_ORDER_REPAIRS);
   cacheLife({ expire: CACHE_TTL.PAGINATED_LIST, revalidate: CACHE_TTL.PAGINATED_LIST, stale: 30 });
+  return runInCompanyScope(companyId, () => getReturnedTasksCachedQuery(companyId, hiddenTypeIds));
+}
 
+/** Cuerpo de `getReturnedTasksCached`: corre dentro de `runInCompanyScope` (la RLS necesita la empresa). */
+async function getReturnedTasksCachedQuery(companyId: string, hiddenTypeIds: readonly string[]) {
   logger.debug('Obteniendo tareas devueltas por reasignacion');
 
   try {
@@ -254,7 +263,11 @@ async function getOrdersPendingValidationCached(companyId: string, hiddenTypeIds
   'use cache';
   cacheTag(CACHE_TAGS.TAB_APPROVALS, CACHE_TAGS.MAINTENANCE_ORDERS);
   cacheLife({ expire: CACHE_TTL.PAGINATED_LIST, revalidate: CACHE_TTL.PAGINATED_LIST, stale: 30 });
+  return runInCompanyScope(companyId, () => getOrdersPendingValidationCachedQuery(companyId, hiddenTypeIds));
+}
 
+/** Cuerpo de `getOrdersPendingValidationCached`: corre dentro de `runInCompanyScope` (la RLS necesita la empresa). */
+async function getOrdersPendingValidationCachedQuery(companyId: string, hiddenTypeIds: readonly string[]) {
   logger.debug('Obteniendo ordenes pendientes de validacion');
 
   try {

@@ -9,6 +9,7 @@ import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { CACHE_TAGS } from '@/shared/constants/cache';
 import { prisma } from '@/shared/lib/prisma';
+import { runInCompanyScope } from '@/shared/lib/tenant-context';
 import { cacheLife, cacheTag } from 'next/cache';
 
 const serverLogger = new Logger('Mantenimiento/NuevoPedido/queries');
@@ -25,7 +26,11 @@ async function getCachedChecklistTemplatesForEquipment(equipmentId: string, comp
   'use cache';
   cacheTag(CACHE_TAGS.ALL);
   cacheLife({ expire: 600, revalidate: 600, stale: 60 });
+  return runInCompanyScope(companyId, () => getCachedChecklistTemplatesForEquipmentQuery(equipmentId, companyId));
+}
 
+/** Cuerpo de `getCachedChecklistTemplatesForEquipment`: corre dentro de `runInCompanyScope` (la RLS necesita la empresa). */
+async function getCachedChecklistTemplatesForEquipmentQuery(equipmentId: string, companyId: string) {
   serverLogger.debug('Obteniendo templates de checklist para equipo', { data: { equipmentId } });
 
   // 1. Obtener type y subType del equipo

@@ -75,7 +75,9 @@ export function createTenantClient(base: PrismaClient, ctx: TenantContext) {
     name: 'tenant-context',
     client: {
       $transaction() {
-        throw new Error('El cliente con contexto no admite $transaction: usar withTenantContext() para operaciones atómicas');
+        throw new Error(
+          'El cliente con contexto no admite $transaction: usar withTenantContext() para operaciones atómicas'
+        );
       },
     },
     query: {
@@ -85,6 +87,33 @@ export function createTenantClient(base: PrismaClient, ctx: TenantContext) {
       },
     },
   });
+}
+
+/**
+ * Empresa fijada a mano por una función `'use cache'` (ver `runInCompanyScope`). Vive en `globalThis`, igual que el
+ * cliente `prisma`: el cliente se crea una sola vez y su resolver tiene que leer ESTE store aunque el bundler cargue
+ * este módulo más de una vez (capas de servidor distintas).
+ */
+const globalForScope = globalThis as unknown as { tenantCompanyScope?: AsyncLocalStorage<TenantContext> };
+const companyScope = (globalForScope.tenantCompanyScope ??= new AsyncLocalStorage<TenantContext>());
+
+/**
+ * Corre `fn` con la empresa ya resuelta como contexto de `prisma`.
+ *
+ * Una función `'use cache'` no puede leer cookies ni la sesión: sin esto el cliente contextual no encuentra contexto,
+ * la consulta corre sin `app.company_id` y, con el rol de aplicación (sin BYPASSRLS), la RLS devuelve CERO filas, que
+ * además quedan cacheadas (ticket 800: "En mantenimiento" mostraba 9 en el contador y la tabla vacía). La empresa
+ * llega por parámetro y ya forma parte de la clave del cache. Sin usuario: las lecturas solo filtran por empresa.
+ */
+export function runInCompanyScope<T>(companyId: string, fn: () => Promise<T>): Promise<T> {
+  const ctx: TenantContext = { companyId, userId: null, kind: 'guest' };
+  assertContext(ctx);
+  return companyScope.run(ctx, fn);
+}
+
+/** Contexto fijado con `runInCompanyScope`, si la operación corre dentro de uno. */
+export function getCompanyScopeContext(): TenantContext | null {
+  return companyScope.getStore() ?? null;
 }
 
 /** Resuelve el contexto del request actual, o null si no hay (login, jobs, tests, cache sin request). */
