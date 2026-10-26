@@ -146,13 +146,15 @@ jobs:
           if echo "$logs" | grep -q "ERR_MODULE_NOT_FOUND"; then echo "::error::falta un archivo en el runner de la imagen"; exit 1; fi
           curl -fsS http://localhost:3000/api/health | tee /dev/stderr | grep -q '"storage":"ok"'
 
-      - name: Datos de prueba para el login
-        # Siempre con el usuario duenio: son datos de preparacion, no tráfico de la app.
+      - name: Datos de prueba para el login y los listados
+        # Siempre con el usuario duenio: son datos de preparacion, no tráfico de la app. seed-e2e-fixtures deja una fila
+        # en cada listado clave (Taller, Aprobaciones, Vencimientos): el e2e comprueba que se VEAN, no solo que carguen.
         env:
           DATABASE_URL: postgresql://alphataco:devpass@127.0.0.1:5432/alphataco
         run: |
           node scripts/seed-company.ts --name "P4 Verificacion" --id 00000000-0000-0000-0000-0000000000f4
           node scripts/seed-auth-fixtures.ts
+          node scripts/seed-e2e-fixtures.ts
 
       - name: Esperar Chromium
         run: |
