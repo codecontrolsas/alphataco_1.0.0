@@ -171,6 +171,9 @@ jobs:
       - run: bash scripts/test-warehouses.sh
       - run: bash scripts/test-purchases.sh
       - run: bash scripts/test-treasury.sh
+      # Integracion bajo los roles reales (`alphataco_app` sin BYPASSRLS): listas cacheadas, preferencias, tipos de
+      # reparacion. Los jobs ya corren asi en test-jobs.sh. Son pocas suites chicas (segundos).
+      - run: bash scripts/test-rls.sh
 
   # La imagen de la app para los e2e se construye UNA vez por commit y la comparten `e2e` y `e2e-rls`
   # (antes cada uno construia la suya: ~6 min de build por job). Ver `_e2e-image.yml`.

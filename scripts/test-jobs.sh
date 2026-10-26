@@ -35,6 +35,10 @@ export NEXT_PUBLIC_BASE_URL="${NEXT_PUBLIC_BASE_URL:-http://localhost:3000}"
 echo "==> Aplicando migraciones pendientes..."
 npx prisma migrate deploy
 
+# Los jobs corren con los roles REALES (app sin BYPASSRLS + sistema), como en la demo: ver `src/test/rls-roles.ts`.
+# shellcheck source=lib/rls-roles.sh
+source scripts/lib/rls-roles.sh
+
 echo "==> Corriendo los tests de integracion de los jobs..."
 # En secuencia (--no-file-parallelism): los jobs recorren TODAS las empresas de la base, y un
 # archivo que crea y borra sus empresas de prueba en paralelo le cambia el universo al otro
