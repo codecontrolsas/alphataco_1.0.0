@@ -109,7 +109,12 @@ export async function seedCatalogs(ctx: Ctx): Promise<void> {
   // ── RRHH ────────────────────────────────────────────────────────────────────
   const companyId = company.id;
   await tx.hierarchy.createMany({
-    data: HIERARCHY.map((h) => ({ id: demoId('hierarchy', h.key), name: h.name, company_id: companyId })),
+    data: HIERARCHY.map((h) => ({
+      id: demoId('hierarchy', h.key),
+      name: h.name,
+      parent_id: h.parent ? demoId('hierarchy', h.parent) : null,
+      company_id: companyId,
+    })),
   });
   await tx.company_positions.createMany({
     data: POSITIONS.map((p) => ({
