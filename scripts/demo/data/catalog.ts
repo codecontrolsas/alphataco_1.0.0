@@ -59,13 +59,15 @@ export const MEASURE_UNITS: Array<{ id: number; unit: string; simbol: string; ti
 
 // ── RRHH ─────────────────────────────────────────────────────────────────────
 
-export const HIERARCHY = [
-  { key: 'operaciones', name: 'Operaciones' },
-  { key: 'mantenimiento', name: 'Mantenimiento' },
-  { key: 'logistica', name: 'Logística' },
-  { key: 'hse', name: 'HSE' },
-  { key: 'administracion', name: 'Administración' },
-  { key: 'rrhh', name: 'Recursos Humanos' },
+/** Sectores. `parent` = sector del que dependen en el organigrama (la raíz no tiene). */
+export const HIERARCHY: Array<{ key: string; name: string; parent?: string }> = [
+  { key: 'direccion', name: 'Dirección General' },
+  { key: 'operaciones', name: 'Operaciones', parent: 'direccion' },
+  { key: 'mantenimiento', name: 'Mantenimiento', parent: 'direccion' },
+  { key: 'logistica', name: 'Logística', parent: 'direccion' },
+  { key: 'hse', name: 'HSE', parent: 'direccion' },
+  { key: 'administracion', name: 'Administración', parent: 'direccion' },
+  { key: 'rrhh', name: 'Recursos Humanos', parent: 'direccion' },
 ];
 
 export const POSITIONS = [
@@ -81,7 +83,24 @@ export const POSITIONS = [
   { key: 'administrativo', name: 'Administrativo', hierarchy: ['administracion'] },
   { key: 'analista_rrhh', name: 'Analista de RRHH', hierarchy: ['rrhh'] },
   { key: 'jefe_base', name: 'Jefe de base', hierarchy: ['operaciones'] },
+  // Conducción: un solo titular cada uno (van al final para no mover el orden de los legajos de campo).
+  { key: 'gerente_general', name: 'Gerente General', hierarchy: ['direccion'] },
+  { key: 'gerente_operaciones', name: 'Gerente de Operaciones', hierarchy: ['operaciones'] },
+  { key: 'coordinador_logistica', name: 'Coordinador de Logística', hierarchy: ['logistica'] },
+  { key: 'gerente_administracion', name: 'Gerente de Administración', hierarchy: ['administracion'] },
+  { key: 'jefe_rrhh', name: 'Jefe de RRHH', hierarchy: ['rrhh'] },
+  { key: 'responsable_hse', name: 'Responsable HSE', hierarchy: ['hse'] },
 ] as const;
+
+/** Puestos de conducción: un legajo cada uno, siempre activo. */
+export const MANAGEMENT_POSITIONS = [
+  'gerente_general',
+  'gerente_operaciones',
+  'coordinador_logistica',
+  'gerente_administracion',
+  'jefe_rrhh',
+  'responsable_hse',
+] as const satisfies readonly (typeof POSITIONS)[number]['key'][];
 
 export type PositionKey = (typeof POSITIONS)[number]['key'];
 
@@ -99,7 +118,51 @@ export const POSITION_HEADCOUNT: Record<PositionKey, number> = {
   administrativo: 7,
   analista_rrhh: 3,
   jefe_base: 2,
+  gerente_general: 1,
+  gerente_operaciones: 1,
+  coordinador_logistica: 1,
+  gerente_administracion: 1,
+  jefe_rrhh: 1,
+  responsable_hse: 1,
 };
+
+/** Cargo del organigrama. `reportsTo` = `key` del cargo superior; el titular se elige entre los legajos activos con ese sector y puesto. */
+export interface OrgChartSeedPosition {
+  key: string;
+  sector: string;
+  position: PositionKey;
+  reportsTo?: string;
+}
+
+/** Organigrama de la demo: 4 niveles de cargos (Gerente General > Gerente de Operaciones > Jefe de base > Supervisor de campo). */
+export const ORG_CHART: OrgChartSeedPosition[] = [
+  { key: 'gg', sector: 'direccion', position: 'gerente_general' },
+  // Operaciones
+  { key: 'gte_ops', sector: 'operaciones', position: 'gerente_operaciones', reportsTo: 'gg' },
+  { key: 'base_anelo', sector: 'operaciones', position: 'jefe_base', reportsTo: 'gte_ops' },
+  { key: 'base_rincon', sector: 'operaciones', position: 'jefe_base', reportsTo: 'gte_ops' },
+  { key: 'sup_anelo_1', sector: 'operaciones', position: 'supervisor', reportsTo: 'base_anelo' },
+  { key: 'sup_anelo_2', sector: 'operaciones', position: 'supervisor', reportsTo: 'base_anelo' },
+  { key: 'sup_rincon_1', sector: 'operaciones', position: 'supervisor', reportsTo: 'base_rincon' },
+  { key: 'sup_rincon_2', sector: 'operaciones', position: 'supervisor', reportsTo: 'base_rincon' },
+  // Logística
+  { key: 'coord_log', sector: 'logistica', position: 'coordinador_logistica', reportsTo: 'gte_ops' },
+  { key: 'chofer_log', sector: 'logistica', position: 'chofer', reportsTo: 'coord_log' },
+  // Mantenimiento
+  { key: 'jefe_taller', sector: 'mantenimiento', position: 'jefe_taller', reportsTo: 'gg' },
+  { key: 'mecanico', sector: 'mantenimiento', position: 'mecanico', reportsTo: 'jefe_taller' },
+  { key: 'electricista', sector: 'mantenimiento', position: 'electricista', reportsTo: 'jefe_taller' },
+  { key: 'gomero', sector: 'mantenimiento', position: 'gomero', reportsTo: 'jefe_taller' },
+  // HSE
+  { key: 'resp_hse', sector: 'hse', position: 'responsable_hse', reportsTo: 'gg' },
+  { key: 'tecnico_hse', sector: 'hse', position: 'tecnico_hse', reportsTo: 'resp_hse' },
+  // Recursos Humanos
+  { key: 'jefe_rrhh', sector: 'rrhh', position: 'jefe_rrhh', reportsTo: 'gg' },
+  { key: 'analista_rrhh', sector: 'rrhh', position: 'analista_rrhh', reportsTo: 'jefe_rrhh' },
+  // Administración
+  { key: 'gte_admin', sector: 'administracion', position: 'gerente_administracion', reportsTo: 'gg' },
+  { key: 'administrativo', sector: 'administracion', position: 'administrativo', reportsTo: 'gte_admin' },
+];
 
 export const COST_CENTERS = [
   { key: 'anelo', name: 'CC Operaciones Añelo' },
@@ -195,13 +258,71 @@ export const TYPE_OPERATIVE = [
 ];
 
 export const EQUIPMENT_TYPES = [
-  { key: 'tractor', id: KPI_FIXED_IDS.typeTractor, name: 'Tractor', hitch: true, tractor: true, operative: true, count: 24, operativeKind: 'pesado' },
-  { key: 'chasis', id: KPI_FIXED_IDS.typeChasis, name: 'Chasis', hitch: false, tractor: false, operative: true, count: 20, operativeKind: 'pesado' },
-  { key: 'semirremolque', name: 'Semirremolque', hitch: true, tractor: false, operative: false, count: 18, operativeKind: 'pesado' },
-  { key: 'camioneta', name: 'Camioneta', hitch: false, tractor: false, operative: true, count: 34, operativeKind: 'liviano' },
-  { key: 'hidrogrua', name: 'Camión hidrogrúa', hitch: false, tractor: false, operative: true, count: 10, operativeKind: 'especial' },
-  { key: 'minibus', name: 'Minibús', hitch: false, tractor: false, operative: true, count: 8, operativeKind: 'liviano' },
-  { key: 'cisterna', name: 'Camión cisterna', hitch: false, tractor: false, operative: true, count: 6, operativeKind: 'especial' },
+  {
+    key: 'tractor',
+    id: KPI_FIXED_IDS.typeTractor,
+    name: 'Tractor',
+    hitch: true,
+    tractor: true,
+    operative: true,
+    count: 24,
+    operativeKind: 'pesado',
+  },
+  {
+    key: 'chasis',
+    id: KPI_FIXED_IDS.typeChasis,
+    name: 'Chasis',
+    hitch: false,
+    tractor: false,
+    operative: true,
+    count: 20,
+    operativeKind: 'pesado',
+  },
+  {
+    key: 'semirremolque',
+    name: 'Semirremolque',
+    hitch: true,
+    tractor: false,
+    operative: false,
+    count: 18,
+    operativeKind: 'pesado',
+  },
+  {
+    key: 'camioneta',
+    name: 'Camioneta',
+    hitch: false,
+    tractor: false,
+    operative: true,
+    count: 34,
+    operativeKind: 'liviano',
+  },
+  {
+    key: 'hidrogrua',
+    name: 'Camión hidrogrúa',
+    hitch: false,
+    tractor: false,
+    operative: true,
+    count: 10,
+    operativeKind: 'especial',
+  },
+  {
+    key: 'minibus',
+    name: 'Minibús',
+    hitch: false,
+    tractor: false,
+    operative: true,
+    count: 8,
+    operativeKind: 'liviano',
+  },
+  {
+    key: 'cisterna',
+    name: 'Camión cisterna',
+    hitch: false,
+    tractor: false,
+    operative: true,
+    count: 6,
+    operativeKind: 'especial',
+  },
 ] as const;
 
 export type EquipmentTypeKey = (typeof EQUIPMENT_TYPES)[number]['key'];
@@ -229,21 +350,37 @@ export const OTHER_EQUIPMENT_TYPES = [
 ] as const;
 
 /** Marcas y modelos por tipo de equipo. */
-export const BRANDS: Array<{ key: string; name: string; models: Array<{ key: string; name: string; types: string[] }> }> = [
-  { key: 'mercedes', name: 'Mercedes-Benz', models: [
-    { key: 'actros', name: 'Actros 2646', types: ['tractor'] },
-    { key: 'atego', name: 'Atego 1726', types: ['chasis', 'hidrogrua', 'cisterna'] },
-    { key: 'sprinter', name: 'Sprinter 515', types: ['minibus'] },
-  ] },
-  { key: 'scania', name: 'Scania', models: [
-    { key: 'g410', name: 'G 410', types: ['tractor'] },
-    { key: 'p310', name: 'P 310', types: ['chasis', 'hidrogrua', 'cisterna'] },
-  ] },
-  { key: 'iveco', name: 'Iveco', models: [
-    { key: 'stralis', name: 'Stralis 490', types: ['tractor'] },
-    { key: 'tector', name: 'Tector 170E28', types: ['chasis', 'cisterna'] },
-    { key: 'daily', name: 'Daily 70C17', types: ['minibus'] },
-  ] },
+export const BRANDS: Array<{
+  key: string;
+  name: string;
+  models: Array<{ key: string; name: string; types: string[] }>;
+}> = [
+  {
+    key: 'mercedes',
+    name: 'Mercedes-Benz',
+    models: [
+      { key: 'actros', name: 'Actros 2646', types: ['tractor'] },
+      { key: 'atego', name: 'Atego 1726', types: ['chasis', 'hidrogrua', 'cisterna'] },
+      { key: 'sprinter', name: 'Sprinter 515', types: ['minibus'] },
+    ],
+  },
+  {
+    key: 'scania',
+    name: 'Scania',
+    models: [
+      { key: 'g410', name: 'G 410', types: ['tractor'] },
+      { key: 'p310', name: 'P 310', types: ['chasis', 'hidrogrua', 'cisterna'] },
+    ],
+  },
+  {
+    key: 'iveco',
+    name: 'Iveco',
+    models: [
+      { key: 'stralis', name: 'Stralis 490', types: ['tractor'] },
+      { key: 'tector', name: 'Tector 170E28', types: ['chasis', 'cisterna'] },
+      { key: 'daily', name: 'Daily 70C17', types: ['minibus'] },
+    ],
+  },
   { key: 'volvo', name: 'Volvo', models: [{ key: 'fh', name: 'FH 540', types: ['tractor'] }] },
   { key: 'toyota', name: 'Toyota', models: [{ key: 'hilux', name: 'Hilux SRV 2.8', types: ['camioneta'] }] },
   { key: 'ford', name: 'Ford', models: [{ key: 'ranger', name: 'Ranger XLT 3.2', types: ['camioneta'] }] },
@@ -251,10 +388,14 @@ export const BRANDS: Array<{ key: string; name: string; models: Array<{ key: str
   { key: 'helvetica', name: 'Helvética', models: [{ key: 'batea30', name: 'Batea 30 m3', types: ['semirremolque'] }] },
   { key: 'randon', name: 'Randon', models: [{ key: 'sr3', name: 'SR 3 ejes', types: ['semirremolque'] }] },
   { key: 'caterpillar', name: 'Caterpillar', models: [{ key: 'xq60', name: 'XQ60', types: ['generador'] }] },
-  { key: 'atlas', name: 'Atlas Copco', models: [
-    { key: 'hilight', name: 'HiLight V5+', types: ['torre'] },
-    { key: 'xas', name: 'XAS 185', types: ['compresor'] },
-  ] },
+  {
+    key: 'atlas',
+    name: 'Atlas Copco',
+    models: [
+      { key: 'hilight', name: 'HiLight V5+', types: ['torre'] },
+      { key: 'xas', name: 'XAS 185', types: ['compresor'] },
+    ],
+  },
   { key: 'honda', name: 'Honda', models: [{ key: 'wb30', name: 'WB30XT', types: ['bomba'] }] },
 ];
 
@@ -283,27 +424,196 @@ export interface DocTypeDef {
 }
 
 export const DOC_TYPES: DocTypeDef[] = [
-  { key: 'dni', name: 'DNI', applies: 'Persona', expires: false, mandatory: true, preFile: true, description: 'Documento Nacional de Identidad (frente y dorso)' },
-  { key: 'alta_temprana', name: 'Alta temprana AFIP', applies: 'Persona', expires: false, mandatory: true, description: 'Constancia de alta en el Sistema de Simplificación Registral' },
-  { key: 'apto_medico', name: 'Apto psicofísico', applies: 'Persona', expires: true, validityDays: 365, mandatory: true, preFile: true, description: 'Examen preocupacional o periódico' },
-  { key: 'licencia', name: 'Licencia de conducir', applies: 'Persona', expires: true, validityDays: 730, mandatory: true, description: 'Licencia nacional de conducir con categoría habilitante' },
-  { key: 'manejo_defensivo', name: 'Curso de manejo defensivo', applies: 'Persona', expires: true, validityDays: 730, mandatory: true, description: 'Certificado de aprobación del curso de manejo defensivo' },
-  { key: 'induccion_hse', name: 'Inducción HSE', applies: 'Persona', expires: true, validityDays: 365, mandatory: true, description: 'Inducción de seguridad, salud y medio ambiente' },
-  { key: 'antecedentes', name: 'Certificado de antecedentes penales', applies: 'Persona', expires: true, validityDays: 180, mandatory: false, preFile: true, description: 'Certificado del Registro Nacional de Reincidencia' },
-  { key: 'recibo', name: 'Recibo de sueldo', applies: 'Persona', expires: false, mandatory: false, monthly: true, private: true, description: 'Recibo de haberes mensual firmado' },
-  { key: 'art_nomina', name: 'Nómina ART', applies: 'Persona', expires: false, mandatory: false, monthly: true, description: 'Constancia de cobertura en la nómina de la ART' },
+  {
+    key: 'dni',
+    name: 'DNI',
+    applies: 'Persona',
+    expires: false,
+    mandatory: true,
+    preFile: true,
+    description: 'Documento Nacional de Identidad (frente y dorso)',
+  },
+  {
+    key: 'alta_temprana',
+    name: 'Alta temprana AFIP',
+    applies: 'Persona',
+    expires: false,
+    mandatory: true,
+    description: 'Constancia de alta en el Sistema de Simplificación Registral',
+  },
+  {
+    key: 'apto_medico',
+    name: 'Apto psicofísico',
+    applies: 'Persona',
+    expires: true,
+    validityDays: 365,
+    mandatory: true,
+    preFile: true,
+    description: 'Examen preocupacional o periódico',
+  },
+  {
+    key: 'licencia',
+    name: 'Licencia de conducir',
+    applies: 'Persona',
+    expires: true,
+    validityDays: 730,
+    mandatory: true,
+    description: 'Licencia nacional de conducir con categoría habilitante',
+  },
+  {
+    key: 'manejo_defensivo',
+    name: 'Curso de manejo defensivo',
+    applies: 'Persona',
+    expires: true,
+    validityDays: 730,
+    mandatory: true,
+    description: 'Certificado de aprobación del curso de manejo defensivo',
+  },
+  {
+    key: 'induccion_hse',
+    name: 'Inducción HSE',
+    applies: 'Persona',
+    expires: true,
+    validityDays: 365,
+    mandatory: true,
+    description: 'Inducción de seguridad, salud y medio ambiente',
+  },
+  {
+    key: 'antecedentes',
+    name: 'Certificado de antecedentes penales',
+    applies: 'Persona',
+    expires: true,
+    validityDays: 180,
+    mandatory: false,
+    preFile: true,
+    description: 'Certificado del Registro Nacional de Reincidencia',
+  },
+  {
+    key: 'recibo',
+    name: 'Recibo de sueldo',
+    applies: 'Persona',
+    expires: false,
+    mandatory: false,
+    monthly: true,
+    private: true,
+    description: 'Recibo de haberes mensual firmado',
+  },
+  {
+    key: 'art_nomina',
+    name: 'Nómina ART',
+    applies: 'Persona',
+    expires: false,
+    mandatory: false,
+    monthly: true,
+    description: 'Constancia de cobertura en la nómina de la ART',
+  },
 
-  { key: 'titulo', name: 'Título del automotor', applies: 'Equipos', expires: false, mandatory: true, description: 'Título de propiedad del automotor' },
-  { key: 'cedula', name: 'Cédula de identificación', applies: 'Equipos', expires: true, validityDays: 730, mandatory: true, description: 'Cédula verde de identificación del automotor' },
-  { key: 'seguro', name: 'Póliza de seguro', applies: 'Equipos', expires: true, validityDays: 180, mandatory: true, policy: true, description: 'Póliza de responsabilidad civil y daños' },
-  { key: 'vtv', name: 'RTO / VTV', applies: 'Equipos', expires: true, validityDays: 365, mandatory: true, description: 'Revisión técnica obligatoria' },
-  { key: 'ruta', name: 'Habilitación RUTA', applies: 'Equipos', expires: true, validityDays: 365, mandatory: true, description: 'Registro Único del Transporte Automotor de cargas' },
-  { key: 'pago_seguro', name: 'Comprobante de pago de seguro', applies: 'Equipos', expires: false, mandatory: false, monthly: true, description: 'Comprobante mensual de pago de la póliza' },
+  {
+    key: 'titulo',
+    name: 'Título del automotor',
+    applies: 'Equipos',
+    expires: false,
+    mandatory: true,
+    description: 'Título de propiedad del automotor',
+  },
+  {
+    key: 'cedula',
+    name: 'Cédula de identificación',
+    applies: 'Equipos',
+    expires: true,
+    validityDays: 730,
+    mandatory: true,
+    description: 'Cédula verde de identificación del automotor',
+  },
+  {
+    key: 'seguro',
+    name: 'Póliza de seguro',
+    applies: 'Equipos',
+    expires: true,
+    validityDays: 180,
+    mandatory: true,
+    policy: true,
+    description: 'Póliza de responsabilidad civil y daños',
+  },
+  {
+    key: 'vtv',
+    name: 'RTO / VTV',
+    applies: 'Equipos',
+    expires: true,
+    validityDays: 365,
+    mandatory: true,
+    description: 'Revisión técnica obligatoria',
+  },
+  {
+    key: 'ruta',
+    name: 'Habilitación RUTA',
+    applies: 'Equipos',
+    expires: true,
+    validityDays: 365,
+    mandatory: true,
+    description: 'Registro Único del Transporte Automotor de cargas',
+  },
+  {
+    key: 'pago_seguro',
+    name: 'Comprobante de pago de seguro',
+    applies: 'Equipos',
+    expires: false,
+    mandatory: false,
+    monthly: true,
+    description: 'Comprobante mensual de pago de la póliza',
+  },
 
-  { key: 'afip', name: 'Constancia de inscripción AFIP', applies: 'Empresa', expires: false, mandatory: true, description: 'Constancia de inscripción en AFIP' },
-  { key: 'art_empresa', name: 'Certificado de cobertura ART', applies: 'Empresa', expires: true, validityDays: 180, mandatory: true, description: 'Certificado de cobertura de la aseguradora de riesgos del trabajo' },
-  { key: 'rc', name: 'Póliza de responsabilidad civil', applies: 'Empresa', expires: true, validityDays: 365, mandatory: true, description: 'Póliza de responsabilidad civil general' },
-  { key: 'habilitacion', name: 'Habilitación municipal', applies: 'Empresa', expires: true, validityDays: 730, mandatory: true, description: 'Habilitación comercial de la base operativa' },
-  { key: 'iso', name: 'Certificado ISO 9001', applies: 'Empresa', expires: true, validityDays: 1095, mandatory: false, description: 'Certificación del sistema de gestión de calidad' },
-  { key: 'f931', name: 'Formulario 931', applies: 'Empresa', expires: false, mandatory: false, monthly: true, description: 'Declaración jurada de cargas sociales' },
+  {
+    key: 'afip',
+    name: 'Constancia de inscripción AFIP',
+    applies: 'Empresa',
+    expires: false,
+    mandatory: true,
+    description: 'Constancia de inscripción en AFIP',
+  },
+  {
+    key: 'art_empresa',
+    name: 'Certificado de cobertura ART',
+    applies: 'Empresa',
+    expires: true,
+    validityDays: 180,
+    mandatory: true,
+    description: 'Certificado de cobertura de la aseguradora de riesgos del trabajo',
+  },
+  {
+    key: 'rc',
+    name: 'Póliza de responsabilidad civil',
+    applies: 'Empresa',
+    expires: true,
+    validityDays: 365,
+    mandatory: true,
+    description: 'Póliza de responsabilidad civil general',
+  },
+  {
+    key: 'habilitacion',
+    name: 'Habilitación municipal',
+    applies: 'Empresa',
+    expires: true,
+    validityDays: 730,
+    mandatory: true,
+    description: 'Habilitación comercial de la base operativa',
+  },
+  {
+    key: 'iso',
+    name: 'Certificado ISO 9001',
+    applies: 'Empresa',
+    expires: true,
+    validityDays: 1095,
+    mandatory: false,
+    description: 'Certificación del sistema de gestión de calidad',
+  },
+  {
+    key: 'f931',
+    name: 'Formulario 931',
+    applies: 'Empresa',
+    expires: false,
+    mandatory: false,
+    monthly: true,
+    description: 'Declaración jurada de cargas sociales',
+  },
 ];

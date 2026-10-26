@@ -12,6 +12,7 @@ import {
   CATEGORIES,
   CITIES,
   COVENANTS,
+  MANAGEMENT_POSITIONS,
   POSITIONS,
   POSITION_HEADCOUNT,
   type PositionKey,
@@ -33,6 +34,8 @@ export interface DemoEmployee {
   dni: string;
   cuil: string;
   position: PositionKey;
+  /** `key` del sector de su ficha (`hierarchical_position`). */
+  sector: string;
   active: boolean;
   /** Offset (dias) de la fecha de ingreso. */
   admission: number;
@@ -119,7 +122,11 @@ function diagramFor(ctx: Ctx, position: PositionKey): WorkDiagramKey {
 
 function costCenterFor(ctx: Ctx, position: PositionKey): string {
   if (WORKSHOP.includes(position)) return 'taller';
-  if (['administrativo', 'analista_rrhh'].includes(position)) return 'admin';
+  if (
+    ['administrativo', 'analista_rrhh'].includes(position) ||
+    (MANAGEMENT_POSITIONS as readonly string[]).includes(position)
+  )
+    return 'admin';
   return weighted(ctx.faker, [
     ['anelo', 60],
     ['rincon', 40],
@@ -138,12 +145,21 @@ export async function seedEmployees(ctx: Ctx): Promise<DemoEmployee[]> {
   const inactiveIdx = new Set(
     sample(
       faker,
-      positions.map((_, i) => i).filter((i) => positions[i].key !== 'jefe_taller'),
+      positions
+        .map((_, i) => i)
+        .filter(
+          (i) =>
+            positions[i].key !== 'jefe_taller' &&
+            !(MANAGEMENT_POSITIONS as readonly string[]).includes(positions[i].key)
+        ),
       10
     )
   );
 
+  let choferCount = 0;
   for (const [index, pos] of positions.entries()) {
+    // Un chofer de cada cuatro está asignado a Logística (el puesto existe en los dos sectores).
+    const sector = pos.key === 'chofer' && choferCount++ % 4 === 3 ? 'logistica' : pos.hierarchy[0];
     file += faker.number.int({ min: 1, max: 4 });
     const person = makePerson(faker, usedDni, {
       today: cal.today,
@@ -185,6 +201,7 @@ export async function seedEmployees(ctx: Ctx): Promise<DemoEmployee[]> {
       dni: person.dni,
       cuil: person.cuil,
       position: pos.key,
+      sector,
       active,
       admission,
       diagram,
@@ -241,7 +258,7 @@ export async function seedEmployees(ctx: Ctx): Promise<DemoEmployee[]> {
       affiliate_status: ['jefe_base', 'jefe_taller', 'supervisor'].includes(pos.key)
         ? 'Fuera_de_convenio'
         : 'Dentro_de_convenio',
-      hierarchical_position: demoId('hierarchy', pos.hierarchy[0]),
+      hierarchical_position: demoId('hierarchy', sector),
       company_position: demoId('position', pos.key),
       workflow_diagram: demoId('work_diagram', diagram),
       category_id: demoId('category', category),

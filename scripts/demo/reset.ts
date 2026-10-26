@@ -31,6 +31,7 @@ import { seedCandidates, seedClothing, seedKpis } from './domains/hr.ts';
 import { seedIndicators } from './domains/indicators.ts';
 import { seedMaintenance } from './domains/maintenance.ts';
 import { seedOperations } from './domains/operations.ts';
+import { seedOrgChart } from './domains/org-chart.ts';
 import { seedOwnChecks } from './domains/own-checks.ts';
 import { SUPPLIER_DOCUMENTS_BUCKET, seedPurchases } from './domains/purchases.ts';
 import { seedThirdPartyChecks } from './domains/third-party-checks.ts';
@@ -113,6 +114,7 @@ async function main(): Promise<void> {
           await seedFiscalProfile(ctx);
           log('clientes, contratos y datos fiscales listos');
           const employees = await seedEmployees(ctx);
+          await seedOrgChart(ctx, employees);
           const { vehicles, others } = await seedVehicles(ctx);
           await seedDocuments(ctx, employees, vehicles);
           const grid = buildDiagramGrid(ctx, employees);
