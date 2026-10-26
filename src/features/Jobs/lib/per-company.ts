@@ -3,6 +3,7 @@ import 'server-only';
 import type { NotifyResult } from '@/features/Notifications/lib/dispatch.server';
 import { Logger } from '@/lib/logger';
 import { prismaSystem } from '@/shared/lib/prisma-system';
+import { runInCompanyScope } from '@/shared/lib/tenant-context';
 import { claimRun, finishRun, recordRunStart } from './runs';
 import { summarize, type JobName, type JobSummary, type JobUnitOutcome } from './types';
 
@@ -109,7 +110,10 @@ export async function runForEachCompany(params: {
 
     let result: CompanyWorkResult;
     try {
-      result = await params.work(company);
+      // El trabajo corre con la empresa como contexto del cliente `prisma`: los jobs no tienen request, y las funciones
+      // compartidas que usan (`notify`, `findExpiringBatches`) consultan con ese cliente. Sin esto, con el rol de la
+      // app la RLS rechazaba el alta del aviso y devolvía cero lotes (el job quedaba "sin nada que avisar").
+      result = await runInCompanyScope(company.id, () => params.work(company), 'job');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error desconocido';
       logger.error('Falló el job para una empresa', {
