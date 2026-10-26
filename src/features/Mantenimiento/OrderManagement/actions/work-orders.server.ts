@@ -3,11 +3,13 @@
 import { buildWorkOrderNumber } from '@/features/Mantenimiento/lib/work-order-generation';
 import { ACTIVITY_LOG } from '@/features/Mantenimiento/shared/activity-log/action-types';
 import { logActivity } from '@/features/Mantenimiento/shared/activity-log/log-activity';
+import { withMaintenanceActor } from '@/features/Mantenimiento/shared/maintenance-actor';
 import {
   getResourceKind,
   getResourceLabel,
   resourceIdFields,
 } from '@/features/Mantenimiento/shared/maintenance-resource';
+import { nextWorkOrderSequence } from '@/features/Mantenimiento/shared/order-numbering';
 import { getMaintenanceOrderCompanyId } from '@/features/Mantenimiento/shared/resource-company';
 import { Logger } from '@/lib/logger';
 import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
@@ -15,7 +17,16 @@ import { INVALIDATION_MAP } from '@/shared/constants/cache-invalidation-map';
 import { prisma } from '@/shared/lib/prisma';
 import { invalidateCacheTags } from '@/shared/utils/cache-invalidation';
 import { z } from 'zod';
-import { lockEditableOrder, OrderManagementError, requireOrderManagementPermissions, toFailure } from './access';
+import { ensureDiagnosticRepairType } from '../../utils/diagnostic-repair-type';
+import type { OrderChangeSet } from '../schemas/order-changes';
+import {
+  orderChangeSetSchema,
+  orderIdSchema,
+  plannedDatesSchema,
+  wizardSectorAssignmentsSchema,
+  wizardSectorOrderSchema,
+} from '../schemas/order-changes';
+import { OrderManagementError, lockEditableOrder, requireOrderManagementPermissions, toFailure } from './access';
 import {
   applyChiefCommentUpdates,
   applyDescriptionUpdates,
@@ -24,27 +35,13 @@ import {
   applyRepairTypeUpdates,
   requiredActionsForChanges,
 } from './item-changes';
-import {
-  orderChangeSetSchema,
-  orderIdSchema,
-  plannedDatesSchema,
-  wizardSectorAssignmentsSchema,
-  wizardSectorOrderSchema,
-} from '../schemas/order-changes';
 import { assertOrderInActiveCompany, assertSectorInCompany } from './perimeter';
-import { DIAGNOSTICO_REPAIR_TYPE_ID } from '../../utils/constants';
-import type { OrderChangeSet } from '../schemas/order-changes';
 import { getOrderGenerationPreview } from './queries.server';
-import { withMaintenanceActor } from '@/features/Mantenimiento/shared/maintenance-actor';
-import { nextWorkOrderSequence } from '@/features/Mantenimiento/shared/order-numbering';
 
 const logger = new Logger('OrderManagement/work-orders');
 
 /** Núcleo sin chequeo de permisos: lo llaman las dos acciones exportadas, que ya lo verificaron. */
-async function generateWorkOrdersCore(
-  orderId: string,
-  dates: { plannedStartDate: string; plannedEndDate: string }
-) {
+async function generateWorkOrdersCore(orderId: string, dates: { plannedStartDate: string; plannedEndDate: string }) {
   // Perímetro: el pedido tiene que ser de la empresa activa.
   await assertOrderInActiveCompany(orderId);
 
@@ -240,7 +237,8 @@ async function generateWorkOrdersCore(
             await tx.work_order_item_repairs.create({
               data: {
                 work_order_item_id: diagWoItem.id,
-                repair_type_id: DIAGNOSTICO_REPAIR_TYPE_ID,
+                // El tipo DIAGNÓSTICO es por empresa y se crea la primera vez (ticket 800)
+                repair_type_id: await ensureDiagnosticRepairType(tx, companyId),
                 status: 'pending',
                 is_diagnostico: true,
                 company_id: companyId,

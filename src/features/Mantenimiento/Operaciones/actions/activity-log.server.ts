@@ -6,6 +6,7 @@ import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
 import { CACHE_TAGS, CACHE_TTL } from '@/shared/constants/cache';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { runInCompanyScope } from '@/shared/lib/tenant-context';
 import { cacheLife, cacheTag } from 'next/cache';
 import { ACTIVITY_LOG_SELECT, getRequestItemComments, mapActivityLogEntry } from './operations-select';
 
@@ -52,7 +53,11 @@ async function getMaintenanceOrderActivityLogCached(companyId: string, orderId: 
   'use cache';
   cacheTag(CACHE_TAGS.MAINTENANCE_ORDERS);
   cacheLife({ revalidate: CACHE_TTL.PAGINATED_LIST });
+  return runInCompanyScope(companyId, () => getMaintenanceOrderActivityLogCachedQuery(companyId, orderId));
+}
 
+/** Cuerpo de `getMaintenanceOrderActivityLogCached`: corre dentro de `runInCompanyScope` (la RLS necesita la empresa). */
+async function getMaintenanceOrderActivityLogCachedQuery(companyId: string, orderId: string) {
   serverLogger.debug('Obteniendo historial de actividades', { data: { orderId } });
 
   try {
@@ -112,7 +117,11 @@ async function getMaintenanceRequestFullActivityLogCached(companyId: string, req
   'use cache';
   cacheTag(CACHE_TAGS.MAINTENANCE_REQUESTS);
   cacheLife({ revalidate: CACHE_TTL.PAGINATED_LIST });
+  return runInCompanyScope(companyId, () => getMaintenanceRequestFullActivityLogCachedQuery(companyId, requestId));
+}
 
+/** Cuerpo de `getMaintenanceRequestFullActivityLogCached`: corre dentro de `runInCompanyScope` (la RLS necesita la empresa). */
+async function getMaintenanceRequestFullActivityLogCachedQuery(companyId: string, requestId: string) {
   serverLogger.debug('Obteniendo historial completo de solicitud', { data: { requestId } });
 
   try {
@@ -221,7 +230,13 @@ async function getMaintenanceOrderFullActivityLogCached(companyId: string, order
   'use cache';
   cacheTag(CACHE_TAGS.MAINTENANCE_ORDERS);
   cacheLife({ revalidate: CACHE_TTL.PAGINATED_LIST });
+  return runInCompanyScope(companyId, () =>
+    getMaintenanceOrderFullActivityLogCachedQuery(companyId, orderId, requestId)
+  );
+}
 
+/** Cuerpo de `getMaintenanceOrderFullActivityLogCached`: corre dentro de `runInCompanyScope` (la RLS necesita la empresa). */
+async function getMaintenanceOrderFullActivityLogCachedQuery(companyId: string, orderId: string, requestId?: string) {
   serverLogger.debug('Obteniendo historial completo de pedido', { data: { orderId, requestId } });
 
   try {
@@ -413,7 +428,11 @@ async function getWorkOrderFullActivityLogCached(companyId: string, workOrderId:
   'use cache';
   cacheTag(CACHE_TAGS.WORK_ORDER_REPAIRS);
   cacheLife({ revalidate: CACHE_TTL.PAGINATED_LIST });
+  return runInCompanyScope(companyId, () => getWorkOrderFullActivityLogCachedQuery(companyId, workOrderId));
+}
 
+/** Cuerpo de `getWorkOrderFullActivityLogCached`: corre dentro de `runInCompanyScope` (la RLS necesita la empresa). */
+async function getWorkOrderFullActivityLogCachedQuery(companyId: string, workOrderId: string) {
   serverLogger.debug('Obteniendo historial completo de orden de trabajo', { data: { workOrderId } });
 
   try {

@@ -3,27 +3,24 @@
 import { refreshDocumentStatus } from '@/features/Documentacion/shared/compliance/server/document-status.server';
 import { ACTIVITY_LOG } from '@/features/Mantenimiento/shared/activity-log/action-types';
 import { logActivity } from '@/features/Mantenimiento/shared/activity-log/log-activity';
+import { withMaintenanceActor } from '@/features/Mantenimiento/shared/maintenance-actor';
+import { lockMaintenanceOrder } from '@/features/Mantenimiento/shared/order-lock';
+import { nextMaintenanceOrderNumber } from '@/features/Mantenimiento/shared/order-numbering';
+import { transitionMaintenanceOrder } from '@/features/Mantenimiento/shared/order-transition';
+import { requireMaintenancePermission } from '@/features/Mantenimiento/shared/permissions.server';
 import { Logger } from '@/lib/logger';
 import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
 import { CACHE_TAGS } from '@/shared/constants/cache';
 import { INVALIDATION_MAP } from '@/shared/constants/cache-invalidation-map';
-import { prisma } from '@/shared/lib/prisma';
 import { toDateOnly } from '@/shared/lib/date-only';
+import { prisma } from '@/shared/lib/prisma';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { runInCompanyScope } from '@/shared/lib/tenant-context';
 import { invalidateCacheTags } from '@/shared/utils/cache-invalidation';
 import { cacheTag } from 'next/cache';
-import type {
-  ApproveWorkshopEntryInput,
-  RejectPendingOrderInput,
-  ScheduleOrderInput,
-} from '../../types';
-import { withMaintenanceActor } from '@/features/Mantenimiento/shared/maintenance-actor';
-import { lockMaintenanceOrder } from '@/features/Mantenimiento/shared/order-lock';
-import { transitionMaintenanceOrder } from '@/features/Mantenimiento/shared/order-transition';
-import { requireMaintenancePermission } from '@/features/Mantenimiento/shared/permissions.server';
-import { nextMaintenanceOrderNumber } from '@/features/Mantenimiento/shared/order-numbering';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { assertOrderInActiveCompany } from '../../MaintenanceOrders/actions/order-perimeter';
 import { z } from 'zod';
+import { assertOrderInActiveCompany } from '../../MaintenanceOrders/actions/order-perimeter';
+import type { ApproveWorkshopEntryInput, RejectPendingOrderInput, ScheduleOrderInput } from '../../types';
 
 const serverLogger = new Logger('PedidosMantenimiento/actions');
 
@@ -84,7 +81,11 @@ const MAINTENANCE_ORDER_ITEMS_INCLUDE = {
 async function getCachedMaintenanceOrderById(orderId: string, companyId: string) {
   'use cache';
   cacheTag(CACHE_TAGS.MAINTENANCE_ORDERS);
+  return runInCompanyScope(companyId, () => getCachedMaintenanceOrderByIdQuery(orderId, companyId));
+}
 
+/** Cuerpo de `getCachedMaintenanceOrderById`: corre dentro de `runInCompanyScope` (la RLS necesita la empresa). */
+async function getCachedMaintenanceOrderByIdQuery(orderId: string, companyId: string) {
   serverLogger.debug('Obteniendo pedido por ID', { data: { orderId } });
 
   try {

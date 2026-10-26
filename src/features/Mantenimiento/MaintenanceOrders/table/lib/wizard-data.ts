@@ -7,7 +7,6 @@ import {
   type ExternalWorkshop,
   type WorkshopSector,
 } from '../../../OrderManagement/actions/queries.server';
-import { DIAGNOSTICO_REPAIR_TYPE_ID } from '../../../utils/constants';
 
 export interface MaintenanceOrderWizardData {
   sectors: WorkshopSector[];
@@ -26,9 +25,8 @@ export async function loadWizardData(): Promise<MaintenanceOrderWizardData> {
     getActiveExternalWorkshops(),
   ]);
 
-  const repairTypes = repairTypesData
-    .filter((r) => r.id !== DIAGNOSTICO_REPAIR_TYPE_ID)
-    .map((r) => ({ id: r.id, name: r.name }));
+  // `fetchAllTypesOfRepairs` ya excluye el tipo DIAGNÓSTICO (lo agrega solo el sistema)
+  const repairTypes = repairTypesData.map((r) => ({ id: r.id, name: r.name }));
 
   return { sectors, repairTypes, externalWorkshops };
 }

@@ -6,6 +6,7 @@ import { CACHE_TAGS } from '@/shared/constants/cache';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { runInCompanyScope } from '@/shared/lib/tenant-context';
 import { cacheLife, cacheTag } from 'next/cache';
 import { MAINTENANCE_REQUEST_FULL_SELECT, mapRequestWithAliases } from './request-select';
 
@@ -22,7 +23,11 @@ async function getCachedMaintenanceRequestById(requestId: string, companyId: str
   'use cache';
   cacheTag(CACHE_TAGS.MAINTENANCE_REQUESTS);
   cacheLife({ expire: 15, revalidate: 15, stale: 5 });
+  return runInCompanyScope(companyId, () => getCachedMaintenanceRequestByIdQuery(requestId, companyId));
+}
 
+/** Cuerpo de `getCachedMaintenanceRequestById`: corre dentro de `runInCompanyScope` (la RLS necesita la empresa). */
+async function getCachedMaintenanceRequestByIdQuery(requestId: string, companyId: string) {
   try {
     const request = await prisma.maintenance_requests.findFirst({
       where: withCompany({ id: requestId }, companyId),

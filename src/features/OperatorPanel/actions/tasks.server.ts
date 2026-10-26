@@ -3,13 +3,13 @@
 import { ACTIVITY_LOG } from '@/features/Mantenimiento/shared/activity-log/action-types';
 import { logActivity } from '@/features/Mantenimiento/shared/activity-log/log-activity';
 import { withMaintenanceActor } from '@/features/Mantenimiento/shared/maintenance-actor';
+import { getDiagnosticRepairTypeId } from '@/features/Mantenimiento/utils/diagnostic-repair-type';
 import {
   assertAssignedSector,
   assertMaintenanceOrderInScope,
   assertWorkOrderInScope,
   requireOperatorIdentity,
 } from '@/features/OperatorPanel/actions/perimeter';
-import { DIAGNOSTICO_REPAIR_TYPE_ID } from '@/features/Mantenimiento/utils/constants';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { revalidatePath } from 'next/cache';
@@ -39,7 +39,7 @@ export async function getRepairTypesForSector(sectorId: string) {
         // Mismos filtros y mismo orden que `getAllRepairTypes`: un tipo dado de baja seguía
         // apareciendo en el combo del sector.
         is_active: true,
-        id: { not: DIAGNOSTICO_REPAIR_TYPE_ID },
+        id: { not: getDiagnosticRepairTypeId(operator.companyId) },
       },
     },
     select: { types_of_repairs: { select: REPAIR_TYPE_SELECT } },
@@ -58,7 +58,11 @@ export async function getAllRepairTypes(): Promise<OperatorRepairType[]> {
   const operator = await requireOperatorIdentity();
 
   return prisma.types_of_repairs.findMany({
-    where: { company_id: operator.companyId, is_active: true, id: { not: DIAGNOSTICO_REPAIR_TYPE_ID } },
+    where: {
+      company_id: operator.companyId,
+      is_active: true,
+      id: { not: getDiagnosticRepairTypeId(operator.companyId) },
+    },
     select: REPAIR_TYPE_SELECT,
     orderBy: { name: 'asc' },
     // Catálogo acotado: un combo no necesita más que esto
