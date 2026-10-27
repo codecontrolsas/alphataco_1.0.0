@@ -518,6 +518,46 @@ export const BOARD_TEMPLATES = [
 export type BoardTemplateKey = (typeof BOARD_TEMPLATES)[number]['key'];
 
 /**
+ * #802: de los tableros predefinidos solo quedan a la vista Resumen y Vencimientos (la mayoría de los otros venían de
+ * GH, otro sistema). Los demás NO se borran: quedan comentados acá por las dudas. Para volver a mostrar uno, se
+ * descomenta su clave (y su sección en `ACTIVE_WIDGET_SECTIONS`). `BOARD_TEMPLATES` sigue completo: es el catálogo.
+ */
+export const ACTIVE_BOARD_TEMPLATE_KEYS: readonly BoardTemplateKey[] = [
+  'resumen',
+  // 'dia',
+  'vencimientos',
+  // 'operacion',
+  // 'flota',
+  // 'personal',
+  // 'desvios',
+  // 'indicadores',
+];
+
+/** Tableros predefinidos que se ofrecen hoy (los de `ACTIVE_BOARD_TEMPLATE_KEYS`, en el orden del catálogo). */
+export const ACTIVE_BOARD_TEMPLATES = BOARD_TEMPLATES.filter((template) =>
+  ACTIVE_BOARD_TEMPLATE_KEYS.includes(template.key)
+);
+
+export function isActiveBoardTemplate(key: string | null | undefined): key is BoardTemplateKey {
+  return ACTIVE_BOARD_TEMPLATE_KEYS.some((active) => active === key);
+}
+
+/**
+ * #802: secciones del catálogo de widgets que se pueden ver y agregar. Las de los tableros ocultos quedan comentadas
+ * (sus widgets siguen en `WIDGETS`, pero no se muestran ni se pueden agregar, aunque estén en un tablero guardado).
+ */
+export const ACTIVE_WIDGET_SECTIONS: readonly WidgetSection[] = [
+  'resumen',
+  // 'dia',
+  'vencimientos',
+  // 'operacion',
+  // 'flota',
+  // 'personal',
+  // 'desvios',
+  // 'indicadores',
+];
+
+/**
  * Links viejos (`?tab=` / `?subtab=` de las secciones Resumen/Vencimientos/Análisis, que siguen
  * en el Manual de Ayuda y en marcadores) → tablero por defecto equivalente.
  */

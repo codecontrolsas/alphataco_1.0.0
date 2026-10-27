@@ -3,6 +3,7 @@ import { StateBlock } from '@/shared/components/common/StateBlock';
 import { ChevronRight, CircleCheck } from 'lucide-react';
 import Link from 'next/link';
 import { loadAttentionInbox, type AttentionTone } from '../lib/attention.server';
+import { AttentionInboxAccordion } from './AttentionInboxAccordion';
 
 /** Franja de color a la izquierda de cada fila: lo único con color en la bandeja. Clases escritas completas (Tailwind v4). */
 const TONE_RAIL: Record<AttentionTone, string> = {
@@ -72,36 +73,49 @@ export async function AttentionInboxWidget() {
     );
   }
 
+  // Totales del acordeón cerrado: salen de las MISMAS filas (ya filtradas por permisos) que la lista y el contador.
+  const sumTone = (tone: AttentionTone) =>
+    items.filter((item) => item.tone === tone).reduce((total, item) => total + item.count, 0);
+  const totals = {
+    sections: items.length,
+    cases: items.reduce((total, item) => total + item.count, 0),
+    danger: sumTone('danger'),
+    warn: sumTone('warn'),
+    info: sumTone('info'),
+  };
+
   return (
     <>
       {failedNote}
-      {/* El marco del widget (SectionCard) es el contenedor de las container queries. */}
-      <ul className="grid grid-cols-1 gap-2 @2xl:grid-cols-2">
-        {items.map((item) => (
-          <li key={item.key} className="min-w-0">
-            <Link
-              href={item.href}
-              className="group hover:bg-accent focus-visible:ring-ring relative flex min-h-14 items-center gap-3 overflow-hidden rounded-lg border py-2.5 pr-3 pl-4 outline-none focus-visible:ring-2"
-            >
-              <span aria-hidden="true" className={cn('absolute inset-y-0 left-0 w-1', TONE_RAIL[item.tone])} />
-              <span className="min-w-12 shrink-0 text-right font-mono text-xl leading-none font-semibold tabular-nums">
-                {item.count.toLocaleString('es-AR')}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="line-clamp-2 text-sm font-medium text-pretty">{item.label}</span>
-                <span className="text-muted-foreground block truncate text-xs">
-                  {item.module}
-                  <span className="sr-only"> · {TONE_WORD[item.tone]}</span>
+      <AttentionInboxAccordion totals={totals}>
+        {/* El marco del widget (SectionCard) es el contenedor de las container queries. */}
+        <ul className="grid grid-cols-1 gap-2 @2xl:grid-cols-2">
+          {items.map((item) => (
+            <li key={item.key} className="min-w-0">
+              <Link
+                href={item.href}
+                className="group hover:bg-accent focus-visible:ring-ring relative flex min-h-14 items-center gap-3 overflow-hidden rounded-lg border py-2.5 pr-3 pl-4 outline-none focus-visible:ring-2"
+              >
+                <span aria-hidden="true" className={cn('absolute inset-y-0 left-0 w-1', TONE_RAIL[item.tone])} />
+                <span className="min-w-12 shrink-0 text-right font-mono text-xl leading-none font-semibold tabular-nums">
+                  {item.count.toLocaleString('es-AR')}
                 </span>
-              </span>
-              <ChevronRight
-                aria-hidden="true"
-                className="text-muted-foreground size-4 shrink-0 transition-transform group-hover:translate-x-0.5"
-              />
-            </Link>
-          </li>
-        ))}
-      </ul>
+                <span className="min-w-0 flex-1">
+                  <span className="line-clamp-2 text-sm font-medium text-pretty">{item.label}</span>
+                  <span className="text-muted-foreground block truncate text-xs">
+                    {item.module}
+                    <span className="sr-only"> · {TONE_WORD[item.tone]}</span>
+                  </span>
+                </span>
+                <ChevronRight
+                  aria-hidden="true"
+                  className="text-muted-foreground size-4 shrink-0 transition-transform group-hover:translate-x-0.5"
+                />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </AttentionInboxAccordion>
     </>
   );
 }
