@@ -6,6 +6,7 @@ export const JOB_NAMES = [
   'warehouse-batch-expiry',
   'documents-status',
   'processed-commands-purge',
+  'hse-expired-attempts',
 ] as const;
 
 export type JobName = (typeof JOB_NAMES)[number];
