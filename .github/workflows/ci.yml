@@ -43,7 +43,7 @@ jobs:
               - '!.planes/**'
               - '!.zed/**'
               - '!.husky/**'
-      # El e2e bajo RLS (informativo) solo se corre si el cambio puede afectarlo; en main siempre. Sobreincluir es seguro.
+      # El e2e bajo RLS (obligatorio) solo se corre si el cambio puede afectarlo; en main siempre. Sobreincluir es seguro.
       - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
         id: rls
         with:
@@ -194,7 +194,8 @@ jobs:
       runs_on: ${{ vars.CI_RUNNER }}
       image_artifact: e2e-image
 
-  # Mismo e2e con la app conectada como `alphataco_app` (sin BYPASSRLS). Informativo por ahora.
+  # Mismo e2e con la app conectada como `alphataco_app` (sin BYPASSRLS). Obligatorio: entra en `CI gate`; corre en paralelo
+  # con `e2e` sobre la misma imagen, asi que no alarga el camino critico.
   # Corre en main (push y PR a main) o cuando el cambio toca lo que puede afectarlo (ver filtro `rls`).
   e2e-rls:
     needs: [changes, image]
@@ -206,11 +207,10 @@ jobs:
       image_artifact: e2e-image
 
   # Un unico check que resume los obligatorios (los jobs salteados por filtros de rutas cuentan como ok).
-  # e2e-rls queda afuera: es informativo.
   ci-gate:
     name: CI gate
     if: always()
-    needs: [changes, docs-check, types-and-lint, db-tests, image, e2e]
+    needs: [changes, docs-check, types-and-lint, db-tests, image, e2e, e2e-rls]
     # Cuesta segundos: va al mismo runner que el resto para no gastar minutos de GitHub.
     runs-on: ${{ vars.CI_RUNNER }}
     timeout-minutes: 5

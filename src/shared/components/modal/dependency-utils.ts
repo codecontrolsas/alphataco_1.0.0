@@ -1,6 +1,7 @@
 'use server';
 
 import { refreshDocumentStatus } from '@/features/Documentacion/shared/compliance/server/document-status.server';
+import { syncHseAcknowledgements } from '@/features/Hse/use-cases/sync-acknowledgements';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
@@ -41,7 +42,11 @@ const REPLACEMENT_SOURCES = {
 
 export type ReplacementSourceTable = keyof typeof REPLACEMENT_SOURCES;
 
-export interface FetchDependenciesParams<T extends DependencyTargetTable, C extends string, Select extends string = '*'> {
+export interface FetchDependenciesParams<
+  T extends DependencyTargetTable,
+  C extends string,
+  Select extends string = '*',
+> {
   /** Tabla donde se buscarán las dependencias (la "target"). */
   targetTable: T;
   /** Columna FK de la tabla target que referencia al registro fuente. */
@@ -166,6 +171,10 @@ export async function reassignDependencies<T extends DependencyTargetTable>(para
           data: { [targetColumn]: toValue } as Prisma.employeesUpdateManyMutationInput,
         });
         if (result.count > 0) await refreshDocumentStatus(tx, 'Persona', { companyId });
+        // Cambiaron puestos o sectores en masa: se concilian los documentos HSE de la empresa (idempotente).
+        if (result.count > 0 && (targetColumn === 'company_position' || targetColumn === 'hierarchical_position')) {
+          await syncHseAcknowledgements(tx, { companyId });
+        }
         return result.count;
       });
     }

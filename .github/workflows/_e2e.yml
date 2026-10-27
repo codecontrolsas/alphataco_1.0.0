@@ -25,9 +25,7 @@ jobs:
   e2e:
     runs-on: ${{ inputs.runs_on }}
     timeout-minutes: 40
-    # El e2e bajo RLS es INFORMATIVO mientras la app se adapta (docs/arquitectura/LOOP-ESTADO.md, P2-C): si falla no
-    # bloquea el merge, pero deja el error en el reporte. Se vuelve obligatorio al cambiar DATABASE_URL en produccion.
-    continue-on-error: ${{ inputs.rls }}
+    # El e2e bajo RLS es OBLIGATORIO (sin `continue-on-error`): si falla, el job queda en rojo y `CI gate` bloquea el merge.
     env:
       # Imagen del almacenamiento (RustFS). Vacio = la que fija docker-compose.yml. Variable de repo STORAGE_IMAGE para
       # usar un espejo propio.

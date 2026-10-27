@@ -1,4 +1,5 @@
 import { refreshResourceStatus } from '@/features/Documentacion/shared/compliance/server/document-status.server';
+import { syncHseAcknowledgements } from '@/features/Hse/use-cases/sync-acknowledgements';
 import type { Prisma } from '@/generated/prisma/client';
 import type { EmployeeFormData } from '../schemas/employee-schema';
 import {
@@ -73,6 +74,8 @@ export async function createEmployeeCore(
     // Cache de status con el estado FINAL: contratistas/aptitudes/sectores se insertan DESPUES del
     // INSERT escalar. Va ultimo para que su valor sea el que queda en la transaccion.
     await refreshResourceStatus(tx, 'Persona', companyId, created.id);
+    // Documentos HSE ya publicados que le aplican por puesto, sector o a todos: quedan pendientes de aceptar.
+    await syncHseAcknowledgements(tx, { companyId, employeeId: created.id });
 
     return created;
   } catch (error) {

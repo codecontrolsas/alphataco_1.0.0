@@ -1,9 +1,11 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { getMyHseDocuments } from '@/features/Portal/actions/hse-documents.queries';
 import { getPortalEmployeeForPage } from '@/features/Portal/actions/perimeter';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { ChevronRight, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { DocumentsEmptyState } from './DocumentsEmptyState';
+import { HseDocumentCard } from './HseDocumentCard';
 
 const METHOD_LABELS = {
   invitation: 'por invitación',
@@ -14,6 +16,7 @@ const METHOD_LABELS = {
 /** Inicio del portal: quién sos (legajo, puesto, sector), estado del acceso y lo que tenés pendiente. */
 export async function PortalHome() {
   const employee = await getPortalEmployeeForPage();
+  const pending = (await getMyHseDocuments(employee)).filter((d) => d.status === 'pending');
   const fullName = `${employee.lastname} ${employee.firstname}`.trim();
   const initials = `${employee.firstname[0] ?? ''}${employee.lastname[0] ?? ''}`.toUpperCase();
   const role = [employee.position, employee.sector].filter(Boolean).join(' · ');
@@ -77,9 +80,26 @@ export async function PortalHome() {
             Mis documentos <ChevronRight aria-hidden="true" className="size-4" />
           </Link>
         </div>
-        <div className="bg-card rounded-xl border p-4">
-          <DocumentsEmptyState compact />
-        </div>
+        {pending.length === 0 ? (
+          <div className="bg-card rounded-xl border p-4">
+            <DocumentsEmptyState compact />
+          </div>
+        ) : (
+          <>
+            <p className="text-muted-foreground text-sm">
+              {pending.length === 1
+                ? 'Tenés 1 documento para leer y aceptar.'
+                : `Tenés ${pending.length} documentos para leer y aceptar.`}
+            </p>
+            <ul className="space-y-3">
+              {pending.slice(0, 3).map((d) => (
+                <li key={d.ackId}>
+                  <HseDocumentCard document={d} />
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </section>
     </div>
   );

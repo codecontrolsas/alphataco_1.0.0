@@ -1,4 +1,8 @@
-import { getUserAccessibleModulesServer, getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
+import { withoutDisabledHse } from '@/features/Hse/lib/feature-gate';
+import {
+  getUserAccessibleModulesServer,
+  getUserPermissionsMapServer,
+} from '@/features/Permissions/actions/permissions.server';
 import { resolveVisibleTabs } from '../../utils/tabs-visibility';
 import { NavMain } from '../NavMain';
 
@@ -17,7 +21,7 @@ export async function NavMainAsync() {
 
   return (
     <NavMain
-      accessibleModuleSlugs={accessibleModules.map((module) => module.module_slug)}
+      accessibleModuleSlugs={withoutDisabledHse(accessibleModules.map((module) => module.module_slug))}
       visibleTabs={resolveVisibleTabs(permissions)}
     />
   );

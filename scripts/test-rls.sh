@@ -6,7 +6,8 @@
 # - las listas `'use cache'` vacías (sin empresa en el contexto la RLS devuelve cero filas, y se cachean): Usuarios,
 #   Taller, Aprobaciones;
 # - las preferencias de tabla que nunca se guardaban (la política no coincidía con la clave);
-# - el tipo «Diagnóstico» oculto que bloqueaba crear uno propio con ese nombre.
+# - el tipo «Diagnóstico» oculto que bloqueaba crear uno propio con ese nombre;
+# - el alta de usuario que escribía `auth_*` con el rol de la app (cerradas a ese rol) y no veía perfiles de otra empresa.
 # Los jobs bajo RLS se prueban en `test-jobs.sh` (misma preparación de roles).
 #
 # Usa la base de trabajo `alphataco`; cada suite crea y borra sus propias empresas de prueba.
@@ -26,4 +27,5 @@ source scripts/lib/rls-roles.sh
 echo "==> Corriendo los tests de integracion bajo RLS..."
 npx vitest run --no-file-parallelism \
   src/shared/lib/cached-lists.rls.integration.test.ts \
-  src/shared/lib/user-flows.rls.integration.test.ts
+  src/shared/lib/user-flows.rls.integration.test.ts \
+  src/features/Auth/actions/register-user.rls.integration.test.ts

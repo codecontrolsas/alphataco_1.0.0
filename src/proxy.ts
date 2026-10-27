@@ -1,3 +1,4 @@
+import { legacyManualRedirectHref } from '@/features/Ayuda/Manual/lib/manual-urls';
 import { Logger } from '@/lib/logger';
 import { auth } from '@/shared/lib/auth';
 import { prismaSystem } from '@/shared/lib/prisma-system';
@@ -15,6 +16,7 @@ const logger = new Logger('Proxy');
  * 1. Verificar autenticación para /dashboard/* y /manual
  * 2. Mandar al operario anónimo (QR) a /maintenance
  * 3. Verificar que el usuario tenga empresa, por el claim de la sesión
+ * 4. Redirigir los enlaces viejos `?tab=manual` de cualquier ruta del dashboard a `/manual`
  *
  * Notas:
  * - /maintenance/* NO está protegido (acceso anónimo para empleados con CUIL)
@@ -40,6 +42,11 @@ export async function proxy(req: NextRequest) {
     logger.debug('Usuario anónimo intentando acceder a dashboard, redirigiendo a maintenance');
     return NextResponse.redirect(new URL('/maintenance', req.url));
   }
+
+  // 2b. Enlace viejo al manual (`?tab=manual[&guide=…]`) en cualquier ruta del dashboard: va a `/manual`, que valida el
+  //     permiso. Antes de las consultas de abajo, que la página del manual vuelve a hacer.
+  const manualHref = legacyManualRedirectHref(req.nextUrl.pathname, req.nextUrl.searchParams);
+  if (manualHref) return NextResponse.redirect(new URL(manualHref, req.url));
 
   // 3. Solo empleado (legajo vinculado, sin ser miembro activo ni duenio de ninguna empresa): no es usuario del
   //    dashboard. Va al portal de empleados. Se mira ANTES del claim: el alta de sesion le estampa la empresa del

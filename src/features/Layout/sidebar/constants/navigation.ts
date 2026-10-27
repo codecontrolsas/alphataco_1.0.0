@@ -270,18 +270,30 @@ export const navigationLinks: NavigationLink[] = [
     ],
   },
   {
+    name: 'HSE',
+    moduleSlug: 'hse',
+    href: '/dashboard/hse',
+    icon: MODULE_ICONS.hse,
+    position: 12,
+    items: [
+      { name: 'Documentos', tabSlug: 'documentos-hse' },
+      { name: 'Cumplimiento', tabSlug: 'cumplimiento' },
+      { name: 'Configuración', tabSlug: 'configuracion-hse' },
+    ],
+  },
+  {
     name: 'Formularios',
     moduleSlug: 'formularios',
     href: '/dashboard/forms',
     icon: MODULE_ICONS.formularios,
-    position: 12,
+    position: 13,
   },
   {
     name: 'Ayuda',
     moduleSlug: 'ayuda',
     href: '/dashboard/help',
     icon: MODULE_ICONS.ayuda,
-    position: 13,
+    position: 14,
     items: [
       { name: 'Tickets', tabSlug: 'tickets', badge: 'support-tickets' },
       // Página propia, fuera del dashboard: se lee al lado de la app sin dos menús (ticket 809).
@@ -293,7 +305,7 @@ export const navigationLinks: NavigationLink[] = [
     moduleSlug: 'configuracion',
     href: '/dashboard/configuration',
     icon: MODULE_ICONS.configuracion,
-    position: 14,
+    position: 15,
     items: [
       // Organización no lleva `subTabSlug`: `resolveActiveTab` elige el sub-item cuyo `subTabSlug` coincide con
       // `?subtab=` y, si ninguno coincide, el primero de la tab (Organización). Por eso va ANTES de Usuarios.
@@ -369,6 +381,9 @@ export const SUB_ITEM_ICONS: Record<string, NavIcon> = {
   'tesoreria:conciliacion': ListChecks,
   'tesoreria:retenciones-sufridas': Percent,
   'tesoreria:config-tesoreria': Settings,
+  'hse:documentos-hse': FileText,
+  'hse:cumplimiento': ListChecks,
+  'hse:configuracion-hse': Settings,
   'ayuda:tickets': LifeBuoy,
   'ayuda:manual': BookOpen,
 };

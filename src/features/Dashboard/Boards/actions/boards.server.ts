@@ -128,7 +128,11 @@ export async function getUserDashboardNavBoards(): Promise<BoardNavEntry[]> {
 
 const createInputSchema = z.object({ name: boardNameSchema });
 
-/** Crea un tablero vacío al final de la lista. */
+/**
+ * Crea un tablero vacío al final de la lista («Nuevo tablero»): siempre `private`, sin widgets, y se abre en modo
+ * personalizar. Difiere de «Guardar como preset» (`createDashboardPreset`), que copia el layout que se está viendo o
+ * editando, pide alcance (solo yo / organización / usuarios) y exige `canUseDashboard()`; esta acción no lo exige.
+ */
 export async function createUserBoard(
   input: z.input<typeof createInputSchema>
 ): Promise<BoardActionResult<{ id: string }>> {

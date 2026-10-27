@@ -28,6 +28,7 @@ import { seedDocuments } from './domains/documents.ts';
 import { seedEmployees } from './domains/employees.ts';
 import { seedFiscalProfile } from './domains/fiscal.ts';
 import { seedCandidates, seedClothing, seedKpis } from './domains/hr.ts';
+import { seedHse } from './domains/hse.ts';
 import { seedIndicators } from './domains/indicators.ts';
 import { seedMaintenance } from './domains/maintenance.ts';
 import { seedOperations } from './domains/operations.ts';
@@ -143,6 +144,7 @@ async function main(): Promise<void> {
           await seedClothing(ctx, employees);
           await seedKpis(ctx);
           await seedUsers(ctx, employees);
+          await seedHse(ctx, employees);
           await seedIndicators(ctx);
 
           files = ctx.files;
@@ -155,6 +157,7 @@ async function main(): Promise<void> {
             'invoice-pdfs',
             SUPPLIER_DOCUMENTS_BUCKET,
             CUSTOMER_DOCUMENTS_BUCKET,
+            'hse-files',
           ]);
           await uploadAll(s3, files);
           log(`${files.length} archivos subidos`);
@@ -172,6 +175,7 @@ async function main(): Promise<void> {
       { bucket: REMIT_BUCKET, prefix: `${REMIT_PREFIX}/` },
       { bucket: SUPPLIER_DOCUMENTS_BUCKET, prefix: `${DEMO_COMPANY_ID}/` },
       { bucket: CUSTOMER_DOCUMENTS_BUCKET, prefix: `${DEMO_COMPANY_ID}/` },
+      { bucket: 'hse-files', prefix: `${DEMO_COMPANY_ID}/` },
     ]).catch((error) => {
       log(`no se pudieron limpiar archivos viejos: ${String(error)}`);
       return 0;

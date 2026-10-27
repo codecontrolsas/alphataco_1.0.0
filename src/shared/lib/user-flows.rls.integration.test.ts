@@ -89,6 +89,14 @@ describe.skipIf(!RUN_RLS)('flujos de usuario bajo RLS (rol alphataco_app)', () =
       // Quedó en la base con la clave de siempre (no se cambia el formato: hay filas guardadas así).
       const stored = await owner.user_table_preferences.findUnique({ where: { user_id: `${USER}:${TABLE}` } });
       expect(stored?.preferences).toMatchObject({ pageSize: 50 });
+
+      // Modificar una fila existente actualiza `updated_at` (el upsert dejaba la fecha del alta).
+      const old = new Date('2000-01-01T00:00:00Z');
+      await owner.user_table_preferences.update({ where: { user_id: `${USER}:${TABLE}` }, data: { updated_at: old } });
+      await saveTableColumnVisibility(TABLE, { email: true });
+      const updated = await owner.user_table_preferences.findUnique({ where: { user_id: `${USER}:${TABLE}` } });
+      expect(updated?.updated_at.getTime()).toBeGreaterThan(old.getTime());
+      await saveTableColumnVisibility(TABLE, { email: false });
     });
 
     it('otro usuario no ve ni pisa las preferencias ajenas', async () => {

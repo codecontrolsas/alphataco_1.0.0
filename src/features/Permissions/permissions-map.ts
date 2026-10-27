@@ -1589,6 +1589,45 @@ export const PERMISSIONS = {
       },
     },
   },
+  // ============================================
+  // 15. HSE
+  // ============================================
+  // Documentos HSE (normas y procedimientos) que se publican y cada empleado acepta desde el portal (ticket 804,
+  // docs/arquitectura/BLUEPRINT-PORTAL-EMPLEADOS-Y-HSE.md). Ids al azar, no de prefijo: el módulo se trae a cada clon
+  // y un prefijo fijo puede chocar con uno propio de otro clon. El detalle de un documento hereda `documentos-hse`.
+  hse: {
+    slug: 'hse',
+    name: 'HSE',
+    moduleId: '33d06789-45d5-443d-9aaa-4bd1fd6777ff',
+    tabs: {
+      'documentos-hse': {
+        slug: 'documentos-hse',
+        name: 'Documentos HSE',
+        tabId: '81aed398-6ca8-47ce-93a2-57fae115c921',
+        parent: null,
+        // 'approve' = publicar (y publicar una versión nueva, que vuelve las aceptaciones a pendiente);
+        // 'delete' = retirar (archiva el documento: no se borra).
+        allowedActions: ['view', 'create', 'update', 'delete', 'approve'],
+        subtabs: {},
+      },
+      cumplimiento: {
+        slug: 'cumplimiento',
+        name: 'Cumplimiento',
+        tabId: '933d0164-aca5-4ece-83f8-789ee008bf8b',
+        parent: null,
+        allowedActions: ['view'],
+        subtabs: {},
+      },
+      'configuracion-hse': {
+        slug: 'configuracion-hse',
+        name: 'Configuración',
+        tabId: '5120f8e0-e97d-4ce1-be3f-e86b85dd7199',
+        parent: null,
+        allowedActions: ['view', 'create', 'update', 'delete'],
+        subtabs: {},
+      },
+    },
+  },
 } as const;
 
 // ============================================

@@ -379,3 +379,42 @@ BEGIN
   EXECUTE format('CREATE POLICY employee_self_delete ON %s AS RESTRICTIVE FOR DELETE USING (%s)', p_table, v_write_check);
 END
 $function$;
+
+-- function app_enable_read_gate: LECTURA acotada (RESTRICTIVA, se suma con AND a `tenant_isolation`) para tablas de
+-- CONTENIDO que el empleado del portal lee solo en parte (documentos HSE: lo publicado que le aplica, nunca borradores).
+-- Una fila se lee si el usuario tiene el permiso de lectura del dashboard ('modulo:tab:accion') o si la funcion de
+-- compuerta (`p_gate`, `SECURITY DEFINER`, recibe `p_column`) dice que si. Sin compuerta, leer exige el permiso.
+-- Falla cerrada: sin permiso y sin compuerta que lo habilite no hay filas, aunque una action se olvide de filtrar.
+-- Las escrituras NO se tocan: van con `app_require_any_permission_for_writes`.
+CREATE OR REPLACE FUNCTION public.app_enable_read_gate(
+  p_table regclass,
+  p_read_perm text,
+  p_gate regprocedure DEFAULT NULL,
+  p_column text DEFAULT 'id'
+)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_read text := format('(SELECT public.app_has_permission(%L, %L, %L))',
+    split_part(p_read_perm, ':', 1), split_part(p_read_perm, ':', 2), split_part(p_read_perm, ':', 3));
+  v_check text;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE format('%I.%I', schemaname, tablename)::regclass = p_table AND policyname = 'tenant_isolation') THEN
+    RAISE EXCEPTION 'La tabla % no tiene tenant_isolation: llamar antes a app_enable_tenant_isolation', p_table;
+  END IF;
+  IF p_gate IS NULL THEN
+    v_check := format('(%s)', v_read);
+  ELSE
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_attribute a WHERE a.attrelid = p_table AND a.attname = p_column AND NOT a.attisdropped
+    ) THEN
+      RAISE EXCEPTION 'La tabla % no tiene columna %', p_table, p_column;
+    END IF;
+    v_check := format('(%s OR %s(%I))', v_read, p_gate::oid::regproc, p_column);
+  END IF;
+
+  EXECUTE format('DROP POLICY IF EXISTS read_gate_select ON %s', p_table);
+  EXECUTE format('CREATE POLICY read_gate_select ON %s AS RESTRICTIVE FOR SELECT USING %s', p_table, v_check);
+END
+$function$;

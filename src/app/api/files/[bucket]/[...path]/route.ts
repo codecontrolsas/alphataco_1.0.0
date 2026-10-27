@@ -1,3 +1,4 @@
+import { isHseEnabled } from '@/features/Hse/lib/feature-gate';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { s3Client } from '@/shared/lib/s3';
@@ -70,6 +71,8 @@ export async function GET(
   const { bucket, path: segments } = await params;
 
   if (!isStorageBucket(bucket)) return notFound();
+  // HSE apagado en la instancia: sus archivos no se sirven.
+  if (bucket === 'hse-files' && !isHseEnabled()) return notFound();
 
   // Next ya decodifica cada segmento del catch-all (`getRouteMatcher` hace
   // `match.split('/').map(decode)`), y `buildStorageFileUrl` codifica segmento a segmento
@@ -83,9 +86,10 @@ export async function GET(
   if (!(await getSessionUserId())) return notFound();
 
   // El empleado del portal (legajo sin membresia) no lee archivos de la empresa por path: con la empresa activa del
-  // legajo podria pedir el documento de cualquier compañero adivinando la ruta. La fase 2 abre solo los documentos HSE
-  // publicados que le aplican. Los paneles de ropa y taller no sirven archivos por esta ruta.
-  if ((await getTenantContextOrNull())?.kind === 'employee') return notFound();
+  // legajo podria pedir el documento de cualquier compañero adivinando la ruta. La única excepción son los documentos HSE
+  // (`hse-files`): su dueño se resuelve por la fila de la versión bajo RLS, que al empleado solo le deja ver los
+  // publicados que le aplican (ver `resolveStorageObjectOwner`). Los paneles de ropa y taller no sirven archivos acá.
+  if (bucket !== 'hse-files' && (await getTenantContextOrNull())?.kind === 'employee') return notFound();
 
   try {
     const owner = await resolveStorageObjectOwner(bucket, key);

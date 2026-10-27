@@ -3,7 +3,7 @@ import {
   type BoardWidgetSlot,
   type CatalogWidget,
 } from '@/features/Dashboard/Boards/components/_DashboardBoard';
-import { BOARD_PARAM, PRESET_VISIBILITY_LABELS } from '@/features/Dashboard/Boards/lib/board-layout';
+import { BOARD_PARAM, presetScopeLabel } from '@/features/Dashboard/Boards/lib/board-layout';
 import { getUserBoards, getVisibleWidgetIds } from '@/features/Dashboard/Boards/lib/boards.server';
 import { renderWidget } from '@/features/Dashboard/Boards/lib/widget-render';
 import { findActiveBoardIndex } from '@/features/Dashboard/lib/board-nav';
@@ -102,11 +102,7 @@ export default async function DashboardComponent({ searchParams }: { searchParam
                 items={boards.map((board) => {
                   const widgets = `${board.layout.length} ${board.layout.length === 1 ? 'widget' : 'widgets'}`;
                   // #802: el desplegable lista presets; el alcance o quién lo compartió va en la descripción.
-                  const scope = !board.isOwner
-                    ? `Compartido por ${board.ownerName}`
-                    : board.persisted
-                      ? PRESET_VISIBILITY_LABELS[board.visibility]
-                      : 'Predefinido';
+                  const scope = presetScopeLabel(board);
                   return {
                     value: board.id,
                     label: board.name,
