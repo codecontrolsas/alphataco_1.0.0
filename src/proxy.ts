@@ -11,7 +11,7 @@ const logger = new Logger('Proxy');
  * refrescaba el JWT en cada request.
  *
  * Responsabilidades:
- * 1. Verificar autenticación para /dashboard/*
+ * 1. Verificar autenticación para /dashboard/* y /manual
  * 2. Mandar al operario anónimo (QR) a /maintenance
  * 3. Verificar que el usuario tenga empresa, por el claim de la sesión
  *
@@ -69,6 +69,7 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  // Solo proteger /dashboard/* - /maintenance/* es público para usuarios anónimos
-  matcher: ['/dashboard/:path*'],
+  // Proteger /dashboard/* y el manual (`/manual`, página propia fuera del dashboard: misma sesión y
+  // empresa que el resto). /maintenance/* es público para usuarios anónimos.
+  matcher: ['/dashboard/:path*', '/manual', '/manual/:path*'],
 };
