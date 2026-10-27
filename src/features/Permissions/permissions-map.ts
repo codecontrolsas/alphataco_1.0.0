@@ -1628,6 +1628,16 @@ export const PERMISSIONS = {
         allowedActions: ['view'],
         subtabs: {},
       },
+      // Actas de dictado y constancias firmadas (fase 4). 'create'/'update' = armar el acta en borrador; 'approve' = cierre
+      // formal (la congela con su huella); 'delete' = anular un acta cerrada o una constancia (con motivo, no se borran).
+      actas: {
+        slug: 'actas',
+        name: 'Actas y constancias',
+        tabId: '4a81c057-5669-42a8-ab53-530d626a62dd',
+        parent: null,
+        allowedActions: ['view', 'create', 'update', 'delete', 'approve'],
+        subtabs: {},
+      },
       'configuracion-hse': {
         slug: 'configuracion-hse',
         name: 'Configuración',
