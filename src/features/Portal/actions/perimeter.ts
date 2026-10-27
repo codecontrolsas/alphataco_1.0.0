@@ -3,6 +3,7 @@ import 'server-only';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionNeedsPasswordChange, getSessionUserId, isSessionAnonymous } from '@/shared/lib/session';
 import { getTenantContextOrNull } from '@/shared/lib/tenant-db';
+import { redirect } from 'next/navigation';
 import { cache } from 'react';
 
 /**
@@ -122,5 +123,17 @@ export async function requirePortalEmployee(): Promise<PortalEmployee> {
   const session = await getPortalSession();
   if (!session.ok) throw new Error('No hay una sesión del portal habilitada');
   if (session.employee.needsPasswordChange) throw new Error('Tenés que cambiar la contraseña temporal antes de seguir');
+  return session.employee;
+}
+
+/**
+ * Para las PÁGINAS del panel: igual que `requirePortalEmployee()` pero redirige en vez de lanzar. El layout y la página
+ * se renderizan en paralelo, así que si el acceso se revocó la página no puede contar con que el layout ya redirigió.
+ */
+export async function getPortalEmployeeForPage(): Promise<PortalEmployee> {
+  const session = await getPortalSession();
+  if (!session.ok) redirect('/portal/login');
+  // Con la contraseña temporal sin cambiar el layout NO renderiza la página (muestra solo el cambio); acá no se redirige
+  // al login porque el login devolvería a `/portal` (bucle). Los datos son del propio empleado.
   return session.employee;
 }

@@ -1,5 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { requirePortalEmployee } from '@/features/Portal/actions/perimeter';
+import { getPortalEmployeeForPage } from '@/features/Portal/actions/perimeter';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { ChevronRight, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
@@ -13,7 +13,7 @@ const METHOD_LABELS = {
 
 /** Inicio del portal: quién sos (legajo, puesto, sector), estado del acceso y lo que tenés pendiente. */
 export async function PortalHome() {
-  const employee = await requirePortalEmployee();
+  const employee = await getPortalEmployeeForPage();
   const fullName = `${employee.lastname} ${employee.firstname}`.trim();
   const initials = `${employee.firstname[0] ?? ''}${employee.lastname[0] ?? ''}`.toUpperCase();
   const role = [employee.position, employee.sector].filter(Boolean).join(' · ');

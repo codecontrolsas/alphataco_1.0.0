@@ -1,11 +1,11 @@
-import { requirePortalEmployee } from '@/features/Portal/actions/perimeter';
+import { getPortalEmployeeForPage } from '@/features/Portal/actions/perimeter';
 import { formatDateOnlyAr } from '@/shared/lib/argentina-time';
 import { ChangePasswordForm } from './ChangePasswordForm';
 import { PortalPageHeader } from './PortalPageHeader';
 
 /** Perfil del empleado: datos del legajo de solo lectura y cambio de contraseña. */
 export async function PortalProfile() {
-  const employee = await requirePortalEmployee();
+  const employee = await getPortalEmployeeForPage();
   const rows: { label: string; value: string | null; mono?: boolean }[] = [
     { label: 'Legajo', value: employee.file, mono: true },
     { label: 'Apellido y nombre', value: `${employee.lastname} ${employee.firstname}`.trim() },
