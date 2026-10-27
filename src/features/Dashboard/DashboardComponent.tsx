@@ -3,7 +3,7 @@ import {
   type BoardWidgetSlot,
   type CatalogWidget,
 } from '@/features/Dashboard/Boards/components/_DashboardBoard';
-import { BOARD_PARAM } from '@/features/Dashboard/Boards/lib/board-layout';
+import { BOARD_PARAM, PRESET_VISIBILITY_LABELS } from '@/features/Dashboard/Boards/lib/board-layout';
 import { getUserBoards, getVisibleWidgetIds } from '@/features/Dashboard/Boards/lib/boards.server';
 import { renderWidget } from '@/features/Dashboard/Boards/lib/widget-render';
 import { findActiveBoardIndex } from '@/features/Dashboard/lib/board-nav';
@@ -77,26 +77,43 @@ export default async function DashboardComponent({ searchParams }: { searchParam
         <ChartColorVars />
         <DashboardBoard
           key={active.id}
-          board={{ id: active.id, name: active.name, persisted: active.persisted }}
-          canMoveUp={activeIndex > 0}
-          canMoveDown={activeIndex < boards.length - 1}
+          board={{
+            id: active.id,
+            name: active.name,
+            persisted: active.persisted,
+            isOwner: active.isOwner,
+            ownerName: active.ownerName,
+            visibility: active.visibility,
+            sharedUserIds: active.sharedUserIds,
+          }}
+          // Se reordenan solo los propios (van primero en la lista; los compartidos, después).
+          canMoveUp={active.isOwner && activeIndex > 0}
+          canMoveDown={active.isOwner && activeIndex < boards.filter((board) => board.isOwner).length - 1}
           slots={slots}
           catalog={catalog}
           startEditing={firstValue(searchParams.personalizar) === '1'}
           selector={
-            boards.length > 1 ? (
+            boards.length > 0 ? (
               <ViewNav
                 layout="menu"
                 menuPrefix="Tablero"
                 ariaLabel="Tableros"
                 activeValue={active.id}
-                items={boards.map((board) => ({
-                  value: board.id,
-                  label: board.name,
-                  description:
-                    board.description ?? `${board.layout.length} ${board.layout.length === 1 ? 'widget' : 'widgets'}`,
-                  href: `/dashboard?${BOARD_PARAM}=${encodeURIComponent(board.id)}`,
-                }))}
+                items={boards.map((board) => {
+                  const widgets = `${board.layout.length} ${board.layout.length === 1 ? 'widget' : 'widgets'}`;
+                  // #802: el desplegable lista presets; el alcance o quién lo compartió va en la descripción.
+                  const scope = !board.isOwner
+                    ? `Compartido por ${board.ownerName}`
+                    : board.persisted
+                      ? PRESET_VISIBILITY_LABELS[board.visibility]
+                      : 'Predefinido';
+                  return {
+                    value: board.id,
+                    label: board.name,
+                    description: `${scope} · ${widgets}`,
+                    href: `/dashboard?${BOARD_PARAM}=${encodeURIComponent(board.id)}`,
+                  };
+                })}
               />
             ) : null
           }

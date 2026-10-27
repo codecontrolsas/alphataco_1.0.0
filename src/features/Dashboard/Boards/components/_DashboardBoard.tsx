@@ -39,22 +39,32 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowDown,
   ArrowUp,
+  Copy,
   LayoutGrid,
   MoreHorizontal,
   Pencil,
   Plus,
   RotateCcw,
+  Save,
   Settings2,
   Trash2,
+  Users,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { deleteUserBoard, moveUserBoard, resetUserBoards, saveUserBoardLayout } from '../actions/boards.server';
+import {
+  deleteUserBoard,
+  duplicateDashboardPreset,
+  moveUserBoard,
+  resetUserBoards,
+  saveUserBoardLayout,
+} from '../actions/boards.server';
 import { DASHBOARD_NAV_BOARDS_QUERY_KEY } from '../hooks/useActiveDashboardBoard';
-import { BOARD_PARAM, WIDGET_SPAN_CLASS, type BoardLayout } from '../lib/board-layout';
+import { BOARD_PARAM, PRESET_VISIBILITY_LABELS, WIDGET_SPAN_CLASS, type BoardLayout } from '../lib/board-layout';
 import { AddWidgetSheet } from './_AddWidgetSheet';
 import { BoardNameForm } from './_BoardNameForm';
+import { PresetForm, type PresetScopeItem } from './_PresetForm';
 import { SortableWidget } from './_SortableWidget';
 
 /** Widget del catálogo visible para el usuario (sin el árbol: solo metadatos). */
@@ -76,7 +86,16 @@ export interface BoardWidgetSlot {
 }
 
 interface DashboardBoardProps {
-  board: { id: string; name: string; persisted: boolean };
+  board: {
+    id: string;
+    name: string;
+    persisted: boolean;
+    /** Solo el dueño modifica el preset; los compartidos se ven y se duplican. */
+    isOwner: boolean;
+    ownerName: string | null;
+    visibility: PresetScopeItem['visibility'];
+    sharedUserIds: string[];
+  };
   canMoveUp: boolean;
   canMoveDown: boolean;
   slots: readonly BoardWidgetSlot[];
@@ -132,6 +151,8 @@ export function DashboardBoard({
   const catalogById = new Map(catalog.map((widget) => [widget.id, widget]));
 
   const nameSheet = useCatalogSheet<{ id: string; name: string }>({ canCreate: true, canUpdate: true });
+  // #802: «Guardar como preset» (alta con la personalización actual) y «Alcance» (editar quién lo ve).
+  const presetSheet = useCatalogSheet<PresetScopeItem>({ canCreate: true, canUpdate: board.isOwner });
 
   /**
    * Navega al tablero; si la URL no cambia, vuelve a pedir el render del servidor. Siempre se llama
@@ -211,7 +232,25 @@ export function DashboardBoard({
     onError: () => toast.error('No se pudieron restablecer los tableros. Intentá nuevamente.'),
   });
 
-  const busy = saveMutation.isPending || moveMutation.isPending || deleteMutation.isPending || resetMutation.isPending;
+  const duplicateMutation = useMutation({
+    mutationFn: () => duplicateDashboardPreset({ boardId: board.id, name: `${board.name} (copia)`.slice(0, 60) }),
+    onSuccess: (result) => {
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(`Se duplicó «${board.name}» como preset propio (${result.data.widgets} widgets)`);
+      goTo(boardHref(result.data.id));
+    },
+    onError: () => toast.error('No se pudo duplicar el preset. Intentá nuevamente.'),
+  });
+
+  const busy =
+    saveMutation.isPending ||
+    moveMutation.isPending ||
+    deleteMutation.isPending ||
+    resetMutation.isPending ||
+    duplicateMutation.isPending;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -283,12 +322,37 @@ export function DashboardBoard({
             <Button type="button" variant="ghost" onClick={cancelEdit} disabled={busy}>
               Cancelar
             </Button>
-            <Button type="button" onClick={() => saveMutation.mutate(draft)} disabled={busy || !dirty}>
-              {saveMutation.isPending ? 'Guardando…' : 'Guardar tablero'}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => presetSheet.openCreate()}
+              disabled={busy || draft.length === 0}
+            >
+              <Save aria-hidden="true" className="size-4" />
+              Guardar como preset
             </Button>
+            {board.isOwner ? (
+              <Button type="button" onClick={() => saveMutation.mutate(draft)} disabled={busy || !dirty}>
+                {saveMutation.isPending ? 'Guardando…' : 'Guardar tablero'}
+              </Button>
+            ) : null}
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
+            {/* #802: crear y guardar presets a la vista, sin abrir el menú «⋯». */}
+            <Button type="button" variant="outline" onClick={() => nameSheet.openCreate()} disabled={busy}>
+              <LayoutGrid aria-hidden="true" className="size-4" />
+              Nuevo tablero
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => presetSheet.openCreate()}
+              disabled={busy || savedLayout.length === 0}
+            >
+              <Save aria-hidden="true" className="size-4" />
+              Guardar como preset
+            </Button>
             <Button type="button" variant="outline" onClick={startEdit} disabled={busy}>
               <Settings2 aria-hidden="true" className="size-4" />
               Personalizar
@@ -305,29 +369,54 @@ export function DashboardBoard({
                   <MoreHorizontal aria-hidden="true" className="size-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem onSelect={() => nameSheet.openCreate()}>
-                  <LayoutGrid aria-hidden="true" className="size-4" />
-                  Nuevo tablero
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => nameSheet.openEdit({ id: board.id, name: board.name })}>
-                  <Pencil aria-hidden="true" className="size-4" />
-                  Renombrar tablero
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled={!canMoveUp} onSelect={() => moveMutation.mutate('up')}>
-                  <ArrowUp aria-hidden="true" className="size-4" />
-                  Mover antes en la lista
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled={!canMoveDown} onSelect={() => moveMutation.mutate('down')}>
-                  <ArrowDown aria-hidden="true" className="size-4" />
-                  Mover después en la lista
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" onSelect={() => setConfirm('delete')}>
-                  <Trash2 aria-hidden="true" className="size-4" />
-                  Eliminar tablero
-                </DropdownMenuItem>
+              <DropdownMenuContent align="end" className="w-60">
+                {board.isOwner ? (
+                  <>
+                    <DropdownMenuItem onSelect={() => nameSheet.openEdit({ id: board.id, name: board.name })}>
+                      <Pencil aria-hidden="true" className="size-4" />
+                      Renombrar tablero
+                    </DropdownMenuItem>
+                    {board.persisted ? (
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          presetSheet.openEdit({
+                            id: board.id,
+                            name: board.name,
+                            visibility: board.visibility,
+                            sharedUserIds: board.sharedUserIds,
+                          })
+                        }
+                      >
+                        <Users aria-hidden="true" className="size-4" />
+                        Cambiar quién lo ve
+                      </DropdownMenuItem>
+                    ) : null}
+                  </>
+                ) : null}
                 {board.persisted ? (
+                  <DropdownMenuItem onSelect={() => duplicateMutation.mutate()}>
+                    <Copy aria-hidden="true" className="size-4" />
+                    Duplicar como propio
+                  </DropdownMenuItem>
+                ) : null}
+                {board.isOwner ? (
+                  <>
+                    <DropdownMenuItem disabled={!canMoveUp} onSelect={() => moveMutation.mutate('up')}>
+                      <ArrowUp aria-hidden="true" className="size-4" />
+                      Mover antes en la lista
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={!canMoveDown} onSelect={() => moveMutation.mutate('down')}>
+                      <ArrowDown aria-hidden="true" className="size-4" />
+                      Mover después en la lista
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem variant="destructive" onSelect={() => setConfirm('delete')}>
+                      <Trash2 aria-hidden="true" className="size-4" />
+                      Eliminar tablero
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
+                {board.persisted && board.isOwner ? (
                   <DropdownMenuItem onSelect={() => setConfirm('reset')}>
                     <RotateCcw aria-hidden="true" className="size-4" />
                     Restablecer tableros por defecto
@@ -338,6 +427,21 @@ export function DashboardBoard({
           </div>
         )}
       </div>
+
+      {!board.isOwner ? (
+        <p className="text-muted-foreground text-sm">
+          Preset compartido por <span className="text-foreground font-medium">{board.ownerName}</span>: lo podés ver,
+          personalizar y guardar como preset propio, pero solo su dueño lo modifica.
+        </p>
+      ) : board.persisted && board.visibility !== 'private' ? (
+        <p className="text-muted-foreground text-sm">
+          Compartido con{' '}
+          {board.visibility === 'company'
+            ? 'toda la organización'
+            : `${board.sharedUserIds.length} ${board.sharedUserIds.length === 1 ? 'usuario' : 'usuarios'}`}
+          .
+        </p>
+      ) : null}
 
       <p role="status" className={cn('text-muted-foreground text-sm', !editing && 'sr-only')}>
         {editing
@@ -437,6 +541,28 @@ export function DashboardBoard({
           <BoardNameForm
             board={item}
             onSaved={(id, mode) => goTo(boardHref(id, mode === 'create' ? { personalizar: '1' } : undefined))}
+          />
+        )}
+      </CatalogFormSheet>
+
+      <CatalogFormSheet
+        sheet={presetSheet}
+        getKey={(item) => item.id}
+        title={{ create: 'Guardar como preset', edit: 'Quién ve este preset' }}
+        description={{
+          create: 'Guarda la personalización actual con un nombre. Aparece en el desplegable «Tablero».',
+          edit: `${PRESET_VISIBILITY_LABELS[board.visibility]} hoy. Solo vos podés cambiarlo.`,
+        }}
+      >
+        {({ item }) => (
+          <PresetForm
+            preset={item}
+            layout={editing ? draft : savedLayout}
+            onSaved={(id) => {
+              setEditing(false);
+              setAddOpen(false);
+              goTo(boardHref(id));
+            }}
           />
         )}
       </CatalogFormSheet>

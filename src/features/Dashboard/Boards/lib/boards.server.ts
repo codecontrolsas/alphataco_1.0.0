@@ -1,10 +1,13 @@
 import 'server-only';
 
 import {
+  ACTIVE_BOARD_TEMPLATES,
+  ACTIVE_WIDGET_SECTIONS,
   ALL_WIDGET_PERMISSION_KEYS,
   BOARD_TEMPLATES,
   WIDGETS,
   getWidgetDefinition,
+  isActiveBoardTemplate,
   isWidgetGranted,
   type BoardTemplateKey,
   type WidgetId,
@@ -32,7 +35,12 @@ export const getVisibleWidgetIds = cache(async (): Promise<ReadonlySet<WidgetId>
     })
   );
   const granted = new Set(keys.filter((key) => result.get(key) === true));
-  return new Set(WIDGETS.filter((widget) => isWidgetGranted(widget, granted)).map((widget) => widget.id));
+  // #802: los widgets de las secciones ocultas no se ven aunque el usuario tenga el permiso.
+  return new Set(
+    WIDGETS.filter((widget) => ACTIVE_WIDGET_SECTIONS.includes(widget.section) && isWidgetGranted(widget, granted)).map(
+      (widget) => widget.id
+    )
+  );
 });
 
 export interface DashboardBoard {
@@ -44,6 +52,20 @@ export interface DashboardBoard {
   /** Layout guardado, ya saneado (sin widgets inexistentes ni repetidos). */
   layout: BoardLayout;
   persisted: boolean;
+  /** El usuario de la sesión es el dueño del preset (solo el dueño lo modifica). Los por defecto son propios. */
+  isOwner: boolean;
+  /** Nombre del dueño, para los presets compartidos por otro usuario. */
+  ownerName: string | null;
+  visibility: BoardVisibility;
+  /** Usuarios con los que se comparte (solo se informa al dueño y con alcance `users`). */
+  sharedUserIds: string[];
+}
+
+export const BOARD_VISIBILITIES = ['private', 'company', 'users'] as const;
+export type BoardVisibility = (typeof BOARD_VISIBILITIES)[number];
+
+function asVisibility(value: string): BoardVisibility {
+  return BOARD_VISIBILITIES.find((item) => item === value) ?? 'private';
 }
 
 function templateLayout(widgets: readonly WidgetId[], visible: ReadonlySet<WidgetId>): BoardLayout {
@@ -57,7 +79,8 @@ function templateLayout(widgets: readonly WidgetId[], visible: ReadonlySet<Widge
 
 /** Tableros por defecto con lo que el usuario puede ver (los que quedan vacíos no se ofrecen). */
 export function buildDefaultBoards(visible: ReadonlySet<WidgetId>): DashboardBoard[] {
-  return BOARD_TEMPLATES.flatMap((template) => {
+  // #802: solo los predefinidos activos (Resumen y Vencimientos).
+  return ACTIVE_BOARD_TEMPLATES.flatMap((template) => {
     const layout = templateLayout(template.widgets, visible);
     if (layout.length === 0) return [];
     return [
@@ -68,6 +91,10 @@ export function buildDefaultBoards(visible: ReadonlySet<WidgetId>): DashboardBoa
         template: template.key,
         layout,
         persisted: false,
+        isOwner: true,
+        ownerName: null,
+        visibility: 'private' as const,
+        sharedUserIds: [],
       },
     ];
   });
@@ -86,8 +113,10 @@ export const getBoardOwner = cache(async (): Promise<{ userId: string; companyId
 });
 
 /**
- * Tableros del usuario en la empresa activa. Sin tableros guardados devuelve los tableros por
- * defecto (sin escribir nada): la primera personalización los guarda.
+ * Presets del Dashboard que ve el usuario en la empresa activa: los propios (en su orden) y, después, los que otros
+ * compartieron con toda la organización o con él. Sin presets propios se ofrecen los predefinidos activos (sin escribir
+ * nada: la primera personalización los guarda). Los tableros guardados de un predefinido que hoy está oculto (#802) no
+ * se listan (los datos no se borran).
  */
 export const getUserBoards = cache(async (): Promise<DashboardBoard[]> => {
   const [owner, visible] = await Promise.all([getBoardOwner(), getVisibleWidgetIds()]);
@@ -95,15 +124,44 @@ export const getUserBoards = cache(async (): Promise<DashboardBoard[]> => {
 
   try {
     const rows = await prisma.user_dashboards.findMany({
-      where: { user_id: owner.userId, company_id: owner.companyId },
+      where: {
+        company_id: owner.companyId,
+        OR: [
+          { user_id: owner.userId },
+          { visibility: 'company' },
+          { visibility: 'users', shares: { some: { user_id: owner.userId } } },
+        ],
+      },
       orderBy: [{ position: 'asc' }, { created_at: 'asc' }],
-      select: { id: true, name: true, template: true, layout: true },
+      select: {
+        id: true,
+        user_id: true,
+        name: true,
+        template: true,
+        layout: true,
+        visibility: true,
+        shares: { select: { user_id: true } },
+      },
     });
 
-    if (rows.length === 0) return buildDefaultBoards(visible);
+    const shown = rows.filter((row) => row.template === null || isActiveBoardTemplate(row.template));
+    const own = shown.filter((row) => row.user_id === owner.userId);
+    const shared = shown.filter((row) => row.user_id !== owner.userId);
 
-    return rows.map((row) => {
+    // Nombre de los dueños de los compartidos (una consulta; el perfil comparte id con el usuario).
+    const ownerIds = [...new Set(shared.map((row) => row.user_id))];
+    const profiles = ownerIds.length
+      ? await prisma.profile.findMany({
+          where: { credential_id: { in: ownerIds } },
+          select: { credential_id: true, fullname: true },
+        })
+      : [];
+    const ownerNames = new Map(profiles.map((profile) => [profile.credential_id, profile.fullname]));
+
+    const toBoard = (row: (typeof rows)[number]): DashboardBoard => {
       const template = asTemplateKey(row.template);
+      const isOwner = row.user_id === owner.userId;
+      const visibility = asVisibility(row.visibility);
       return {
         id: row.id,
         name: row.name,
@@ -111,8 +169,16 @@ export const getUserBoards = cache(async (): Promise<DashboardBoard[]> => {
         template,
         layout: parseStoredLayout(row.layout),
         persisted: true,
+        isOwner,
+        ownerName: isOwner ? null : ownerNames.get(row.user_id) ?? 'Otro usuario',
+        visibility,
+        sharedUserIds: isOwner && visibility === 'users' ? row.shares.map((share) => share.user_id) : [],
       };
-    });
+    };
+
+    const sharedBoards = shared.map(toBoard).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    if (own.length === 0) return [...buildDefaultBoards(visible), ...sharedBoards];
+    return [...own.map(toBoard), ...sharedBoards];
   } catch (error) {
     logger.error('Error al obtener los tableros del usuario', { data: { error } });
     throw error;
