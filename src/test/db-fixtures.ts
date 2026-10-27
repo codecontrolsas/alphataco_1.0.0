@@ -35,7 +35,9 @@ export async function ensureCity(prisma: PrismaClient): Promise<{ id: bigint; pr
  * y vitest corre los archivos en paralelo. Con la base vacía de CI, dos suites que llegaban a la
  * vez insertaban las dos y una caía con `roles_name_key` (P2002).
  */
-export async function ensureDefaultRole(prisma: PrismaClient): Promise<void> {
+// Tipado con lo que usa (no el cliente entero): comparar el cliente contextual con `PrismaClient` completo supera el
+// límite de instanciación de tipos (TS2589) cuando crece el esquema.
+export async function ensureDefaultRole(prisma: Pick<PrismaClient, '$executeRaw'>): Promise<void> {
   await prisma.$executeRaw`
     INSERT INTO roles (name, slug, is_system, is_active)
     VALUES ('User', 'user', true, true)

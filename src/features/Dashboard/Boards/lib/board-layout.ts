@@ -45,6 +45,26 @@ export const boardNameSchema = z
   .max(60, 'El nombre admite hasta 60 caracteres');
 
 export const boardNameFormSchema = z.object({ name: boardNameSchema });
+
+/** Alcance de un preset (#802): solo el dueño, toda la organización o usuarios puntuales. */
+export const PRESET_VISIBILITY_LABELS = {
+  private: 'Solo yo',
+  company: 'Toda la organización',
+  users: 'Usuarios específicos',
+} as const;
+
+/** Formulario «Guardar como preset» / «Alcance»: nombre, alcance y usuarios (si el alcance es `users`). */
+export const presetFormSchema = z
+  .object({
+    name: boardNameSchema,
+    visibility: z.enum(['private', 'company', 'users']),
+    userIds: z.array(z.string().uuid()).max(200, 'Se puede compartir con hasta 200 usuarios'),
+  })
+  .refine((values) => values.visibility !== 'users' || values.userIds.length > 0, {
+    message: 'Elegí al menos un usuario',
+    path: ['userIds'],
+  });
+export type PresetFormValues = z.infer<typeof presetFormSchema>;
 export type BoardNameFormValues = z.infer<typeof boardNameFormSchema>;
 
 /** Id de un tablero por defecto que todavía no se guardó en la base. */

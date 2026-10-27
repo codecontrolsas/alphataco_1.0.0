@@ -135,7 +135,17 @@ export function runInCompanyScope<T>(
   return companyScope.run(ctx, async () => await fn());
 }
 
-/** Contexto fijado con `runInCompanyScope`, si la operación corre dentro de uno. */
+/**
+ * Corre `fn` con un contexto COMPLETO (empresa + usuario) como contexto de `prisma`, para quien ya lo resolvió sin
+ * cookie: la API móvil autentica por token de portador y reutiliza las consultas de la web (que usan el cliente
+ * contextual). Sin esto, con el rol de aplicación la RLS devolvería cero filas sin error.
+ */
+export function runInTenantScope<T>(ctx: TenantContext, fn: () => Promise<T>): Promise<T> {
+  assertContext(ctx);
+  return companyScope.run(ctx, async () => await fn());
+}
+
+/** Contexto fijado con `runInCompanyScope` o `runInTenantScope`, si la operación corre dentro de uno. */
 export function getCompanyScopeContext(): TenantContext | null {
   return companyScope.getStore() ?? null;
 }

@@ -3,6 +3,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { isMobilePermission, isMobileTab } from '@/features/Permissions/permission-catalog';
 import { cn } from '@/lib/utils';
 import { SectionCard } from '@/shared/components/common/SectionCard';
 import { StateBlock } from '@/shared/components/common/StateBlock';
@@ -32,7 +33,7 @@ import type {
   PermissionTab,
   RoleSourceRef,
 } from '../../lib/permission-types';
-import { RoleActionToggle, UserActionToggle } from './ActionToggle';
+import { MobileBadge, RoleActionToggle, UserActionToggle } from './ActionToggle';
 import { InheritedNotes, getInheritedNotes } from './permission-notes';
 
 export interface RoleModeHandlers {
@@ -166,6 +167,7 @@ export function ModulePanel({
                 key={action.id}
                 action={action}
                 tabName={tab.name}
+                mobile={isMobilePermission(module.slug, tab.slug, action.slug)}
                 state={user.getState(key)}
                 effective={isGranted}
                 roles={user.roleSources.get(key) ?? []}
@@ -182,6 +184,7 @@ export function ModulePanel({
               key={action.id}
               action={action}
               tabName={tab.name}
+              mobile={isMobilePermission(module.slug, tab.slug, action.slug)}
               pressed={isGranted}
               disabled={disabled}
               highlighted={highlighted}
@@ -286,7 +289,10 @@ export function ModulePanel({
                         {depth > 1 ? (
                           <p className="text-muted-foreground text-xs">{parents.slice(1).join(' › ')}</p>
                         ) : null}
-                        <h4 className="text-sm font-semibold">{tab.name}</h4>
+                        <h4 className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">
+                          {tab.name}
+                          {isMobileTab(module.slug, tab.slug) ? <MobileBadge /> : null}
+                        </h4>
                         {tab.description ? (
                           <p className="text-muted-foreground text-xs text-pretty">{tab.description}</p>
                         ) : null}

@@ -597,6 +597,7 @@ model company {
   user_roles                    user_roles[]
   user_permissions              user_permissions[]
   user_dashboards               user_dashboards[]
+  user_dashboard_shares         user_dashboard_shares[]
   vehicles                      vehicles[]
   work_orders                   work_orders[]
   workshops                     workshops[]
@@ -1334,6 +1335,7 @@ model employees {
   portal_access_events employee_portal_access_events[]
 
   @@index([type_of_contract], map: "idx_employees_type_of_contract")
+  @@index([company_id, is_active, lastname, firstname, id], map: "idx_employees_company_active_name")
   @@schema("public")
 }
 
@@ -3370,13 +3372,33 @@ model user_dashboards {
   position   Int      @default(0)
   template   String?  @db.VarChar(40)
   layout     Json     @default("[]")
+  /// Alcance del preset (#802): private | company | users (con `user_dashboard_shares`).
+  visibility String   @default("private") @db.VarChar(20)
   created_at DateTime @default(now()) @db.Timestamptz(6)
   updated_at DateTime @default(now()) @db.Timestamptz(6)
   company    company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
   user       user     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  shares     user_dashboard_shares[]
 
   @@unique([user_id, company_id, name], map: "user_dashboards_user_company_name_key")
+  @@index([company_id, visibility], map: "idx_user_dashboards_company_visibility")
   @@index([user_id, company_id, position], map: "idx_user_dashboards_user_company_position")
+  @@schema("public")
+}
+
+/// Usuarios con los que se comparte un preset del Dashboard con alcance `users` (#802).
+model user_dashboard_shares {
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id   String          @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  dashboard_id String          @db.Uuid
+  user_id      String          @db.Uuid
+  created_at   DateTime        @default(now()) @db.Timestamptz(6)
+  dashboard    user_dashboards @relation(fields: [dashboard_id], references: [id], onDelete: Cascade)
+  user         user            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  company      company         @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@unique([dashboard_id, user_id], map: "user_dashboard_shares_dashboard_user_key")
+  @@index([user_id, company_id], map: "idx_user_dashboard_shares_user_company")
   @@schema("public")
 }
 
@@ -3915,6 +3937,7 @@ model user {
   accounts   account[]
   sessions   session[]
   dashboards user_dashboards[]
+  dashboard_shares user_dashboard_shares[]
 
   @@map("auth_user")
   @@schema("public")

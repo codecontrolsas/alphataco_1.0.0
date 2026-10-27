@@ -2,7 +2,7 @@
 
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
-import { Check } from 'lucide-react';
+import { Check, Smartphone } from 'lucide-react';
 import { useId } from 'react';
 import type { OverrideState, PermissionAction, RoleSourceRef } from '../../lib/permission-types';
 import { getActionColor, getActionIcon, getActionLabel } from './action-presentation';
@@ -12,15 +12,31 @@ interface ActionHeadingProps {
   descriptionId: string;
   /** Texto extra bajo la descripción (ej. qué depende de "Ver") */
   hint?: string | null;
+  /** La app móvil también aplica este permiso (`MOBILE_PERMISSION_KEYS`). */
+  mobile?: boolean;
 }
 
-function ActionHeading({ action, descriptionId, hint }: ActionHeadingProps) {
+/** Insignia «Móvil»: el permiso también rige en la app móvil. Informativa, no es un interruptor. */
+export function MobileBadge() {
+  return (
+    <span
+      className="bg-info-subtle text-info-subtle-foreground inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] leading-none font-medium"
+      title="También se aplica en la app móvil"
+    >
+      <Smartphone aria-hidden="true" className="size-3" />
+      Móvil
+    </span>
+  );
+}
+
+function ActionHeading({ action, descriptionId, hint, mobile }: ActionHeadingProps) {
   const Icon = getActionIcon(action.slug);
   return (
     <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
       <span className="flex items-center gap-1.5 text-sm font-medium">
         <Icon aria-hidden="true" className={cn('size-3.5 shrink-0', getActionColor(action.slug))} />
         <span className="truncate">{getActionLabel(action)}</span>
+        {mobile ? <MobileBadge /> : null}
       </span>
       {action.description ? (
         <span id={descriptionId} className="text-muted-foreground line-clamp-2 text-xs text-pretty">
@@ -39,6 +55,7 @@ interface RoleActionToggleProps {
   disabled?: boolean;
   highlighted?: boolean;
   hint?: string | null;
+  mobile?: boolean;
   onPressedChange: (pressed: boolean) => void;
 }
 
@@ -50,6 +67,7 @@ export function RoleActionToggle({
   disabled,
   highlighted,
   hint,
+  mobile,
   onPressedChange,
 }: RoleActionToggleProps) {
   const descriptionId = useId();
@@ -57,7 +75,7 @@ export function RoleActionToggle({
     <button
       type="button"
       aria-pressed={pressed}
-      aria-label={`${getActionLabel(action)} en ${tabName}`}
+      aria-label={`${getActionLabel(action)} en ${tabName}${mobile ? ' (también en la app móvil)' : ''}`}
       aria-describedby={action.description ? descriptionId : undefined}
       disabled={disabled}
       onClick={() => onPressedChange(!pressed)}
@@ -76,7 +94,7 @@ export function RoleActionToggle({
       >
         {pressed ? <Check className="size-3" strokeWidth={3} /> : null}
       </span>
-      <ActionHeading action={action} descriptionId={descriptionId} hint={hint} />
+      <ActionHeading action={action} descriptionId={descriptionId} hint={hint} mobile={mobile} />
     </button>
   );
 }
@@ -95,6 +113,7 @@ interface UserActionToggleProps {
   roles: RoleSourceRef[];
   disabled?: boolean;
   highlighted?: boolean;
+  mobile?: boolean;
   onStateChange: (state: OverrideState) => void;
 }
 
@@ -118,6 +137,7 @@ export function UserActionToggle({
   roles,
   disabled,
   highlighted,
+  mobile,
   onStateChange,
 }: UserActionToggleProps) {
   const descriptionId = useId();
@@ -137,7 +157,7 @@ export function UserActionToggle({
           aria-hidden="true"
           className={cn('mt-1.5 size-2 shrink-0 rounded-full', effective ? 'bg-ok' : 'bg-muted-foreground/40')}
         />
-        <ActionHeading action={action} descriptionId={descriptionId} />
+        <ActionHeading action={action} descriptionId={descriptionId} mobile={mobile} />
       </div>
       <p id={sourceId} className="text-muted-foreground text-xs">
         <span className={cn('font-medium', effective ? 'text-ok-subtle-foreground' : 'text-foreground')}>
@@ -155,7 +175,7 @@ export function UserActionToggle({
         onValueChange={(value) => {
           if (value) onStateChange(value as OverrideState);
         }}
-        aria-label={`${label} en ${tabName}`}
+        aria-label={`${label} en ${tabName}${mobile ? ' (también en la app móvil)' : ''}`}
         aria-describedby={`${sourceId}${action.description ? ` ${descriptionId}` : ''}`}
         className="grid w-full grid-cols-3"
       >
