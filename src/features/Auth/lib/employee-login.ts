@@ -17,6 +17,8 @@ export type EmployeeLoginResult<RequireCompany extends boolean> =
   | { error: string }
   | {
       userId: string;
+      /** Token de la sesión recién abierta (para escribirle claims sin depender de la cookie del request). */
+      sessionToken: string;
       employee: { id: string; company_id: RequireCompany extends true ? string : string | null };
       /** Cierra la sesión recién abierta, para el acceso que rechaza al empleado después. */
       rejectSession: () => Promise<void>;
@@ -78,6 +80,7 @@ export async function signInLinkedEmployee<RequireCompany extends boolean>(
 
   return {
     userId,
+    sessionToken,
     employee: employee as { id: string; company_id: RequireCompany extends true ? string : string | null },
     rejectSession: () => rejectLogin(sessionToken, requestHeaders),
   };

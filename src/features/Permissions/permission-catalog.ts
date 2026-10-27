@@ -39,6 +39,7 @@ export const ACTION_DESCRIPTIONS: Record<ActionSlug, string> = {
   reverse: 'Revertir un movimiento ya registrado',
   direct_exit: 'Sacar stock sin pedido aprobado',
   send: 'Enviar al proveedor por correo o marcar como enviado',
+  portal_access: 'Habilitar o deshabilitar el acceso del empleado al portal',
 };
 
 // ============================================
@@ -116,6 +117,7 @@ export const TAB_DESCRIPTIONS: Record<string, string> = {
   '20000000-0000-0000-0000-000000000063': 'Puesto, convenio, categoría y afectaciones del empleado',
   '20000000-0000-0000-0000-000000000065': 'Diagrama de trabajo del empleado',
   '3df67b2a-f5e7-47e0-849b-88698d055863': 'Entregas de indumentaria y EPP al empleado',
+  '9bd3625c-4245-4428-b2cf-fec178038f90': 'Acceso del empleado al portal: estado, invitación y bitácora',
 
   // ── Equipos ────────────────────────────────
   '30000000-0000-0000-0000-000000000001': 'Listado de la flota y alta de equipos',
