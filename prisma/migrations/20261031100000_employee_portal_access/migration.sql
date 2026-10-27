@@ -119,10 +119,14 @@ INSERT INTO actions (slug, name, description)
 VALUES ('portal_access', 'Habilitar portal', 'Habilitar o deshabilitar el acceso del empleado al portal')
 ON CONFLICT (slug) DO NOTHING;
 
+-- El módulo de Empleados y su pestaña padre los siembra `npm run db:seed` desde permissions-map.ts: en una base
+-- recién migrada (sin seed) todavía no existen y la inserción se omite; el seed crea la pestaña igual.
 INSERT INTO tabs (id, module_id, slug, name, description, order_index, parent_tab_id)
-VALUES ('9bd3625c-4245-4428-b2cf-fec178038f90', '3c54a757-162c-4afc-8ea5-dca462f92e0c', 'portal_empleado',
+SELECT '9bd3625c-4245-4428-b2cf-fec178038f90', '3c54a757-162c-4afc-8ea5-dca462f92e0c', 'portal_empleado',
   'Portal del empleado', 'Acceso del empleado al portal: estado, invitación y bitácora', 5,
-  '20000000-0000-0000-0000-000000000006')
+  '20000000-0000-0000-0000-000000000006'
+WHERE EXISTS (SELECT 1 FROM modules WHERE id = '3c54a757-162c-4afc-8ea5-dca462f92e0c')
+  AND EXISTS (SELECT 1 FROM tabs WHERE id = '20000000-0000-0000-0000-000000000006')
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description;
 
 INSERT INTO role_permissions (role_id, tab_id, action_id)
@@ -130,4 +134,5 @@ SELECT r.id, '9bd3625c-4245-4428-b2cf-fec178038f90'::uuid, a.id
 FROM roles r
 JOIN actions a ON a.slug IN ('view', 'portal_access')
 WHERE r.slug IN ('admin', 'administrador', 'full-access-provisional')
+  AND EXISTS (SELECT 1 FROM tabs WHERE id = '9bd3625c-4245-4428-b2cf-fec178038f90')
 ON CONFLICT (role_id, tab_id, action_id) DO NOTHING;
