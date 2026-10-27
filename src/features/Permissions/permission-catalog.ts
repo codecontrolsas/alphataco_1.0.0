@@ -119,6 +119,11 @@ export const TAB_DESCRIPTIONS: Record<string, string> = {
   '3df67b2a-f5e7-47e0-849b-88698d055863': 'Entregas de indumentaria y EPP al empleado',
   '9bd3625c-4245-4428-b2cf-fec178038f90': 'Acceso del empleado al portal: estado, invitación y bitácora',
 
+  // ── HSE ────────────────────────────────────
+  '81aed398-6ca8-47ce-93a2-57fae115c921': 'Normas y procedimientos: alta, versiones, destinatarios y publicación',
+  '933d0164-aca5-4ece-83f8-789ee008bf8b': 'Quién aceptó, quién tiene pendiente y quién rechazó cada documento',
+  '5120f8e0-e97d-4ce1-be3f-e86b85dd7199': 'Tipos de documento HSE',
+
   // ── Equipos ────────────────────────────────
   '30000000-0000-0000-0000-000000000001': 'Listado de la flota y alta de equipos',
   '30000000-0000-0000-0000-000000000011': 'Vehículos de la flota',
@@ -264,6 +269,11 @@ export const ACTION_OVERRIDES: Partial<Record<PermissionOverrideKey, ActionOverr
   'tesoreria:config-tesoreria:create': { description: 'Dar de alta cuentas, cajas y conceptos' },
   'tesoreria:config-tesoreria:update': { description: 'Editar, activar o desactivar cuentas, cajas y conceptos' },
   'tesoreria:config-tesoreria:delete': { description: 'Borrar cuentas, cajas y conceptos' },
+  'hse:documentos-hse:approve': {
+    name: 'Publicar',
+    description: 'Publicar documentos y versiones nuevas (las aceptaciones vuelven a pendiente)',
+  },
+  'hse:documentos-hse:delete': { name: 'Retirar', description: 'Retirar documentos publicados (quedan archivados)' },
 
   // Comercial
   'comercial:facturacion:create': { description: 'Armar borradores de factura y notas de crédito o débito' },

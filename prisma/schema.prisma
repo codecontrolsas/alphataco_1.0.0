@@ -684,6 +684,7 @@ model company_positions {
   employees                  employees[]
   pre_employees              pre_employees[]
   org_chart_positions        org_chart_positions[]
+  hse_targets                hse_document_targets[]
   company_id                 String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                    company                      @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
@@ -1333,6 +1334,8 @@ model employees {
   org_chart_positions org_chart_positions[]
   portal_access        employee_portal_access?
   portal_access_events employee_portal_access_events[]
+  hse_targets          hse_document_targets[]
+  hse_acknowledgements hse_document_acknowledgements[]
 
   @@index([type_of_contract], map: "idx_employees_type_of_contract")
   @@index([company_id, is_active, lastname, firstname, id], map: "idx_employees_company_active_name")
@@ -1458,6 +1461,7 @@ model hierarchy {
   other_equipment other_equipment[]
   vehicles        vehicles[]
   pre_employees   pre_employees[]
+  hse_targets     hse_document_targets[]
   company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company         company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
@@ -6505,5 +6509,166 @@ model employee_portal_access_events {
 
   @@index([company_id], map: "idx_employee_portal_access_events_company_id")
   @@index([employee_id, created_at(sort: Desc)], map: "idx_employee_portal_access_events_employee")
+  @@schema("public")
+}
+
+// ── HSE: documentos (ticket 804, fase 2) ────────────────────────────────────────────────────
+// Normas y procedimientos que HSE publica y cada empleado al que le aplican acepta desde el portal.
+// RLS: empresa (`tenant_isolation`) + lectura acotada (`app_enable_read_gate`) en el contenido y capa por empleado
+// (`app_enable_employee_self`) en las aceptaciones. Ver prisma/sql/hse.sql.
+
+enum hse_document_status {
+  draft
+  published
+  archived
+
+  @@schema("public")
+}
+
+enum hse_target_kind {
+  all
+  position
+  sector
+  employee
+
+  @@schema("public")
+}
+
+enum hse_ack_status {
+  pending
+  accepted
+  rejected
+
+  @@schema("public")
+}
+
+enum hse_ack_archive_reason {
+  /// Salió una versión nueva del documento.
+  superseded
+  /// El documento dejó de aplicarle al empleado (cambió de puesto o sector, se lo quitó de los destinatarios, baja).
+  no_longer_applies
+
+  @@schema("public")
+}
+
+/// Tipos de documento HSE de la empresa (norma, procedimiento, instructivo…).
+model hse_document_types {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id  String          @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  name        String
+  description String?
+  is_active   Boolean         @default(true)
+  created_at  DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime        @default(now()) @db.Timestamptz(6)
+  documents   hse_documents[]
+
+  @@unique([company_id, name], map: "hse_document_types_company_name_key")
+  @@index([company_id], map: "idx_hse_document_types_company_id")
+  @@schema("public")
+}
+
+/// Documento HSE. `current_version_id` = última versión PUBLICADA (null mientras es borrador).
+model hse_documents {
+  id                 String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id         String                          @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  type_id            String?                         @db.Uuid
+  title              String
+  description        String?
+  status             hse_document_status             @default(draft)
+  current_version_id String?                         @unique(map: "hse_documents_current_version_key") @db.Uuid
+  /// `profile.id` de quien lo creó (sin FK, como el resto de las columnas de auditoría).
+  created_by         String                          @db.Uuid
+  archived_at        DateTime?                       @db.Timestamptz(6)
+  archived_by        String?                         @db.Uuid
+  created_at         DateTime                        @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime                        @default(now()) @db.Timestamptz(6)
+  type               hse_document_types?             @relation(fields: [type_id], references: [id], onDelete: SetNull)
+  current_version    hse_document_versions?          @relation("hse_document_current_version", fields: [current_version_id], references: [id], onDelete: NoAction)
+  versions           hse_document_versions[]         @relation("hse_document_versions")
+  targets            hse_document_targets[]
+  acknowledgements   hse_document_acknowledgements[]
+
+  @@index([company_id, status], map: "idx_hse_documents_company_status")
+  @@schema("public")
+}
+
+/// Versión (archivo) de un documento. Una versión publicada no se modifica: los cambios son una versión nueva.
+model hse_document_versions {
+  id                 String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id         String                          @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  document_id        String                          @db.Uuid
+  version            Int
+  /// Key en el bucket `hse-files`: `<companyId>/documents/<documentId>/<versionId>.pdf`.
+  file_path          String                          @unique(map: "hse_document_versions_file_path_key")
+  file_name          String
+  file_size          Int
+  /// Huella SHA-256 del PDF (hex): la aceptación la copia, así queda constancia de QUÉ archivo se aceptó.
+  file_sha256        String
+  change_log         String?
+  expires_at         DateTime?                       @db.Date
+  published_at       DateTime?                       @db.Timestamptz(6)
+  published_by       String?                         @db.Uuid
+  created_by         String                          @db.Uuid
+  created_at         DateTime                        @default(now()) @db.Timestamptz(6)
+  document           hse_documents                   @relation("hse_document_versions", fields: [document_id], references: [id], onDelete: Cascade)
+  current_of         hse_documents?                  @relation("hse_document_current_version")
+  acknowledgements   hse_document_acknowledgements[]
+
+  @@unique([document_id, version], map: "hse_document_versions_document_version_key")
+  @@index([company_id], map: "idx_hse_document_versions_company_id")
+  @@schema("public")
+}
+
+/// A quién aplica un documento: todos, un puesto, un sector o un empleado puntual. Una fila por destinatario.
+model hse_document_targets {
+  id          String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id  String             @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  document_id String             @db.Uuid
+  kind        hse_target_kind
+  position_id String?            @db.Uuid
+  sector_id   String?            @db.Uuid
+  employee_id String?            @db.Uuid
+  created_at  DateTime           @default(now()) @db.Timestamptz(6)
+  document    hse_documents      @relation(fields: [document_id], references: [id], onDelete: Cascade)
+  position    company_positions? @relation(fields: [position_id], references: [id], onDelete: Cascade)
+  sector      hierarchy?         @relation(fields: [sector_id], references: [id], onDelete: Cascade)
+  employee    employees?         @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@index([document_id], map: "idx_hse_document_targets_document")
+  @@index([company_id], map: "idx_hse_document_targets_company_id")
+  @@schema("public")
+}
+
+/// Aceptación de UNA versión por UN empleado. Se crea pendiente al publicar (o al pasar a aplicarle) y la respuesta
+/// no se pisa (trigger `hse_ack_guard`). Lo que deja de aplicar se ARCHIVA (`archived_at`), nunca se borra.
+model hse_document_acknowledgements {
+  id              String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id      String                  @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  document_id     String                  @db.Uuid
+  version_id      String                  @db.Uuid
+  employee_id     String                  @db.Uuid
+  status          hse_ack_status          @default(pending)
+  responded_at    DateTime?               @db.Timestamptz(6)
+  reject_reason   String?
+  /// Constancia del momento de la respuesta: nombre, puesto y legajo como estaban ese día.
+  signer_name     String?
+  signer_position String?
+  signer_file     String?
+  /// Huella del archivo de la versión que se aceptó.
+  file_sha256     String?
+  ip              String?
+  user_agent      String?
+  archived_at     DateTime?               @db.Timestamptz(6)
+  archive_reason  hse_ack_archive_reason?
+  created_at      DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime                @default(now()) @db.Timestamptz(6)
+  document        hse_documents           @relation(fields: [document_id], references: [id], onDelete: Cascade)
+  version         hse_document_versions   @relation(fields: [version_id], references: [id], onDelete: Cascade)
+  employee        employees               @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@unique([version_id, employee_id], map: "hse_document_acknowledgements_version_employee_key")
+  @@index([employee_id, archived_at], map: "idx_hse_document_acknowledgements_employee")
+  @@index([document_id, archived_at], map: "idx_hse_document_acknowledgements_document")
+  @@index([company_id], map: "idx_hse_document_acknowledgements_company_id")
   @@schema("public")
 }

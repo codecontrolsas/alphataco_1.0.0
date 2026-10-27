@@ -7,6 +7,7 @@ import {
   ClipboardList,
   FileText,
   Handshake,
+  HardHat,
   Landmark,
   LayoutDashboard,
   Settings,
@@ -47,6 +48,7 @@ export const MODULE_ICONS: Record<ModuleSlug, ModuleIcon> = {
   almacenes: Boxes,
   compras: ShoppingCart,
   tesoreria: Landmark,
+  hse: HardHat,
 };
 
 /**
