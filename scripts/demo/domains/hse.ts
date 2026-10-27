@@ -7,11 +7,13 @@
  *   - Manejo defensivo: a choferes, v2 publicada hace pocos días (la v1 aceptada queda como historia).
  *   - EPP en taller: al sector Mantenimiento, v1, ~50% aceptado.
  *   - Trabajo en altura: borrador (no lo ve nadie).
+ * Capacitaciones (fase 3): matafuegos (a todos, con límite de tiempo), manejo en ruta (choferes) y un borrador, con
+ * intentos aprobados, desaprobados y sin intentos rendidos con las funciones reales del examen.
  * Ids deterministas: los links a un documento sobreviven al reset.
  */
 import { createHash } from 'node:crypto';
 import { POSITIONS } from '../data/catalog.ts';
-import { addPdf, type Ctx } from '../lib/ctx.ts';
+import { addPdf, withoutTriggers, type Ctx } from '../lib/ctx.ts';
 import { demoId } from '../lib/ids.ts';
 import type { DemoEmployee } from './employees.ts';
 
@@ -208,4 +210,354 @@ export async function seedHse(ctx: Ctx, employees: DemoEmployee[]): Promise<void
 
   const acks = await tx.hse_document_acknowledgements.count({ where: { company_id: company.id } });
   ctx.log(`HSE: ${DOCS.length} documentos, ${acks} aceptaciones`);
+  await seedHseTrainings(ctx);
+}
+
+// ── Capacitaciones (fase 3) ──────────────────────────────────────────────────────────────────
+
+interface DemoQuestion {
+  prompt: string;
+  points: number;
+  options: string[];
+  /** Posición de la opción correcta. */
+  correct: number;
+}
+
+interface DemoTraining {
+  key: string;
+  title: string;
+  kind: 'induction' | 'refresher' | 'specific' | 'other';
+  description: string;
+  targets: Target[];
+  /** Días atrás de la publicación; null = borrador. */
+  publishedDaysAgo: number | null;
+  passingScore: number;
+  maxAttempts: number;
+  timeLimitMinutes: number | null;
+  validityMonths: number | null;
+  materials: Array<{ title: string; kind: 'file' | 'link'; url?: string; required: boolean }>;
+  questions: DemoQuestion[];
+  /** Fracción de destinatarios que aprobó (con 1 o 2 intentos) y que desaprobó todos sus intentos. */
+  passedShare: number;
+  exhaustedShare: number;
+}
+
+const TRAININGS: DemoTraining[] = [
+  {
+    key: 'matafuegos',
+    title: 'Uso de matafuegos',
+    kind: 'induction',
+    description: 'Clases de fuego, tipos de extintor y la técnica PAS para usarlos en la base y en los equipos.',
+    targets: [{ kind: 'all' }],
+    publishedDaysAgo: 30,
+    passingScore: 70,
+    maxAttempts: 3,
+    timeLimitMinutes: 15,
+    validityMonths: 12,
+    materials: [
+      { title: 'Manual de uso de matafuegos', kind: 'file', required: true },
+      {
+        title: 'Video: técnica PAS',
+        kind: 'link',
+        url: 'https://www.youtube.com/watch?v=PQV71INDaqY',
+        required: false,
+      },
+    ],
+    questions: [
+      {
+        prompt: '¿Qué tipo de fuego es el de un tablero eléctrico con tensión?',
+        points: 2,
+        options: ['Clase A', 'Clase B', 'Clase C', 'Clase D'],
+        correct: 2,
+      },
+      {
+        prompt: '¿Qué significa la sigla PAS?',
+        points: 1,
+        options: [
+          'Presionar, Apuntar, Soltar',
+          'Quitar el precinto, Apuntar a la base, Apretar la palanca',
+          'Probar, Avisar, Salir',
+        ],
+        correct: 1,
+      },
+      {
+        prompt: '¿A dónde se apunta la descarga del matafuego?',
+        points: 1,
+        options: ['A la base de las llamas', 'A la punta de las llamas', 'Al humo'],
+        correct: 0,
+      },
+      {
+        prompt: 'Antes de usar un matafuego hay que:',
+        points: 1,
+        options: [
+          'Dar aviso y tener una vía de escape a la espalda',
+          'Abrir puertas y ventanas',
+          'Esperar a que llegue el supervisor',
+        ],
+        correct: 0,
+      },
+    ],
+    passedShare: 0.55,
+    exhaustedShare: 0.04,
+  },
+  {
+    key: 'manejo-ruta',
+    title: 'Manejo defensivo en ruta',
+    kind: 'specific',
+    description:
+      'Evaluación del procedimiento de manejo defensivo: velocidades, descansos y conducta en caminos de ripio.',
+    targets: [{ kind: 'position', positionKey: 'chofer' }],
+    publishedDaysAgo: 10,
+    passingScore: 80,
+    maxAttempts: 2,
+    timeLimitMinutes: null,
+    validityMonths: 24,
+    materials: [{ title: 'Procedimiento de manejo defensivo (resumen)', kind: 'file', required: true }],
+    questions: [
+      {
+        prompt: '¿Cuál es la velocidad máxima en caminos de ripio con el equipo cargado?',
+        points: 2,
+        options: ['40 km/h', '60 km/h', '80 km/h'],
+        correct: 0,
+      },
+      {
+        prompt: '¿Cada cuántas horas de manejo continuo hay que descansar?',
+        points: 1,
+        options: ['Cada 2 horas', 'Cada 4 horas', 'Solo al llegar'],
+        correct: 0,
+      },
+      {
+        prompt: 'El celular mientras se maneja:',
+        points: 1,
+        options: ['Se usa solo con manos libres y detenido', 'Se puede usar en recta', 'Se usa para mensajes cortos'],
+        correct: 0,
+      },
+    ],
+    passedShare: 0.4,
+    exhaustedShare: 0.1,
+  },
+  {
+    key: 'altura',
+    title: 'Trabajo en altura',
+    kind: 'specific',
+    description: 'Borrador en armado: arnés, línea de vida y permiso de trabajo.',
+    targets: [{ kind: 'sector', sectorKey: 'mantenimiento' }],
+    publishedDaysAgo: null,
+    passingScore: 70,
+    maxAttempts: 3,
+    timeLimitMinutes: 20,
+    validityMonths: 12,
+    materials: [],
+    questions: [
+      {
+        prompt: '¿Desde qué altura es obligatorio el arnés?',
+        points: 1,
+        options: ['1,8 m', '3 m', '5 m'],
+        correct: 0,
+      },
+    ],
+    passedShare: 0,
+    exhaustedShare: 0,
+  },
+];
+
+/**
+ * Capacitaciones de la demo. Quién la tiene asignada lo calcula la MISMA conciliación de la app
+ * (`hse_sync_training_assignments`) y los intentos se rinden con las MISMAS funciones del portal (`hse_start_attempt`,
+ * `hse_save_answer`, `hse_grade_attempt`) con el legajo de cada empleado como contexto: así los puntajes salen de la
+ * corrección real. Después se corren las fechas al pasado (sin triggers) para que la demo tenga historia.
+ */
+async function seedHseTrainings(ctx: Ctx): Promise<void> {
+  const { tx, company, faker } = ctx;
+  let attempts = 0;
+
+  for (const t of TRAININGS) {
+    const trainingId = demoId('hse-training', t.key);
+    await tx.hse_trainings.create({
+      data: {
+        id: trainingId,
+        company_id: company.id,
+        title: t.title,
+        description: t.description,
+        kind: t.kind,
+        passing_score: t.passingScore,
+        max_attempts: t.maxAttempts,
+        time_limit_minutes: t.timeLimitMinutes,
+        validity_months: t.validityMonths,
+        created_by: ctx.actorId,
+        created_at: daysAgo(ctx, (t.publishedDaysAgo ?? 1) + 3),
+      },
+      select: { id: true },
+    });
+    await tx.hse_training_targets.createMany({
+      data: t.targets.map((target) => ({
+        company_id: company.id,
+        training_id: trainingId,
+        kind: target.kind,
+        position_id: target.kind === 'position' ? demoId('position', target.positionKey) : null,
+        sector_id: target.kind === 'sector' ? demoId('hierarchy', target.sectorKey) : null,
+      })),
+    });
+    for (const [position, m] of t.materials.entries()) {
+      const materialId = demoId('hse-material', `${t.key}:${position}`);
+      const key = m.kind === 'file' ? `${company.id}/trainings/${trainingId}/${materialId}.pdf` : null;
+      let size = 0;
+      let sha = '';
+      if (key) {
+        await addPdf(ctx, HSE_BUCKET, key, {
+          title: m.title,
+          fields: [['Capacitación', t.title]],
+          body: t.description,
+          reference: `HSE-CAP-${t.key.toUpperCase()}`,
+        });
+        const body = ctx.files[ctx.files.length - 1]?.body ?? new Uint8Array();
+        size = body.byteLength;
+        sha = createHash('sha256').update(body).digest('hex');
+      }
+      await tx.hse_training_materials.create({
+        data: {
+          id: materialId,
+          company_id: company.id,
+          training_id: trainingId,
+          kind: m.kind,
+          title: m.title,
+          url: m.kind === 'link' ? m.url : null,
+          file_path: key,
+          file_name: key ? `${t.key}.pdf` : null,
+          file_size: key ? size : null,
+          file_sha256: key ? sha : null,
+          is_required: m.required,
+          position,
+        },
+        select: { id: true },
+      });
+    }
+    const keyByQuestion = new Map<string, { correct: string; wrong: string[] }>();
+    for (const [qIndex, q] of t.questions.entries()) {
+      const questionId = demoId('hse-question', `${t.key}:${qIndex}`);
+      await tx.hse_training_questions.create({
+        data: {
+          id: questionId,
+          company_id: company.id,
+          training_id: trainingId,
+          prompt: q.prompt,
+          points: q.points,
+          position: qIndex,
+        },
+        select: { id: true },
+      });
+      const optionIds = q.options.map((_, oIndex) => demoId('hse-option', `${t.key}:${qIndex}:${oIndex}`));
+      await tx.hse_training_options.createMany({
+        data: q.options.map((label, oIndex) => ({
+          id: optionIds[oIndex] as string,
+          company_id: company.id,
+          training_id: trainingId,
+          question_id: questionId,
+          label,
+          position: oIndex,
+        })),
+      });
+      await tx.hse_training_answer_keys.create({
+        data: {
+          question_id: questionId,
+          company_id: company.id,
+          training_id: trainingId,
+          option_id: optionIds[q.correct] as string,
+        },
+        select: { question_id: true },
+      });
+      keyByQuestion.set(questionId, {
+        correct: optionIds[q.correct] as string,
+        wrong: optionIds.filter((_, i) => i !== q.correct),
+      });
+    }
+    if (t.publishedDaysAgo === null) continue;
+
+    await tx.hse_trainings.update({
+      where: { id: trainingId },
+      data: { status: 'published', published_at: daysAgo(ctx, t.publishedDaysAgo), published_by: ctx.actorId },
+      select: { id: true },
+    });
+    await tx.$executeRaw`SELECT public.hse_sync_training_assignments(${company.id}::uuid, ${trainingId}::uuid, NULL::uuid)`;
+    const assignments = await tx.hse_training_assignments.findMany({
+      where: { training_id: trainingId, archived_at: null },
+      select: { employee_id: true },
+      orderBy: { employee_id: 'asc' },
+    });
+
+    for (const a of assignments) {
+      const roll = faker.number.float({ min: 0, max: 1 });
+      const plan: boolean[] =
+        roll < t.passedShare
+          ? roll < t.passedShare / 3
+            ? [false, true]
+            : [true]
+          : roll < t.passedShare + t.exhaustedShare
+            ? Array.from({ length: t.maxAttempts }, () => false)
+            : [];
+      if (plan.length === 0) continue;
+      // El examen se rinde como ESE empleado: las funciones exigen el legajo y la empresa del contexto.
+      await tx.$executeRaw`SELECT set_config('app.company_id', ${company.id}, true), set_config('app.employee_id', ${a.employee_id}, true), set_config('app.actor_kind', 'employee', true)`;
+      for (const m of t.materials.entries()) {
+        await tx.$executeRaw`SELECT public.hse_mark_material_read(${demoId('hse-material', `${t.key}:${m[0]}`)}::uuid)`;
+      }
+      let daysBack = faker.number.int({ min: 1, max: Math.max(t.publishedDaysAgo - 1, 1) });
+      for (const pass of plan) {
+        const started = await tx.$queryRaw<{ r: { ok: boolean; attemptId?: string } }[]>`
+          SELECT public.hse_start_attempt(${trainingId}::uuid) AS r`;
+        const attemptId = started[0]?.r.attemptId;
+        if (!attemptId) break;
+        for (const [questionId, options] of keyByQuestion) {
+          // Aprobado: todo bien. Desaprobado: la primera bien (si hay más de una) y el resto mal.
+          const first = questionId === [...keyByQuestion.keys()][0];
+          const optionId =
+            pass || (first && keyByQuestion.size > 2) ? options.correct : faker.helpers.arrayElement(options.wrong);
+          await tx.$queryRaw`SELECT public.hse_save_answer(${attemptId}::uuid, ${questionId}::uuid, ${optionId}::uuid)`;
+        }
+        await tx.$queryRaw`SELECT public.hse_grade_attempt(${attemptId}::uuid)`;
+        attempts += 1;
+        // Fechas al pasado (el reloj de la demo es "hoy"): sin triggers, porque un intento cerrado es inmutable.
+        const startedAt = ctx.cal.at(-daysBack, faker.number.int({ min: 8, max: 16 }));
+        const submittedAt = new Date(startedAt.getTime() + faker.number.int({ min: 4, max: 12 }) * 60_000);
+        await withoutTriggers(tx, async () => {
+          await tx.hse_training_attempts.update({
+            where: { id: attemptId },
+            data: {
+              started_at: startedAt,
+              submitted_at: submittedAt,
+              deadline_at: t.timeLimitMinutes ? new Date(startedAt.getTime() + t.timeLimitMinutes * 60_000) : null,
+            },
+            select: { id: true },
+          });
+          await tx.hse_training_answers.updateMany({
+            where: { attempt_id: attemptId },
+            data: { answered_at: submittedAt },
+          });
+          await tx.hse_training_assignments.updateMany({
+            where: { training_id: trainingId, employee_id: a.employee_id },
+            data: pass
+              ? {
+                  last_attempt_at: startedAt,
+                  passed_at: submittedAt,
+                  valid_until: t.validityMonths
+                    ? new Date(
+                        Date.UTC(
+                          submittedAt.getUTCFullYear(),
+                          submittedAt.getUTCMonth() + t.validityMonths,
+                          submittedAt.getUTCDate()
+                        )
+                      )
+                    : null,
+                }
+              : { last_attempt_at: startedAt },
+          });
+        });
+        daysBack = Math.max(daysBack - faker.number.int({ min: 1, max: 3 }), 0);
+      }
+    }
+    await tx.$executeRaw`SELECT set_config('app.company_id', ${company.id}, true), set_config('app.employee_id', '', true), set_config('app.actor_kind', '', true)`;
+  }
+
+  const assigned = await tx.hse_training_assignments.count({ where: { company_id: company.id } });
+  ctx.log(`HSE: ${TRAININGS.length} capacitaciones, ${assigned} asignaciones, ${attempts} intentos rendidos`);
 }
