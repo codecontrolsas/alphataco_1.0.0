@@ -18,3 +18,8 @@ export function isHseEnabled(): boolean {
 export function assertHseEnabled(): void {
   if (!isHseEnabled()) notFound();
 }
+
+/** Saca el módulo `hse` de la navegación (sidebar y buscador del header) si está apagado en la instancia. */
+export function withoutDisabledHse(moduleSlugs: string[]): string[] {
+  return isHseEnabled() ? moduleSlugs : moduleSlugs.filter((slug) => slug !== 'hse');
+}

@@ -13,7 +13,7 @@ import { Suspense } from 'react';
 import { ComplianceList } from '../Compliance/ComplianceList/ComplianceList';
 import { getHseDocumentDetail } from '../actions/queries.server';
 import { ComplianceBar } from '../components/ComplianceBar';
-import { HseStatusBadge } from '../components/HseStatusBadge';
+import { HseExpiredBadge, HseStatusBadge } from '../components/HseStatusBadge';
 import { HSE_DOCUMENT_STATUS_UI } from '../lib/status-presentation';
 import { DocumentActions } from './components/DocumentActions';
 
@@ -90,7 +90,10 @@ export async function HseDocumentDetailPage({ id, searchParams }: { id: string; 
               </div>
               <div>
                 <dt className="text-muted-foreground">Vence</dt>
-                <dd className="tabular-nums">{formatDay(shown.expiresAt)}</dd>
+                <dd className="flex flex-wrap items-center gap-1.5 tabular-nums">
+                  {formatDay(shown.expiresAt)}
+                  {shown.expired && document.status === 'published' && <HseExpiredBadge />}
+                </dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Publicado</dt>

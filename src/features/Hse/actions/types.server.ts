@@ -93,6 +93,9 @@ export async function deleteHseDocumentType(typeId: string): Promise<ActionResul
     revalidatePath('/dashboard/hse');
     return ok(null);
   } catch (error) {
+    // FK RESTRICT: aunque el conteo no los vea (permisos), un tipo con documentos no se borra.
+    if ((error as { code?: string })?.code === 'P2003')
+      return fail('El tipo tiene documentos: desactivalo en vez de borrarlo');
     logger.error('Error al borrar el tipo de documento HSE', { data: { error, typeId } });
     return fail('No se pudo borrar el tipo');
   }

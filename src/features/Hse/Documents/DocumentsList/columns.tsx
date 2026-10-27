@@ -6,7 +6,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import moment from 'moment';
 import Link from 'next/link';
 import { ComplianceBar } from '../../components/ComplianceBar';
-import { HseStatusBadge } from '../../components/HseStatusBadge';
+import { HseExpiredBadge, HseStatusBadge } from '../../components/HseStatusBadge';
 import { HSE_DOCUMENT_STATUS_LABELS } from '../../lib/constants';
 import { HSE_DOCUMENT_STATUS_UI } from '../../lib/status-presentation';
 import type { HseDocumentListItem } from './actions.server';
@@ -88,7 +88,12 @@ export function getColumns(): ColumnDef<HseDocumentListItem>[] {
       id: 'expires_at',
       accessorKey: 'expires_at',
       ...titled('Vence'),
-      cell: ({ row }) => <span className="tabular-nums">{formatDay(row.original.expires_at)}</span>,
+      cell: ({ row }) => (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="tabular-nums">{formatDay(row.original.expires_at)}</span>
+          {row.original.expired && <HseExpiredBadge />}
+        </div>
+      ),
     },
     {
       id: 'targets',

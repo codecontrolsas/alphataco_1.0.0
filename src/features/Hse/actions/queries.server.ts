@@ -2,6 +2,7 @@ import 'server-only';
 
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { prisma } from '@/shared/lib/prisma';
 import { UUID_RE } from '@/shared/lib/storage-buckets';
 import { buildStorageDownloadUrl, buildStorageFileUrl } from '@/shared/lib/storage-url';
@@ -148,6 +149,7 @@ export const getHseDocumentDetail = cache(async (documentId: string) => {
         sha256: v.file_sha256,
         changeLog: v.change_log,
         expiresAt: v.expires_at ? v.expires_at.toISOString().slice(0, 10) : null,
+        expired: !!v.expires_at && v.expires_at.toISOString().slice(0, 10) < argentinaDate(),
         publishedAt: v.published_at,
         isCurrent: v.id === document.current_version_id,
         viewUrl: buildStorageFileUrl(HSE_FILES_BUCKET, v.file_path),

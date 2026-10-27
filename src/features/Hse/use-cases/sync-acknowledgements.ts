@@ -10,7 +10,8 @@ import type { Prisma } from '@/generated/prisma/client';
  * Puntos de enganche (todos los escritores de `company_position`, `hierarchical_position` e `is_active` de employees):
  * - alta de empleado y conversión de candidato en legajo (`createEmployeeCore`);
  * - edición del legajo (`updateEmployeeMutation`): puesto o sector;
- * - baja y reintegro (`toggleEmployeeStatus`);
+ * - baja y reintegro (`toggleEmployeeStatus` en el legajo y `banCompanyUser`/`unbanCompanyUser` en Usuarios, que da de baja el legajo
+ *   vinculado);
  * - reasignación masiva al borrar un puesto o sector (`reassignDependencies`): concilia la empresa entera;
  * - publicar, versionar o cambiar los destinatarios de un documento (acciones de HSE).
  *

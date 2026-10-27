@@ -149,7 +149,7 @@ CREATE INDEX "idx_hse_document_acknowledgements_company_id" ON "hse_document_ack
 CREATE UNIQUE INDEX "hse_document_acknowledgements_version_employee_key" ON "hse_document_acknowledgements"("version_id", "employee_id");
 
 -- AddForeignKey
-ALTER TABLE "hse_documents" ADD CONSTRAINT "hse_documents_type_id_fkey" FOREIGN KEY ("type_id") REFERENCES "hse_document_types"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "hse_documents" ADD CONSTRAINT "hse_documents_type_id_fkey" FOREIGN KEY ("type_id") REFERENCES "hse_document_types"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "hse_documents" ADD CONSTRAINT "hse_documents_current_version_id_fkey" FOREIGN KEY ("current_version_id") REFERENCES "hse_document_versions"("id") ON DELETE NO ACTION ON UPDATE CASCADE;

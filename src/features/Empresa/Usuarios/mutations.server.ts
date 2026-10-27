@@ -1,6 +1,7 @@
 'use server';
 
 import { refreshResourceStatus } from '@/features/Documentacion/shared/compliance/server/document-status.server';
+import { syncHseAcknowledgements } from '@/features/Hse/use-cases/sync-acknowledgements';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { COMPANY_USERS_INVALIDATION } from '@/shared/constants/cache-invalidation-map';
@@ -117,6 +118,8 @@ async function applyUserStatusPlan(
         if (updated.count === 0) throw new Error('El legajo vinculado no pertenece a la empresa activa');
         // Baja/reintegro del legajo: `is_active` cambia qué documentos se exigen. Refresca el cache de status.
         await refreshResourceStatus(tx, 'Persona', companyId, employeeId);
+        // Baja del legajo: lo pendiente de HSE se archiva; reintegro: vuelve a aplicar.
+        await syncHseAcknowledgements(tx, { companyId, employeeId });
 
         const diagramResult = await callScalar(
           'update_employee_diagram_status',

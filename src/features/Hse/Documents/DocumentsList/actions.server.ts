@@ -13,6 +13,7 @@ import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { NULL_FILTER_VALUE, parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
@@ -137,6 +138,7 @@ function shape(
   rows: DocumentRow[],
   compliance: Map<string, { pending: number; accepted: number; rejected: number }> | null
 ) {
+  const today = argentinaDate();
   return rows.map((r) => ({
     id: r.id,
     title: r.title,
@@ -145,6 +147,11 @@ function shape(
     version: r.current_version?.version ?? null,
     // @db.Date: el día tal cual, sin correr zona horaria.
     expires_at: r.current_version?.expires_at ? r.current_version.expires_at.toISOString().slice(0, 10) : null,
+    /** Vencido: la fecha de vencimiento de la versión vigente ya pasó (hoy en hora argentina). */
+    expired:
+      r.status === 'published' &&
+      !!r.current_version?.expires_at &&
+      r.current_version.expires_at.toISOString().slice(0, 10) < today,
     published_at: r.current_version?.published_at ?? null,
     targets: r._count.targets,
     updated_at: r.updated_at,
