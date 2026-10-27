@@ -15,9 +15,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 import { switchActiveCompany } from '@/shared/actions/company-user.actions';
-import { CheckIcon, ChevronsUpDown, PlusCircle } from 'lucide-react';
-import { Building2 } from 'lucide-react';
 import Cookies from 'js-cookie';
+import { Building2, CheckIcon, ChevronsUpDown, PlusCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -30,7 +29,13 @@ import type { CompanyRow, CompanySelectorProps } from '../types/types';
  * A diferencia del bloque, el desplegable sigue siendo un `Command` dentro de un `Popover` y no
  * un `DropdownMenu`: el buscador ya estaba y hay usuarios con muchas empresas asignadas.
  */
-export function CompanySwitcher({ sharedCompanies, allCompanies, currentCompany }: CompanySelectorProps) {
+export function CompanySwitcher({
+  sharedCompanies,
+  allCompanies,
+  currentCompany,
+  canCreateCompany,
+  companyLimitText,
+}: CompanySelectorProps) {
   const { isMobile } = useSidebar();
   const [open, setOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<CompanyRow | null>(
@@ -164,13 +169,18 @@ export function CompanySwitcher({ sharedCompanies, allCompanies, currentCompany 
               </CommandList>
               <CommandSeparator />
               <div className="w-full p-2">
-                <Link
-                  href="/dashboard/configuration/companies/new"
-                  className={cn(buttonVariants({ variant: 'outline' }), 'flex w-full justify-center p-4')}
-                >
-                  <PlusCircle className="mr-2 size-4" />
-                  Agregar compañía
-                </Link>
+                {canCreateCompany ? (
+                  <Link
+                    href="/dashboard/configuration/companies/new"
+                    className={cn(buttonVariants({ variant: 'outline' }), 'flex w-full justify-center p-4')}
+                  >
+                    <PlusCircle className="mr-2 size-4" />
+                    Agregar compañía
+                  </Link>
+                ) : (
+                  // Límite de empresas alcanzado (ticket 807): no se ofrece el alta.
+                  <p className="text-muted-foreground px-2 py-1.5 text-center text-xs">{companyLimitText}</p>
+                )}
               </div>
             </Command>
           </PopoverContent>

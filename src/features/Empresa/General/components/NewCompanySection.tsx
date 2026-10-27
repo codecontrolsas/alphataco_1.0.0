@@ -1,4 +1,5 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { buttonVariants } from '@/components/ui/button';
 import { getIndustryTypes, hasAnyCompanyMembership } from '@/features/Empresa/General/actions/company.server';
 import CompanyFormFields from '@/features/Empresa/General/components/CompanyFormFields';
 import { CompanyLogoField } from '@/features/Empresa/General/components/CompanyLogoField';
@@ -6,7 +7,10 @@ import CreateCompanyButton from '@/features/Empresa/General/components/CreateCom
 import { getProvinces } from '@/shared/actions/countries.server';
 import { PageHeader } from '@/shared/components/common/PageHeader';
 import { SectionCard } from '@/shared/components/common/SectionCard';
-import { Info } from 'lucide-react';
+import { StateBlock } from '@/shared/components/common/StateBlock';
+import { companyLimitReachedText, getCompanyLimitStatus } from '@/shared/lib/instance-settings';
+import { Building2, Info } from 'lucide-react';
+import Link from 'next/link';
 import { connection } from 'next/server';
 
 /**
@@ -22,11 +26,41 @@ import { connection } from 'next/server';
 export default async function NewCompanySection() {
   await connection();
 
-  const [hasCompany, provinces, industryTypes] = await Promise.all([
+  const [hasCompany, provinces, industryTypes, companyLimit] = await Promise.all([
     hasAnyCompanyMembership(),
     getProvinces(),
     getIndustryTypes(),
+    getCompanyLimitStatus(),
   ]);
+
+  // Límite de empresas de la instancia (ticket 807): sin lugar no se ofrece el formulario. El proxy manda acá
+  // a quien no tiene empresa; si la instancia ya está completa, lo que necesita es que lo inviten.
+  if (companyLimit.reached) {
+    return (
+      <section className="flex min-w-0 flex-col gap-4">
+        <PageHeader title="Registrar compañía" />
+        <SectionCard>
+          <StateBlock
+            variant="empty"
+            icon={Building2}
+            title="No se pueden registrar más compañías"
+            description={
+              hasCompany
+                ? `${companyLimitReachedText(companyLimit.max)}. Para sumar otra, contactá al administrador del sistema.`
+                : `${companyLimitReachedText(companyLimit.max)}. Pedile a un administrador de la empresa que te invite desde Configuración › Usuarios y accesos.`
+            }
+            action={
+              hasCompany ? (
+                <Link href="/dashboard/configuration" className={buttonVariants({ variant: 'outline' })}>
+                  Ir a Configuración
+                </Link>
+              ) : undefined
+            }
+          />
+        </SectionCard>
+      </section>
+    );
+  }
 
   return (
     <section className="flex min-w-0 flex-col gap-4">

@@ -1488,6 +1488,17 @@ model org_chart_positions {
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+/// Configuración global de la instancia (clave/valor, sin empresa). La app solo lee; la escriben el dueño o el
+/// rol de sistema (ver la migración `20261031100000_instance_settings`). Lectura tipada: `src/shared/lib/instance-settings.ts`.
+model instance_settings {
+  key         String   @id
+  value       Json
+  description String?
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@schema("public")
+}
+
 model industry_type {
   id         BigInt   @id @default(autoincrement())
   created_at DateTime @default(now()) @db.Timestamptz(6)

@@ -118,6 +118,19 @@ async function main(): Promise<void> {
       },
     });
 
+    // 2a. Limite de empresas de la instancia (ticket 807). La migracion ya siembra la fila; aca solo se
+    //     asegura que exista, sin pisar un valor que el panel de administracion haya cambiado. El seed no
+    //     pasa por `createCompany`, asi que no aplica el limite: es la via del sistema para la primera empresa.
+    await prisma.instance_settings.upsert({
+      where: { key: 'max_companies' },
+      update: {},
+      create: {
+        key: 'max_companies',
+        value: 1,
+        description: 'Cantidad maxima de empresas que se pueden crear en la instancia (entero >= 1).',
+      },
+    });
+
     // 2b. Destinatarios de los correos automaticos (P5), POR EMPRESA. Sin fila el job
     //     registra la empresa como salteada y no manda nada. El default es el correo de
     //     contacto de la propia empresa: es el unico destinatario que el modelo conoce, y

@@ -31,6 +31,9 @@ vi.mock('@/shared/lib/session', () => ({
 
 class Rollback extends Error {}
 
+/** Valor previo de `instance_settings.max_companies` (ticket 807): se sube para crear empresas y se restaura. */
+let previousMaxCompanies: number | null = null;
+
 /** Empresas creadas por los tests (la server action commitea): se borran en el afterAll. */
 const createdCompanyIds: string[] = [];
 
@@ -54,6 +57,14 @@ function buildCompanyForm({ cuit, city }: { cuit: string; city: { id: bigint; pr
 describe.skipIf(!RUN)('escrituras de empresa y talleres (integración)', () => {
   beforeAll(async () => {
     const { prisma } = await import('@/shared/lib/prisma');
+    // El límite de empresas (default 1) frenaría el alta: estos casos prueban la escritura, no el límite.
+    const previous = await prisma.instance_settings.findUnique({ where: { key: 'max_companies' } });
+    previousMaxCompanies = previous ? Number(previous.value) || 1 : null;
+    await prisma.instance_settings.upsert({
+      where: { key: 'max_companies' },
+      update: { value: 1000 },
+      create: { key: 'max_companies', value: 1000 },
+    });
     // El compose puede no tener perfiles: se crea el del "usuario de sesión" mockeado.
     await prisma.profile.create({
       data: {
@@ -72,6 +83,14 @@ describe.skipIf(!RUN)('escrituras de empresa y talleres (integración)', () => {
     }
     await prisma.user_roles.deleteMany({ where: { user_id: sessionCredentialId } });
     await prisma.profile.delete({ where: { id: sessionProfileId } }).catch(() => undefined);
+    if (previousMaxCompanies !== null) {
+      await prisma.instance_settings.update({
+        where: { key: 'max_companies' },
+        data: { value: previousMaxCompanies },
+      });
+    } else {
+      await prisma.instance_settings.delete({ where: { key: 'max_companies' } }).catch(() => undefined);
+    }
   });
 
   it('createCompany: crea empresa + pertenencia y deja al owner como admin DE ESA empresa', async () => {
@@ -92,7 +111,14 @@ describe.skipIf(!RUN)('escrituras de empresa y talleres (integración)', () => {
 
     const company = await prisma.company.findUnique({
       where: { id: result.data.id },
-      select: { owner_id: true, company_cuit: true, contact_phone: true, city: true, province_id: true, by_defect: true },
+      select: {
+        owner_id: true,
+        company_cuit: true,
+        contact_phone: true,
+        city: true,
+        province_id: true,
+        by_defect: true,
+      },
     });
     const membership = await prisma.share_company_users.findFirst({
       where: { company_id: result.data.id, profile_id: sessionProfileId },
@@ -168,8 +194,11 @@ describe.skipIf(!RUN)('escrituras de empresa y talleres (integración)', () => {
     const company = await prisma.company.findFirst({ select: { id: true } });
     if (!city || !company) throw new Error('La base del compose necesita al menos una ciudad y una empresa');
 
-    let observed: { workshopCity: number | null; workshopLatitudeNull: boolean; duplicateSectorFound: string | null } | null =
-      null;
+    let observed: {
+      workshopCity: number | null;
+      workshopLatitudeNull: boolean;
+      duplicateSectorFound: string | null;
+    } | null = null;
 
     await prisma
       .$transaction(async (tx) => {

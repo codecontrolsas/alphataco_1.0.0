@@ -3,6 +3,7 @@
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { withActor } from '@/shared/lib/actor';
+import { companyLimitReachedText, getCompanyLimitStatus, readCompanyLimitStatus } from '@/shared/lib/instance-settings';
 import { prisma } from '@/shared/lib/prisma';
 import { prismaSystem } from '@/shared/lib/prisma-system';
 import { getSessionToken, getSessionUserId } from '@/shared/lib/session';
@@ -268,6 +269,17 @@ function toCompanyData(values: CompanyFormValues) {
 
 // ─── Mutaciones ──────────────────────────────────────────────────────────────
 
+/** Se alcanzó `instance_settings.max_companies` (se lanza dentro de la transacción del alta). */
+class CompanyLimitReachedError extends Error {
+  constructor(max: number) {
+    super(`${companyLimitReachedText(max)}. Para sumar otra, contactá al administrador del sistema.`);
+    this.name = 'CompanyLimitReachedError';
+  }
+}
+
+/** Clave del lock transaccional que serializa las altas de empresa (el conteo y el insert no pueden cruzarse). */
+const COMPANY_CREATE_LOCK_KEY = 'alphataco:company-create-limit';
+
 /**
  * Alta de empresa. `FormData` con los campos del formulario (+ `logo` opcional).
  * - `owner_id` = profile de sesión; se crea también la pertenencia en `share_company_users`.
@@ -287,6 +299,11 @@ export async function createCompany(formData: FormData): Promise<CompanyMutation
   try {
     const { credentialId, profileId } = await requireSessionProfile();
 
+    // Límite de empresas de la instancia (ticket 807). Chequeo rápido acá; el definitivo va dentro de
+    // la transacción, con lock, para que dos altas simultáneas no pasen las dos.
+    const limit = await getCompanyLimitStatus();
+    if (limit.reached) return { ok: false, error: new CompanyLimitReachedError(limit.max).message };
+
     if (await isCuitTaken(parsed.data.company_cuit)) {
       return {
         ok: false,
@@ -298,6 +315,11 @@ export async function createCompany(formData: FormData): Promise<CompanyMutation
     const companyId = await withActor(
       credentialId,
       async (tx) => {
+        // Serializa las altas y cuenta TODAS las empresas (cliente de sistema: la RLS limitaría a la activa).
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${COMPANY_CREATE_LOCK_KEY}))`;
+        const current = await readCompanyLimitStatus(tx);
+        if (current.reached) throw new CompanyLimitReachedError(current.max);
+
         // Reemplaza al trigger update_company_by_defect: una sola default por owner (índice único
         // parcial), así que se limpian las otras ANTES de guardar esta.
         if (parsed.data.by_defect) await clearOtherDefaultCompanies(tx, profileId, null);
@@ -373,6 +395,10 @@ export async function createCompany(formData: FormData): Promise<CompanyMutation
     logger.info('Empresa creada', { data: { companyId } });
     return { ok: true, data: { id: companyId }, warning };
   } catch (error) {
+    if (error instanceof CompanyLimitReachedError) {
+      logger.warn('Alta de empresa rechazada: límite de la instancia', { data: { message: error.message } });
+      return { ok: false, error: error.message };
+    }
     logger.error('Error al crear la empresa', { data: { error } });
     return { ok: false, error: error instanceof Error ? error.message : 'No se pudo registrar la compañía' };
   }
