@@ -15,6 +15,7 @@ import {
   FileText,
   FileType,
   GitBranch,
+  GraduationCap,
   HandCoins,
   HandHelping,
   Landmark,
@@ -277,6 +278,7 @@ export const navigationLinks: NavigationLink[] = [
     position: 12,
     items: [
       { name: 'Documentos', tabSlug: 'documentos-hse' },
+      { name: 'Capacitaciones', tabSlug: 'capacitaciones' },
       { name: 'Cumplimiento', tabSlug: 'cumplimiento' },
       { name: 'Configuración', tabSlug: 'configuracion-hse' },
     ],
@@ -382,6 +384,7 @@ export const SUB_ITEM_ICONS: Record<string, NavIcon> = {
   'tesoreria:retenciones-sufridas': Percent,
   'tesoreria:config-tesoreria': Settings,
   'hse:documentos-hse': FileText,
+  'hse:capacitaciones': GraduationCap,
   'hse:cumplimiento': ListChecks,
   'hse:configuracion-hse': Settings,
   'ayuda:tickets': LifeBuoy,

@@ -3,7 +3,8 @@ import 'server-only';
 import type { Prisma } from '@/generated/prisma/client';
 
 /**
- * Concilia quién tiene que aceptar qué documento HSE (`hse_sync_acknowledgements`, prisma/sql/hse.sql): crea pendiente lo
+ * Concilia quién tiene que aceptar qué documento HSE (y, si el alcance es un empleado o la empresa, qué capacitaciones le
+ * aplican) (`hse_sync_acknowledgements`, prisma/sql/hse.sql): crea pendiente lo
  * que pasa a aplicar, desarchiva lo que vuelve a aplicar y ARCHIVA lo que dejó de aplicar (nunca borra respuestas).
  * Idempotente y en la MISMA transacción del cambio que la provoca.
  *
@@ -28,4 +29,22 @@ export async function syncHseAcknowledgements(
   scope: { companyId: string; documentId?: string | null; employeeId?: string | null }
 ): Promise<void> {
   await tx.$executeRaw`SELECT public.hse_sync_acknowledgements(${scope.companyId}::uuid, ${scope.documentId ?? null}::uuid, ${scope.employeeId ?? null}::uuid)`;
+  // Sin documento puntual el cambio es del EMPLEADO (alta, puesto, sector, baja) o de la empresa entera: también
+  // cambia qué capacitaciones le aplican. Así los puntos de enganche de Empleados cubren las dos cosas sin llamarse dos
+  // veces (misma regla de destinatarios, `hse_employee_matches_target`).
+  if (!scope.documentId) {
+    await syncHseTrainingAssignments(tx, { companyId: scope.companyId, employeeId: scope.employeeId });
+  }
+}
+
+/**
+ * Concilia quién tiene que hacer cada capacitación publicada (`hse_sync_training_assignments`, prisma/sql/hse.sql):
+ * crea pendiente lo que pasa a aplicar, desarchiva lo que vuelve a aplicar (con su resultado) y ARCHIVA lo que dejó de
+ * aplicar (un aprobado queda como constancia). Idempotente, en la MISMA transacción del cambio. Devuelve `void`.
+ */
+export async function syncHseTrainingAssignments(
+  tx: Pick<Prisma.TransactionClient, '$executeRaw'>,
+  scope: { companyId: string; trainingId?: string | null; employeeId?: string | null }
+): Promise<void> {
+  await tx.$executeRaw`SELECT public.hse_sync_training_assignments(${scope.companyId}::uuid, ${scope.trainingId ?? null}::uuid, ${scope.employeeId ?? null}::uuid)`;
 }

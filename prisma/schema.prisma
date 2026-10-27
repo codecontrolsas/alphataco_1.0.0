@@ -685,6 +685,7 @@ model company_positions {
   pre_employees              pre_employees[]
   org_chart_positions        org_chart_positions[]
   hse_targets                hse_document_targets[]
+  hse_training_targets       hse_training_targets[]
   company_id                 String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                    company                      @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
@@ -1336,6 +1337,11 @@ model employees {
   portal_access_events employee_portal_access_events[]
   hse_targets          hse_document_targets[]
   hse_acknowledgements hse_document_acknowledgements[]
+  hse_training_targets     hse_training_targets[]
+  hse_training_assignments hse_training_assignments[]
+  hse_training_attempts    hse_training_attempts[]
+  hse_training_answers     hse_training_answers[]
+  hse_training_reads       hse_training_material_reads[]
 
   @@index([type_of_contract], map: "idx_employees_type_of_contract")
   @@index([company_id, is_active, lastname, firstname, id], map: "idx_employees_company_active_name")
@@ -1462,6 +1468,7 @@ model hierarchy {
   vehicles        vehicles[]
   pre_employees   pre_employees[]
   hse_targets     hse_document_targets[]
+  hse_training_targets hse_training_targets[]
   company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company         company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
@@ -6670,5 +6677,288 @@ model hse_document_acknowledgements {
   @@index([employee_id, archived_at], map: "idx_hse_document_acknowledgements_employee")
   @@index([document_id, archived_at], map: "idx_hse_document_acknowledgements_document")
   @@index([company_id], map: "idx_hse_document_acknowledgements_company_id")
+  @@schema("public")
+}
+
+// ============================================
+// HSE — Capacitaciones y exámenes (ticket 804, fase 3)
+// ============================================
+
+enum hse_training_status {
+  draft
+  published
+  archived
+
+  @@schema("public")
+}
+
+enum hse_training_kind {
+  induction
+  refresher
+  specific
+  other
+
+  @@schema("public")
+}
+
+enum hse_material_kind {
+  file
+  link
+
+  @@schema("public")
+}
+
+/// Estado del empleado frente a UNA capacitación (se mantiene desde las funciones SQL de HSE, nunca desde la app).
+enum hse_assignment_status {
+  pending
+  in_progress
+  passed
+  failed
+
+  @@schema("public")
+}
+
+enum hse_attempt_status {
+  in_progress
+  submitted
+  expired
+
+  @@schema("public")
+}
+
+/// Capacitación con examen. Al publicarla, el examen (preguntas, opciones, clave, puntaje de aprobación, intentos y
+/// tiempo) queda congelado (trigger `hse_training_freeze_guard`): para cambiarlo se retira y se crea otra.
+model hse_trainings {
+  id                 String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id         String                        @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  title              String
+  description        String?
+  kind               hse_training_kind             @default(other)
+  status             hse_training_status           @default(draft)
+  /// Porcentaje de puntos (sobre el total ponderado) para aprobar: 1 a 100.
+  passing_score      Int                           @default(70)
+  /// Intentos por ciclo (se renuevan cuando vence una aprobación con vigencia).
+  max_attempts       Int                           @default(3)
+  /// Minutos para responder desde que empieza el intento; null = sin límite.
+  time_limit_minutes Int?
+  shuffle_questions  Boolean                       @default(false)
+  /// Meses de vigencia de la aprobación; null = no vence.
+  validity_months    Int?
+  created_by         String                        @db.Uuid
+  published_at       DateTime?                     @db.Timestamptz(6)
+  published_by       String?                       @db.Uuid
+  archived_at        DateTime?                     @db.Timestamptz(6)
+  archived_by        String?                       @db.Uuid
+  created_at         DateTime                      @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime                      @default(now()) @db.Timestamptz(6)
+  targets            hse_training_targets[]
+  materials          hse_training_materials[]
+  questions          hse_training_questions[]
+  options            hse_training_options[]
+  answer_keys        hse_training_answer_keys[]
+  assignments        hse_training_assignments[]
+  attempts           hse_training_attempts[]
+  reads              hse_training_material_reads[]
+
+  @@index([company_id, status], map: "idx_hse_trainings_company_status")
+  @@schema("public")
+}
+
+/// A quién aplica una capacitación (misma forma que los destinatarios de documentos).
+model hse_training_targets {
+  id          String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id  String             @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  training_id String             @db.Uuid
+  kind        hse_target_kind
+  position_id String?            @db.Uuid
+  sector_id   String?            @db.Uuid
+  employee_id String?            @db.Uuid
+  created_at  DateTime           @default(now()) @db.Timestamptz(6)
+  training    hse_trainings      @relation(fields: [training_id], references: [id], onDelete: Cascade)
+  position    company_positions? @relation(fields: [position_id], references: [id], onDelete: Cascade)
+  sector      hierarchy?         @relation(fields: [sector_id], references: [id], onDelete: Cascade)
+  employee    employees?         @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@index([training_id], map: "idx_hse_training_targets_training")
+  @@index([company_id], map: "idx_hse_training_targets_company_id")
+  @@schema("public")
+}
+
+/// Material de estudio: un PDF en `hse-files` o un enlace https. `is_required` = hay que leerlo antes de rendir.
+model hse_training_materials {
+  id          String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id  String                        @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  training_id String                        @db.Uuid
+  kind        hse_material_kind
+  title       String
+  url         String?
+  file_path   String?                       @unique(map: "hse_training_materials_file_path_key")
+  file_name   String?
+  file_size   Int?
+  file_sha256 String?
+  is_required Boolean                       @default(true)
+  position    Int                           @default(0)
+  created_at  DateTime                      @default(now()) @db.Timestamptz(6)
+  training    hse_trainings                 @relation(fields: [training_id], references: [id], onDelete: Cascade)
+  reads       hse_training_material_reads[]
+
+  @@index([training_id], map: "idx_hse_training_materials_training")
+  @@index([company_id], map: "idx_hse_training_materials_company_id")
+  @@schema("public")
+}
+
+model hse_training_questions {
+  id          String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id  String                    @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  training_id String                    @db.Uuid
+  prompt      String
+  /// Peso de la pregunta en el puntaje (porcentaje de puntos sobre el total).
+  points      Int                       @default(1)
+  position    Int                       @default(0)
+  created_at  DateTime                  @default(now()) @db.Timestamptz(6)
+  training    hse_trainings             @relation(fields: [training_id], references: [id], onDelete: Cascade)
+  options     hse_training_options[]
+  answer_key  hse_training_answer_keys?
+  answers     hse_training_answers[]
+
+  @@index([training_id], map: "idx_hse_training_questions_training")
+  @@index([company_id], map: "idx_hse_training_questions_company_id")
+  @@schema("public")
+}
+
+/// Opción de una pregunta. NO lleva la marca de correcta: la clave vive en `hse_training_answer_keys`.
+model hse_training_options {
+  id          String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id  String                    @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  training_id String                    @db.Uuid
+  question_id String                    @db.Uuid
+  label       String
+  position    Int                       @default(0)
+  training    hse_trainings             @relation(fields: [training_id], references: [id], onDelete: Cascade)
+  question    hse_training_questions    @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  key_of      hse_training_answer_keys?
+  answers     hse_training_answers[]
+
+  @@unique([id, question_id], map: "hse_training_options_id_question_key")
+  @@index([question_id], map: "idx_hse_training_options_question")
+  @@index([company_id], map: "idx_hse_training_options_company_id")
+  @@schema("public")
+}
+
+/// Clave de respuestas: la opción correcta de cada pregunta. El empleado NUNCA la lee (RLS sin compuerta): la
+/// corrige `hse_grade_attempt` (SECURITY DEFINER).
+model hse_training_answer_keys {
+  question_id String                 @id @db.Uuid
+  company_id  String                 @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  training_id String                 @db.Uuid
+  option_id   String                 @db.Uuid
+  training    hse_trainings          @relation(fields: [training_id], references: [id], onDelete: Cascade)
+  question    hse_training_questions @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  option      hse_training_options   @relation(fields: [option_id, question_id], references: [id, question_id], onDelete: Cascade)
+
+  @@unique([option_id, question_id], map: "hse_training_answer_keys_option_key")
+  @@index([training_id], map: "idx_hse_training_answer_keys_training")
+  @@index([company_id], map: "idx_hse_training_answer_keys_company_id")
+  @@schema("public")
+}
+
+/// Quién tiene que hacer qué capacitación, y su resultado (constancia: aprobada el día X, vigente hasta Y). La crean,
+/// archivan y actualizan solo las funciones SQL de HSE. Lo que deja de aplicar se ARCHIVA, nunca se borra.
+model hse_training_assignments {
+  id                 String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id         String                  @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  training_id        String                  @db.Uuid
+  employee_id        String                  @db.Uuid
+  status             hse_assignment_status   @default(pending)
+  /// Intentos del ciclo actual (vuelve a 0 cuando vence una aprobación).
+  attempts_used      Int                     @default(0)
+  attempts_total     Int                     @default(0)
+  last_attempt_at    DateTime?               @db.Timestamptz(6)
+  last_score_percent Decimal?                @db.Decimal(5, 2)
+  passed_attempt_id  String?                 @unique(map: "hse_training_assignments_passed_attempt_key") @db.Uuid
+  passed_at          DateTime?               @db.Timestamptz(6)
+  valid_until        DateTime?               @db.Date
+  archived_at        DateTime?               @db.Timestamptz(6)
+  archive_reason     hse_ack_archive_reason?
+  created_at         DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime                @default(now()) @db.Timestamptz(6)
+  training           hse_trainings           @relation(fields: [training_id], references: [id], onDelete: Cascade)
+  employee           employees               @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  passed_attempt     hse_training_attempts?  @relation("hse_assignment_passed_attempt", fields: [passed_attempt_id], references: [id], onDelete: NoAction)
+  attempts           hse_training_attempts[] @relation("hse_assignment_attempts")
+
+  @@unique([training_id, employee_id], map: "hse_training_assignments_training_employee_key")
+  @@index([employee_id, archived_at], map: "idx_hse_training_assignments_employee")
+  @@index([company_id], map: "idx_hse_training_assignments_company_id")
+  @@schema("public")
+}
+
+/// Intento de examen. Lo abre, guarda y cierra solo el servidor (`hse_start_attempt`, `hse_save_answer`,
+/// `hse_grade_attempt`); cerrado es inmutable. El tiempo se mide con el reloj de la base (`deadline_at`).
+model hse_training_attempts {
+  id             String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id     String                     @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  training_id    String                     @db.Uuid
+  assignment_id  String                     @db.Uuid
+  employee_id    String                     @db.Uuid
+  attempt_number Int
+  status         hse_attempt_status         @default(in_progress)
+  started_at     DateTime                   @default(now()) @db.Timestamptz(6)
+  deadline_at    DateTime?                  @db.Timestamptz(6)
+  submitted_at   DateTime?                  @db.Timestamptz(6)
+  score_points   Int?
+  max_points     Int
+  score_percent  Decimal?                   @db.Decimal(5, 2)
+  passed         Boolean?
+  /// Orden de las preguntas de ESTE intento (mezclado en el servidor si la capacitación lo pide).
+  question_order String[]                   @db.Uuid
+  created_at     DateTime                   @default(now()) @db.Timestamptz(6)
+  training       hse_trainings              @relation(fields: [training_id], references: [id], onDelete: Cascade)
+  assignment     hse_training_assignments   @relation("hse_assignment_attempts", fields: [assignment_id], references: [id], onDelete: Cascade)
+  employee       employees                  @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  passed_of      hse_training_assignments?  @relation("hse_assignment_passed_attempt")
+  answers        hse_training_answers[]
+
+  @@unique([training_id, employee_id, attempt_number], map: "hse_training_attempts_number_key")
+  @@index([employee_id], map: "idx_hse_training_attempts_employee")
+  @@index([status, deadline_at], map: "idx_hse_training_attempts_open")
+  @@index([company_id], map: "idx_hse_training_attempts_company_id")
+  @@schema("public")
+}
+
+/// Respuesta elegida en un intento. No guarda si es correcta: en varios intentos eso revelaría la clave.
+model hse_training_answers {
+  id          String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id  String                 @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  attempt_id  String                 @db.Uuid
+  employee_id String                 @db.Uuid
+  question_id String                 @db.Uuid
+  option_id   String                 @db.Uuid
+  answered_at DateTime               @default(now()) @db.Timestamptz(6)
+  attempt     hse_training_attempts  @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
+  employee    employees              @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  question    hse_training_questions @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  option      hse_training_options   @relation(fields: [option_id, question_id], references: [id, question_id], onDelete: Cascade)
+
+  @@unique([attempt_id, question_id], map: "hse_training_answers_attempt_question_key")
+  @@index([company_id], map: "idx_hse_training_answers_company_id")
+  @@schema("public")
+}
+
+/// Lectura del material por el empleado (requisito para rendir si el material es obligatorio).
+model hse_training_material_reads {
+  id          String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id  String                 @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  training_id String                 @db.Uuid
+  material_id String                 @db.Uuid
+  employee_id String                 @db.Uuid
+  read_at     DateTime               @default(now()) @db.Timestamptz(6)
+  training    hse_trainings          @relation(fields: [training_id], references: [id], onDelete: Cascade)
+  material    hse_training_materials @relation(fields: [material_id], references: [id], onDelete: Cascade)
+  employee    employees              @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@unique([material_id, employee_id], map: "hse_training_material_reads_material_employee_key")
+  @@index([employee_id, training_id], map: "idx_hse_training_material_reads_employee")
+  @@index([company_id], map: "idx_hse_training_material_reads_company_id")
   @@schema("public")
 }

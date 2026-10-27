@@ -130,7 +130,16 @@ export async function resolveStorageObjectOwner(
       where: { file_path: path },
       select: { company_id: true, file_name: true },
     });
-    return version ? { kind: 'company', companyId: version.company_id, downloadName: version.file_name } : null;
+    if (version) return { kind: 'company', companyId: version.company_id, downloadName: version.file_name };
+    // Material de capacitación: misma idea con `hse_training_materials` (al empleado, solo el de una capacitación
+    // publicada que le aplica: compuerta `hse_employee_can_read_training`).
+    const material = await prisma.hse_training_materials.findFirst({
+      where: { file_path: path },
+      select: { company_id: true, file_name: true },
+    });
+    return material
+      ? { kind: 'company', companyId: material.company_id, downloadName: material.file_name ?? undefined }
+      : null;
   }
 
   if (isCompanyPrefixedBucket(bucket)) {
