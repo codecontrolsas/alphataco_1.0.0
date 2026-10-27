@@ -57,27 +57,34 @@ export const getPortalSession = cache(async (): Promise<PortalSessionResult> => 
   const employeeId = context?.employeeId;
   if (!context || !employeeId) return { ok: false, reason: 'no-employee' };
 
-  const [employee, access, company, needsPasswordChange] = await Promise.all([
-    prisma.employees.findUnique({
-      where: { id: employeeId },
-      select: {
-        id: true,
-        file: true,
-        firstname: true,
-        lastname: true,
-        picture: true,
-        email: true,
-        is_active: true,
-        date_of_admission: true,
-        company_positions: { select: { name: true } },
-        hierarchy: { select: { name: true } },
-      },
+  // Una sola transacción con el contexto del request (una conexión y un `set_config`) en vez de tres lotes en paralelo.
+  const [{ employee, access, company }, needsPasswordChange] = await Promise.all([
+    prisma.$transaction(async (tx) => {
+      const employeeRow = await tx.employees.findUnique({
+        where: { id: employeeId },
+        select: {
+          id: true,
+          file: true,
+          firstname: true,
+          lastname: true,
+          picture: true,
+          email: true,
+          is_active: true,
+          date_of_admission: true,
+          company_positions: { select: { name: true } },
+          hierarchy: { select: { name: true } },
+        },
+      });
+      const accessRow = await tx.employee_portal_access.findUnique({
+        where: { employee_id: employeeId },
+        select: { credential_id: true, status: true, method: true, granted_at: true },
+      });
+      const companyRow = await tx.company.findUnique({
+        where: { id: context.companyId },
+        select: { company_name: true },
+      });
+      return { employee: employeeRow, access: accessRow, company: companyRow };
     }),
-    prisma.employee_portal_access.findUnique({
-      where: { employee_id: employeeId },
-      select: { credential_id: true, status: true, method: true, granted_at: true },
-    }),
-    prisma.company.findUnique({ where: { id: context.companyId }, select: { company_name: true } }),
     getSessionNeedsPasswordChange(),
   ]);
 

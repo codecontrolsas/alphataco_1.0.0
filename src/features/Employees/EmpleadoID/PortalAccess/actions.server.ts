@@ -13,6 +13,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { prismaSystem } from '@/shared/lib/prisma-system';
 import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { setTenantContext } from '@/shared/lib/tenant-context';
 import { hashPassword } from 'better-auth/crypto';
 import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'node:crypto';
@@ -122,6 +123,24 @@ async function upsertEnabledAccess(
   });
 }
 
+/**
+ * Transacción que toca credenciales (`auth_user`, `auth_account`, `auth_verification`, `auth_session`). Esas tablas están
+ * cerradas al rol de la app (`20261027140000_rls_remaining_tables`): solo las escribe el cliente de sistema. Se usa ese
+ * cliente con el contexto de la empresa y del actor fijado a mano (para los DEFAULT de `company_id` y la auditoría).
+ * Como el sistema saltea la RLS, el perímetro de estas escrituras es el de la action: permiso y legajo de la empresa
+ * activa, validados ANTES de llegar acá.
+ */
+function withCredentialTransaction<T>(
+  companyId: string,
+  actorCredentialId: string,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>
+): Promise<T> {
+  return prismaSystem.$transaction(async (tx) => {
+    await setTenantContext(tx, { companyId, userId: actorCredentialId, kind: 'user' });
+    return fn(tx);
+  });
+}
+
 /** Pone una contraseña temporal (hash de Better Auth) y obliga a cambiarla; cierra las sesiones abiertas. */
 async function setTemporaryPassword(tx: Prisma.TransactionClient, userId: string, password: string): Promise<void> {
   const hash = await hashPassword(password);
@@ -226,6 +245,7 @@ export async function enableEmployeePortalAccess(values: EnablePortalAccessInput
 
       // Cuenta que creó el portal: se puede reemitir invitación o contraseña temporal.
       return await issueCredentialAccess({
+        companyId,
         credentialId,
         email: user.email,
         method,
@@ -259,7 +279,7 @@ export async function enableEmployeePortalAccess(values: EnablePortalAccessInput
     }
 
     const temporaryPassword = method === 'temporary_password' ? generateTemporaryPassword() : undefined;
-    const activationUrl = await withActor(actor.credentialId, async (tx) => {
+    const activationUrl = await withCredentialTransaction(companyId, actor.credentialId, async (tx) => {
       const credentialId = await createCredential(tx, {
         email,
         name: fullname,
@@ -309,6 +329,7 @@ export async function enableEmployeePortalAccess(values: EnablePortalAccessInput
 
 /** Reemite el acceso de una credencial creada por el portal: nueva invitación o nueva contraseña temporal. */
 async function issueCredentialAccess(input: {
+  companyId: string;
   credentialId: string;
   email: string;
   method: 'invitation' | 'temporary_password';
@@ -319,7 +340,7 @@ async function issueCredentialAccess(input: {
 }): Promise<PortalAccessActionResult> {
   const temporaryPassword = input.method === 'temporary_password' ? generateTemporaryPassword() : undefined;
 
-  const activationUrl = await withActor(input.actor.credentialId, async (tx) => {
+  const activationUrl = await withCredentialTransaction(input.companyId, input.actor.credentialId, async (tx) => {
     if (temporaryPassword) await setTemporaryPassword(tx, input.credentialId, temporaryPassword);
     await upsertEnabledAccess(tx, {
       employeeId: input.employeeId,
