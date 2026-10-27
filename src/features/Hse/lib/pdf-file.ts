@@ -32,3 +32,8 @@ export function cleanFileName(name: string): string {
   const short = base.length > 120 ? base.slice(0, 116) : base;
   return short.toLowerCase().endsWith('.pdf') ? short : `${short}.pdf`;
 }
+
+/** Key del PDF de un material de capacitación: la arma SIEMPRE el servidor, con la empresa adelante. */
+export function hseMaterialPath(companyId: string, trainingId: string, materialId: string): string {
+  return `${companyId}/trainings/${trainingId}/${materialId}.pdf`;
+}

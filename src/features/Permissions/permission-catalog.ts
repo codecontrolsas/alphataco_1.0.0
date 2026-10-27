@@ -274,6 +274,14 @@ export const ACTION_OVERRIDES: Partial<Record<PermissionOverrideKey, ActionOverr
     description: 'Publicar documentos y versiones nuevas (las aceptaciones vuelven a pendiente)',
   },
   'hse:documentos-hse:delete': { name: 'Retirar', description: 'Retirar documentos publicados (quedan archivados)' },
+  'hse:capacitaciones:approve': {
+    name: 'Publicar',
+    description: 'Publicar capacitaciones: el examen queda congelado y se asigna a los destinatarios',
+  },
+  'hse:capacitaciones:delete': {
+    name: 'Retirar',
+    description: 'Retirar capacitaciones publicadas (quedan archivadas con sus resultados) o borrar borradores',
+  },
 
   // Comercial
   'comercial:facturacion:create': { description: 'Armar borradores de factura y notas de crédito o débito' },

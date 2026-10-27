@@ -1,11 +1,14 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getMyHseDocuments } from '@/features/Portal/actions/hse-documents.queries';
+import { getMyHseTrainings } from '@/features/Portal/actions/hse-trainings.queries';
 import { getPortalEmployeeForPage } from '@/features/Portal/actions/perimeter';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { ChevronRight, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { DocumentsEmptyState } from './DocumentsEmptyState';
 import { HseDocumentCard } from './HseDocumentCard';
+import { HseTrainingCard } from './HseTrainingCard';
+import { TrainingsEmptyState } from './TrainingsEmptyState';
 
 const METHOD_LABELS = {
   invitation: 'por invitación',
@@ -16,7 +19,9 @@ const METHOD_LABELS = {
 /** Inicio del portal: quién sos (legajo, puesto, sector), estado del acceso y lo que tenés pendiente. */
 export async function PortalHome() {
   const employee = await getPortalEmployeeForPage();
-  const pending = (await getMyHseDocuments(employee)).filter((d) => d.status === 'pending');
+  const [documents, trainings] = await Promise.all([getMyHseDocuments(employee), getMyHseTrainings(employee)]);
+  const pending = documents.filter((d) => d.status === 'pending');
+  const pendingTrainings = trainings.filter((t) => t.status !== 'passed');
   const fullName = `${employee.lastname} ${employee.firstname}`.trim();
   const initials = `${employee.firstname[0] ?? ''}${employee.lastname[0] ?? ''}`.toUpperCase();
   const role = [employee.position, employee.sector].filter(Boolean).join(' · ');
@@ -95,6 +100,44 @@ export async function PortalHome() {
               {pending.slice(0, 3).map((d) => (
                 <li key={d.ackId}>
                   <HseDocumentCard document={d} />
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </section>
+
+      <section aria-labelledby="home-trainings" className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="home-trainings" className="font-semibold">
+            Capacitaciones
+          </h2>
+          <Link
+            href="/portal/trainings"
+            className="focus-visible:ring-ring text-brand-ink inline-flex min-h-11 items-center gap-1 rounded-md text-sm font-medium outline-none focus-visible:ring-2"
+          >
+            Mis capacitaciones <ChevronRight aria-hidden="true" className="size-4" />
+          </Link>
+        </div>
+        {pendingTrainings.length === 0 ? (
+          <div className="bg-card rounded-xl border p-4">
+            {trainings.length === 0 ? (
+              <TrainingsEmptyState compact />
+            ) : (
+              <p className="text-muted-foreground text-sm">Estás al día: aprobaste todas tus capacitaciones.</p>
+            )}
+          </div>
+        ) : (
+          <>
+            <p className="text-muted-foreground text-sm">
+              {pendingTrainings.length === 1
+                ? 'Tenés 1 capacitación para hacer.'
+                : `Tenés ${pendingTrainings.length} capacitaciones para hacer.`}
+            </p>
+            <ul className="space-y-3">
+              {pendingTrainings.slice(0, 3).map((t) => (
+                <li key={t.trainingId}>
+                  <HseTrainingCard training={t} />
                 </li>
               ))}
             </ul>

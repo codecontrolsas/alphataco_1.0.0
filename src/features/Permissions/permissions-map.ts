@@ -1610,6 +1610,16 @@ export const PERMISSIONS = {
         allowedActions: ['view', 'create', 'update', 'delete', 'approve'],
         subtabs: {},
       },
+      // Capacitaciones con material y examen (fase 3). 'approve' = publicar (congela el examen); 'delete' = retirar una
+      // publicada (queda archivada con sus intentos) o borrar un borrador. El detalle hereda esta pestaña.
+      capacitaciones: {
+        slug: 'capacitaciones',
+        name: 'Capacitaciones',
+        tabId: '083b4c64-8d46-4f06-8943-d3dd568ac58b',
+        parent: null,
+        allowedActions: ['view', 'create', 'update', 'delete', 'approve'],
+        subtabs: {},
+      },
       cumplimiento: {
         slug: 'cumplimiento',
         name: 'Cumplimiento',
