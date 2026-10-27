@@ -82,9 +82,18 @@ export function ManualSearch({ size = 'default' }: { size?: 'default' | 'lg' }) 
     setActiveIndex(-1);
   }
 
-  function goTo(result: SearchResult) {
+  /**
+   * Enter abre el resultado como un clic en su enlace: así pasa por el mismo camino que el mouse (el `onClick` del
+   * enlace limpia la búsqueda y el clic burbujea hasta el panel móvil del índice, que se cierra al tocar un enlace).
+   */
+  function goTo(index: number) {
+    const option = document.getElementById(`${baseId}-option-${index}`);
+    if (option instanceof HTMLAnchorElement) {
+      option.click();
+      return;
+    }
     clear();
-    router.push(resultHref(result));
+    router.push(resultHref(results[index]));
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -106,7 +115,7 @@ export function ManualSearch({ size = 'default' }: { size?: 'default' | 'lg' }) 
       setActiveIndex((index) => (index <= 0 ? results.length - 1 : index - 1));
     } else if (event.key === 'Enter') {
       event.preventDefault();
-      goTo(results[Math.max(0, activeIndex)]);
+      goTo(Math.max(0, activeIndex));
     }
   }
 

@@ -1,5 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildStorageFileUrl } from '@/shared/lib/storage-url';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 /**
  * Integración real de la ruta `/api/files/...` contra el Postgres y el RustFS del compose.
@@ -109,8 +109,10 @@ describe.skipIf(!RUN)('GET /api/files/[bucket]/[...path] (integración)', () => 
     });
     await prisma.customer_services.upsert({
       where: { id: CONTRACT_ID },
-      create: { id: CONTRACT_ID, customer_id: CUSTOMER_ID },
-      update: { customer_id: CUSTOMER_ID },
+      // `company_id` explícito: fuera de un request no hay empresa en el contexto de la transacción y el DEFAULT
+      // `app_current_company_id()` daría NULL (la columna es NOT NULL desde que se autocompleta por empresa).
+      create: { id: CONTRACT_ID, customer_id: CUSTOMER_ID, company_id: companyId },
+      update: { customer_id: CUSTOMER_ID, company_id: companyId },
     });
     await prisma.documents_contracts.deleteMany({ where: { contract_id: CONTRACT_ID } });
     await prisma.documents_contracts.create({

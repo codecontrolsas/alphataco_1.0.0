@@ -53,6 +53,24 @@ export const PRESET_VISIBILITY_LABELS = {
   users: 'Usuarios específicos',
 } as const;
 
+/**
+ * Alcance que se muestra junto a cada tablero en el selector. Un predefinido (Resumen, Vencimientos) sigue siendo
+ * «Predefinido» aunque ya esté guardado: la primera personalización de cualquier tablero guarda también los
+ * predefinidos (`materializeDefaults`) con alcance `private`, y no por eso son presets «Solo yo». Si el dueño lo
+ * comparte, se muestra el alcance que eligió.
+ */
+export function presetScopeLabel(board: {
+  isOwner: boolean;
+  ownerName: string | null;
+  persisted: boolean;
+  template: string | null;
+  visibility: keyof typeof PRESET_VISIBILITY_LABELS;
+}): string {
+  if (!board.isOwner) return `Compartido por ${board.ownerName ?? 'otro usuario'}`;
+  if (!board.persisted || (board.template !== null && board.visibility === 'private')) return 'Predefinido';
+  return PRESET_VISIBILITY_LABELS[board.visibility];
+}
+
 /** Formulario «Guardar como preset» / «Alcance»: nombre, alcance y usuarios (si el alcance es `users`). */
 export const presetFormSchema = z
   .object({

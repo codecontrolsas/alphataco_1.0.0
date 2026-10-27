@@ -5,6 +5,7 @@ import type { TablePreferences } from '@/shared/components/common/DataTable/help
 import type { SortItem } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
+import moment from 'moment';
 
 type TablePref = TablePreferences;
 
@@ -28,7 +29,8 @@ async function mergeTablePreferences(tableId: string, patch: TablePref): Promise
   await prisma.user_table_preferences.upsert({
     where: { user_id: key },
     create: { user_id: key, preferences: updatedPrefs },
-    update: { preferences: updatedPrefs },
+    // `updated_at` a mano: la columna solo tiene DEFAULT (sin trigger), así que el upsert dejaba la fecha del alta.
+    update: { preferences: updatedPrefs, updated_at: moment().toDate() },
   });
 }
 
