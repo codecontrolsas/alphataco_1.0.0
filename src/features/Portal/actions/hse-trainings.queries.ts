@@ -165,7 +165,11 @@ export async function getMyHseTraining(employee: PortalEmployee, trainingId: str
     fileName: m.file_name,
   }));
   const pendingMaterials = materials.filter((m) => m.isRequired && !m.readAt).length;
-  const openAttempt = attempts.find((a) => a.status === 'in_progress') ?? null;
+  // Abierto y todavía en tiempo: retomar. Uno vencido no se ofrece para retomar (al empezar, la base lo corrige y abre
+  // otro, que consume un intento: eso pasa por la confirmación de "Rendir").
+  const now = Date.now();
+  const openAttempt =
+    attempts.find((a) => a.status === 'in_progress' && (!a.deadline_at || a.deadline_at.getTime() > now)) ?? null;
 
   return {
     trainingId: t.id,

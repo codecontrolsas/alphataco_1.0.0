@@ -46,7 +46,7 @@ function writePending(attemptId: string, pending: Record<string, string>) {
     if (Object.keys(pending).length === 0) window.localStorage.removeItem(storageKey(attemptId));
     else window.localStorage.setItem(storageKey(attemptId), JSON.stringify(pending));
   } catch {
-    // Sin almacenamiento (modo privado): las respuestas igual se reintentan mientras la página siga abierta.
+    // Sin almacenamiento (modo privado): quedan en memoria (`pendingRef`) y se reintentan mientras la página siga abierta.
   }
 }
 
@@ -78,6 +78,9 @@ export function HseExamRunner({ exam }: { exam: PortalHseExam }) {
   const endAt = useRef<number | null>(exam.secondsLeft === null ? null : Date.now() + exam.secondsLeft * 1000);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const submittedRef = useRef(false);
+  const inFlightRef = useRef(false);
+  /** Pendientes en memoria: fuente de verdad aunque el navegador no deje usar el almacenamiento (modo privado). */
+  const pendingRef = useRef<Record<string, string>>({});
 
   const question = exam.questions[index];
   const answeredCount = exam.questions.filter((q) => answers[q.id]).length;
@@ -88,6 +91,7 @@ export function HseExamRunner({ exam }: { exam: PortalHseExam }) {
     (update: (prev: Record<string, string>) => Record<string, string>) =>
       setPending((prev) => {
         const next = update(prev);
+        pendingRef.current = next;
         writePending(exam.attemptId, next);
         return next;
       }),
@@ -128,7 +132,7 @@ export function HseExamRunner({ exam }: { exam: PortalHseExam }) {
 
   /** Reintenta todo lo pendiente. `true` si no quedó nada sin guardar. */
   const flushPending = useCallback(async (): Promise<boolean> => {
-    const entries = Object.entries(readPending(exam.attemptId));
+    const entries = Object.entries({ ...readPending(exam.attemptId), ...pendingRef.current });
     let ok = true;
     for (const [questionId, optionId] of entries) {
       if (!(await sendAnswer(questionId, optionId))) ok = false;
@@ -139,10 +143,13 @@ export function HseExamRunner({ exam }: { exam: PortalHseExam }) {
 
   const submit = useCallback(
     async (auto: boolean) => {
-      if (submittedRef.current) return;
+      // Un solo envío a la vez: el reloj en cero no dispara otro mientras el anterior sigue en camino.
+      if (submittedRef.current || inFlightRef.current) return;
+      inFlightRef.current = true;
       setSubmitting(true);
       const flushed = await flushPending();
       if (!flushed && !auto) {
+        inFlightRef.current = false;
         setSubmitting(false);
         setConfirmOpen(false);
         toast.error('Hay respuestas sin guardar por falta de conexión. Revisá la señal y volvé a enviar.');
@@ -150,6 +157,7 @@ export function HseExamRunner({ exam }: { exam: PortalHseExam }) {
       }
       const result = await submitHseAttempt({ attemptId: exam.attemptId });
       if (!result.ok) {
+        inFlightRef.current = false;
         setSubmitting(false);
         toast.error(result.error);
         return;
@@ -181,6 +189,7 @@ export function HseExamRunner({ exam }: { exam: PortalHseExam }) {
     const stored = readPending(exam.attemptId);
     if (Object.keys(stored).length > 0) {
       setAnswers((prev) => ({ ...prev, ...stored }));
+      pendingRef.current = stored;
       setPending(stored);
       void flushPending();
     }

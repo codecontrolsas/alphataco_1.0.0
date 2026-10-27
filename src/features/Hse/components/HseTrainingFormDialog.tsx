@@ -87,7 +87,7 @@ export function HseTrainingFormDialog({
       if (mode.kind === 'create') {
         setCreated(true);
         toast.success('Capacitación creada en borrador. Cargá el material y las preguntas.');
-        router.push(`/dashboard/hse/trainings/${result.id}`);
+        router.push(`/dashboard/hse/trainings/${result.id}?tab=capacitaciones`);
         return;
       }
       toast.success(

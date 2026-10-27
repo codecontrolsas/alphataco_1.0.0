@@ -341,6 +341,11 @@ DECLARE
   v_passed boolean;
   v_when timestamptz;
 BEGIN
+  -- Orden de bloqueo ÚNICO en todas las funciones del examen (asignación → intento): sin deadlocks entre el envío,
+  -- una respuesta tardía y el job de vencidos sobre el mismo intento.
+  PERFORM 1 FROM public.hse_training_assignments
+  WHERE id = (SELECT x.assignment_id FROM public.hse_training_attempts x WHERE x.id = p_attempt_id)
+  FOR UPDATE;
   SELECT * INTO v_attempt FROM public.hse_training_attempts WHERE id = p_attempt_id FOR UPDATE;
   IF NOT FOUND OR (v_company IS NOT NULL AND v_attempt.company_id <> v_company) THEN
     RAISE EXCEPTION 'hse_grade_attempt: el intento no existe';
@@ -372,7 +377,8 @@ BEGIN
     AND a.question_id = ANY (v_attempt.question_order);
 
   v_percent := CASE WHEN v_attempt.max_points > 0 THEN round(v_points * 100.0 / v_attempt.max_points, 2) ELSE 0 END;
-  v_passed := v_percent >= v_training.passing_score;
+  -- Aprobado con aritmética entera (sin el redondeo del porcentaje que se muestra).
+  v_passed := v_attempt.max_points > 0 AND v_points * 100 >= v_training.passing_score * v_attempt.max_points;
   v_when := CASE WHEN v_expired THEN v_attempt.deadline_at ELSE now() END;
 
   PERFORM set_config('app.hse_grading', 'on', true);
@@ -528,6 +534,10 @@ BEGIN
   IF v_employee IS NULL OR v_company IS NULL THEN
     RAISE EXCEPTION 'hse_save_answer: falta el empleado del contexto';
   END IF;
+  PERFORM 1 FROM public.hse_training_assignments
+  WHERE id = (SELECT x.assignment_id FROM public.hse_training_attempts x
+              WHERE x.id = p_attempt_id AND x.employee_id = v_employee AND x.company_id = v_company)
+  FOR UPDATE;
   SELECT * INTO v_attempt FROM public.hse_training_attempts
   WHERE id = p_attempt_id AND employee_id = v_employee AND company_id = v_company
   FOR UPDATE;
@@ -578,7 +588,6 @@ BEGIN
     WHERE a.company_id = p_company_id AND a.status = 'in_progress'
       AND a.deadline_at IS NOT NULL AND a.deadline_at <= now()
     ORDER BY a.deadline_at
-    FOR UPDATE SKIP LOCKED
   LOOP
     PERFORM public.hse_grade_attempt(v_id);
     v_closed := v_closed + 1;

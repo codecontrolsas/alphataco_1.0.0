@@ -41,7 +41,7 @@ export async function runHseExpiredAttemptsJob(deps: { now?: Date } = {}): Promi
     date: slot,
     work: async (company) => {
       if (!isHseEnabled()) return { skipped: true, reason: 'HSE apagado en la instancia' };
-      const closed = await callScalar('hse_close_expired_attempts', [company.id], closedSchema);
+      const closed = await callScalar('hse_close_expired_attempts', [{ uuid: company.id }], closedSchema);
       return { reason: `${closed} examen(es) vencido(s) cerrado(s)`, metadata: { closed } };
     },
   });

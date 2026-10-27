@@ -40,7 +40,7 @@ export function getColumns(): ColumnDef<HseTrainingListItem>[] {
       ...titled('Capacitación'),
       cell: ({ row }) => (
         <Link
-          href={`/dashboard/hse/trainings/${row.original.id}`}
+          href={`/dashboard/hse/trainings/${row.original.id}?tab=capacitaciones`}
           className="font-medium text-brand-ink underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
         >
           {row.original.title}
