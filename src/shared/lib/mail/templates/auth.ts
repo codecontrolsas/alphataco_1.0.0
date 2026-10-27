@@ -55,3 +55,46 @@ export async function sendInvitationEmail(params: {
     ),
   });
 }
+
+/**
+ * Invitación al portal de empleados (ticket 804): el empleado define su contraseña con el enlace y entra a `/portal`.
+ * Distinto de la invitación a la empresa: no es un usuario del sistema, es el acceso a sus propios datos.
+ */
+export async function sendPortalInvitationEmail(params: {
+  to: string;
+  name?: string | null;
+  companyName: string;
+  url: string;
+}): Promise<boolean> {
+  const saludo = params.name ? `Hola ${params.name}` : 'Hola';
+  return sendMail({
+    to: params.to,
+    subject: `Tu acceso al portal de empleados de ${params.companyName}`,
+    text: `${saludo}, ${params.companyName} te habilitó el portal de empleados. Definí tu contraseña acá: ${params.url}`,
+    html: renderActionEmail(
+      `Tu acceso al portal de ${params.companyName}`,
+      `${saludo}, Recursos Humanos te habilitó el portal de empleados. Definí tu contraseña para entrar por primera vez; el enlace vence en 24 horas.`,
+      { url: params.url, label: 'Definir mi contraseña' }
+    ),
+  });
+}
+
+/** Aviso al empleado que ya tenía usuario: entra al portal con su contraseña de siempre. */
+export async function sendPortalAccessEnabledEmail(params: {
+  to: string;
+  name?: string | null;
+  companyName: string;
+  url: string;
+}): Promise<boolean> {
+  const saludo = params.name ? `Hola ${params.name}` : 'Hola';
+  return sendMail({
+    to: params.to,
+    subject: `Ya tenés acceso al portal de empleados de ${params.companyName}`,
+    text: `${saludo}, ya podés entrar al portal de empleados con tu usuario y contraseña de siempre: ${params.url}`,
+    html: renderActionEmail(
+      `Ya tenés acceso al portal de ${params.companyName}`,
+      `${saludo}, Recursos Humanos te habilitó el portal de empleados. Entrá con tu usuario y contraseña de siempre.`,
+      { url: params.url, label: 'Ir al portal' }
+    ),
+  });
+}

@@ -5,9 +5,11 @@ import { PermissionGuard } from '@/features/Permissions/components/PermissionGua
 import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
 import { RecordSectionsServer } from '@/features/TabsManager/RecordSectionsServer';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
-import { CalendarDays, ChevronRight, FileText, IdCard, Shirt } from 'lucide-react';
+import { CalendarDays, ChevronRight, FileText, IdCard, Shirt, Smartphone } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { PortalAccessTabContent } from '../../PortalAccess/PortalAccessTabContent';
+import { PortalAccessSkeleton } from '../../PortalAccess/fallback/PortalAccessSkeleton';
 import type { EmployeeDetailData } from '../../actions.server';
 import { EmployeeDiagramsSection } from '../EmployeeDiagramsSection';
 import { EmployeeHeaderContent } from '../EmployeeHeaderContent';
@@ -137,6 +139,19 @@ export async function EmployeeReadView({ employee, searchParams }: EmployeeReadV
             content: (
               <Suspense fallback={<ClothingTableSkeleton />}>
                 <EmployeeDeliveriesTabContent employeeId={employeeId} searchParams={searchParams} />
+              </Suspense>
+            ),
+          },
+          {
+            value: 'portal',
+            label: 'Portal',
+            description: 'Acceso del empleado al portal',
+            icon: <Smartphone aria-hidden="true" />,
+            moduleSlug: 'empleados',
+            tabSlug: 'portal_empleado',
+            content: (
+              <Suspense fallback={<PortalAccessSkeleton />}>
+                <PortalAccessTabContent employeeId={employeeId} />
               </Suspense>
             ),
           },

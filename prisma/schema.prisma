@@ -1330,6 +1330,8 @@ model employees {
   material_requests    material_requests[] @relation("material_request_employee")
   purchase_requests purchase_requests[] @relation("purchase_request_employee")
   org_chart_positions org_chart_positions[]
+  portal_access        employee_portal_access?
+  portal_access_events employee_portal_access_events[]
 
   @@index([type_of_contract], map: "idx_employees_type_of_contract")
   @@schema("public")
@@ -6410,5 +6412,75 @@ model processed_commands {
   @@id([company_id, command_id])
   @@index([company_id], map: "idx_processed_commands_company_id")
   @@index([created_at], map: "idx_processed_commands_created_at")
+  @@schema("public")
+}
+
+// ── Portal de empleados (ticket 804, fase 1) ────────────────────────────────────────────────
+
+enum portal_access_status {
+  enabled
+  disabled
+
+  @@schema("public")
+}
+
+/// Cómo se le dio la credencial al empleado: invitación por mail, contraseña temporal o su usuario ya existente.
+enum portal_access_method {
+  invitation
+  temporary_password
+  existing_account
+
+  @@schema("public")
+}
+
+enum portal_access_event_action {
+  enabled
+  disabled
+  invitation_sent
+  temporary_password_issued
+
+  @@schema("public")
+}
+
+/// Acceso del empleado al portal (/portal). Lo habilita RR.HH. desde el legajo; no hay registro libre.
+/// RLS: aislamiento por empresa + `employee_self` restrictiva (el empleado solo ve su fila y no la escribe).
+model employee_portal_access {
+  id                 String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id         String                @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  employee_id        String                @unique(map: "employee_portal_access_employee_key") @db.Uuid
+  /// `auth_user.id` (= `profile.credential_id`) con el que entra el empleado.
+  credential_id      String                @db.Uuid
+  status             portal_access_status
+  method             portal_access_method
+  /// `true` si la credencial la creó el portal: solo entonces RR.HH. puede reemitir invitación o contraseña temporal.
+  created_credential Boolean               @default(false)
+  /// `profile.id` de quien habilitó o deshabilitó (sin FK, como el resto de las columnas de auditoría).
+  granted_by         String                @db.Uuid
+  granted_at         DateTime              @default(now()) @db.Timestamptz(6)
+  revoked_by         String?               @db.Uuid
+  revoked_at         DateTime?             @db.Timestamptz(6)
+  created_at         DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime              @default(now()) @db.Timestamptz(6)
+  employees          employees             @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@index([company_id], map: "idx_employee_portal_access_company_id")
+  @@index([credential_id], map: "idx_employee_portal_access_credential_id")
+  @@schema("public")
+}
+
+/// Bitácora del acceso al portal: quién habilitó, invitó, emitió contraseña temporal o deshabilitó a quién.
+model employee_portal_access_events {
+  id           String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id   String                     @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  employee_id  String                     @db.Uuid
+  action       portal_access_event_action
+  /// `profile.id` de quien hizo la acción.
+  performed_by String                     @db.Uuid
+  detail       String?
+  created_at   DateTime                   @default(now()) @db.Timestamptz(6)
+  employees    employees                  @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@index([company_id], map: "idx_employee_portal_access_events_company_id")
+  @@index([employee_id, created_at(sort: Desc)], map: "idx_employee_portal_access_events_employee")
   @@schema("public")
 }
