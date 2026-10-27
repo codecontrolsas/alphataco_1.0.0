@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { refreshResourceStatus } from '@/features/Documentacion/shared/compliance/server/document-status.server';
+import { syncHseAcknowledgements } from '@/features/Hse/use-cases/sync-acknowledgements';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
@@ -194,6 +195,8 @@ export async function updateEmployeeMutation(employeeId: string, input: Employee
       // Cache de status: se recalcula con el estado FINAL del empleado (las M:M cambian
       // despues del update escalar). Va ultimo para que su valor sea el que queda en la transaccion.
       await refreshResourceStatus(tx, 'Persona', company_id, employeeId);
+      // Puesto o sector nuevos: documentos HSE que pasan a aplicar (pendientes) o dejan de aplicar (archivados).
+      await syncHseAcknowledgements(tx, { companyId: company_id, employeeId });
 
       return {
         id: updated.id,

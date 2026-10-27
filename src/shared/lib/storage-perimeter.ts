@@ -121,6 +121,18 @@ export async function resolveStorageObjectOwner(
     return profileId && UUID_RE.test(profileId) ? { kind: 'profile', profileId } : null;
   }
 
+  if (bucket === 'hse-files') {
+    // El prefijo de empresa NO alcanza: dentro de la empresa hay borradores y documentos que no le aplican a cada
+    // empleado. El dueño sale de la fila de la versión leída con el cliente contextual: la RLS de
+    // `hse_document_versions` deja verla solo con el permiso de HSE o, al empleado del portal, si es la versión
+    // vigente y publicada de un documento que le aplica. Sin fila visible no hay archivo.
+    const version = await prisma.hse_document_versions.findFirst({
+      where: { file_path: path },
+      select: { company_id: true, file_name: true },
+    });
+    return version ? { kind: 'company', companyId: version.company_id, downloadName: version.file_name } : null;
+  }
+
   if (isCompanyPrefixedBucket(bucket)) {
     const companyId = companyIdFromKey(path);
     return companyId ? { kind: 'company', companyId } : null;

@@ -1,6 +1,7 @@
 'use server';
 
 import { refreshResourceStatus } from '@/features/Documentacion/shared/compliance/server/document-status.server';
+import { syncHseAcknowledgements } from '@/features/Hse/use-cases/sync-acknowledgements';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { COMPANY_USERS_INVALIDATION } from '@/shared/constants/cache-invalidation-map';
@@ -90,6 +91,8 @@ export async function toggleEmployeeStatus(
     if (updated.count === 0) throw new Error('Empleado no encontrado en la empresa activa');
     // Baja/reintegro: `is_active` cambia qué documentos se exigen (los de baja). Refresca el cache de status.
     await refreshResourceStatus(tx, 'Persona', companyId, employeeId);
+    // Baja: lo pendiente de HSE se archiva (deja de aplicar); reintegro: vuelve a aplicar.
+    await syncHseAcknowledgements(tx, { companyId, employeeId });
 
     const diagramResult = await callScalar(
       'update_employee_diagram_status',
