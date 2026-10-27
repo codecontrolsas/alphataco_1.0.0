@@ -85,6 +85,11 @@ export interface TabDefinition<M extends ModuleSlug = ModuleSlug> {
   hideTitle?: boolean;
   /** Texto corto bajo el título de la sección (`PageHeader`). */
   description?: string;
+  /**
+   * URL propia de la sección para el selector de secciones de móvil, cuando no es `?<paramName>=<value>`
+   * (ej. Configuración › Usuarios y accesos conserva `?tab=general&subtab=users`).
+   */
+  href?: string;
 }
 
 /**
@@ -150,8 +155,17 @@ export interface ViewManagerServerProps<M extends ModuleSlug = ModuleSlug> {
   permissions: Record<string, boolean>;
   /** Parámetros que se conservan al cambiar de vista (default `['tab']`); el resto se descarta. */
   preserveParams?: string[];
-  /** `menu`: desplegable en todos los anchos. `rail`: columna lateral desde `2xl`, desplegable debajo. */
-  layout?: 'rail' | 'menu';
+  /**
+   * `menu`: desplegable en todos los anchos. `rail`: columna lateral desde `2xl`, desplegable debajo.
+   * `tabs`: pestañas horizontales con el contenido a ancho completo (Configuración); ver `tabsLevel`.
+   */
+  layout?: 'rail' | 'menu' | 'tabs';
+  /**
+   * Solo con `layout="tabs"`. `primary` (default): fila de pestañas del primer nivel de la página, fija
+   * bajo el header al hacer scroll, con la descripción de la pestaña activa debajo. `secondary`: control
+   * segmentado para un segundo nivel dentro de una pestaña (no se fija ni muestra descripción).
+   */
+  tabsLevel?: 'primary' | 'secondary';
   ariaLabel: string;
   actions?: React.ReactNode;
 }

@@ -36,7 +36,7 @@ export async function SectionManagerServer<M extends ModuleSlug = ModuleSlug>({
     );
   }
 
-  const navItems = visibleTabs.map((tab) => ({ value: tab.value, label: tab.label }));
+  const navItems = visibleTabs.map((tab) => ({ value: tab.value, label: tab.label, href: tab.href }));
   const hasMultiple = visibleTabs.length > 1;
 
   return (

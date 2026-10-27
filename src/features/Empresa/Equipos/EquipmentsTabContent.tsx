@@ -62,7 +62,7 @@ export default function EquipmentsTabContent({
       defaultView="tipos"
       permissions={permissions}
       preserveParams={['tab']}
-      layout="rail"
+      layout="tabs"
       ariaLabel="Flota"
       views={[
         {
