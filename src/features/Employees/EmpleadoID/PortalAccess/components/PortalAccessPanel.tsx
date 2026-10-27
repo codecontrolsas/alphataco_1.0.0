@@ -300,8 +300,8 @@ export function PortalAccessPanel({ employeeId, overview }: PortalAccessPanelPro
           <AlertDialogHeader>
             <AlertDialogTitle>¿Deshabilitar el portal?</AlertDialogTitle>
             <AlertDialogDescription>
-              El empleado deja de poder entrar en su próximo acceso. Si su usuario es solo del portal, se cierran sus
-              sesiones abiertas. Podés volver a habilitarlo cuando quieras.
+              El empleado deja de poder entrar al portal en su próximo acceso. Si el usuario lo creó el portal, se
+              cierran sus sesiones abiertas. Podés volver a habilitarlo cuando quieras.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

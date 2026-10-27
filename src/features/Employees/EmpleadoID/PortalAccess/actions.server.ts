@@ -67,15 +67,6 @@ async function findCompanyEmployee(employeeId: string, companyId: string) {
   });
 }
 
-/** ¿La credencial es miembro o dueña de alguna empresa? Si no, es un usuario SOLO del portal. */
-async function isCompanyMember(profileId: string): Promise<boolean> {
-  const [membership, owned] = await Promise.all([
-    prismaSystem.share_company_users.count({ where: { profile_id: profileId, is_active: true } }),
-    prismaSystem.company.count({ where: { owner_id: profileId } }),
-  ]);
-  return membership > 0 || owned > 0;
-}
-
 /** Deja el acceso habilitado (alta o rehabilitación) y anota el evento. Corre dentro de la transacción de la action. */
 async function upsertEnabledAccess(
   tx: Prisma.TransactionClient,
@@ -384,8 +375,8 @@ async function issueCredentialAccess(input: {
 
 /**
  * Deshabilita el portal del legajo. Corta la entrada en el próximo request (el perímetro mira el estado siempre).
- * Si la credencial es SOLO del portal, además cierra sus sesiones y anula las invitaciones pendientes; si es un usuario
- * del dashboard, sus sesiones siguen (perdería el dashboard por una decisión sobre el portal).
+ * Si la credencial la creó el portal, además cierra sus sesiones y anula las invitaciones pendientes; si es una cuenta
+ * reutilizada (dashboard, ropa, taller), sus sesiones siguen: perdería esos accesos por una decisión sobre el portal.
  */
 export async function disableEmployeePortalAccess(employeeId: string): Promise<PortalAccessActionResult> {
   try {
@@ -415,18 +406,15 @@ export async function disableEmployeePortalAccess(employeeId: string): Promise<P
       });
     });
 
-    const profile = await prismaSystem.profile.findUnique({
-      where: { credential_id: access.credential_id },
-      select: { id: true },
-    });
-    const portalOnly = !profile || !(await isCompanyMember(profile.id));
+    // Solo la credencial que creó el portal es "del portal": a esa se le cierran las sesiones y se anulan las
+    // invitaciones pendientes. Una cuenta reutilizada (dashboard, ropa, taller) conserva sus sesiones: el perímetro del
+    // portal mira el estado en cada request, así que igual deja de entrar al portal.
+    const portalOnly = access.created_credential;
     if (portalOnly) {
       await prismaSystem.session.deleteMany({ where: { userId: access.credential_id } });
-      if (access.created_credential) {
-        await prismaSystem.verification.deleteMany({
-          where: { value: access.credential_id, identifier: { startsWith: 'reset-password:' } },
-        });
-      }
+      await prismaSystem.verification.deleteMany({
+        where: { value: access.credential_id, identifier: { startsWith: 'reset-password:' } },
+      });
     }
 
     revalidatePath('/dashboard/employee/action');
@@ -434,7 +422,7 @@ export async function disableEmployeePortalAccess(employeeId: string): Promise<P
       success: true,
       message: portalOnly
         ? 'Portal deshabilitado. Se cerraron las sesiones del empleado.'
-        : 'Portal deshabilitado. El empleado conserva su acceso al sistema.',
+        : 'Portal deshabilitado. El empleado conserva su usuario para el resto del sistema.',
     };
   } catch (error) {
     logger.error('Error al deshabilitar el portal', { data: { error, employeeId } });
