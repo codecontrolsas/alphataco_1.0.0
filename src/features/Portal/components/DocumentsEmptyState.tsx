@@ -1,8 +1,8 @@
 import { FileText } from 'lucide-react';
 
 /**
- * "Mis documentos" en la fase 1: todavía no hay documentos HSE (llegan en la fase 2). Es un estado vacío HONESTO: no se
- * inventan filas de ejemplo (el portal viejo tenía maquetas con datos fijos que parecían funcionar y no funcionaban).
+ * "Mis documentos" sin documentos vigentes: no hay ninguno publicado que le aplique (o HSE está apagado). Estado vacío
+ * HONESTO: no se inventan filas de ejemplo (el portal viejo tenía maquetas con datos fijos que parecían funcionar).
  */
 export function DocumentsEmptyState({ compact = false }: { compact?: boolean }) {
   return (
