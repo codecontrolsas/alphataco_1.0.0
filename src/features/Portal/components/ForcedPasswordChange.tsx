@@ -63,7 +63,9 @@ export function ForcedPasswordChange() {
                 <FormControl>
                   <PasswordInput {...field} autoComplete="new-password" autoFocus />
                 </FormControl>
-                <FormDescription>Mínimo 8 caracteres, con mayúscula, minúscula y número.</FormDescription>
+                <FormDescription>
+                  Mínimo 8 caracteres, con mayúscula, minúscula, número y un carácter especial.
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
