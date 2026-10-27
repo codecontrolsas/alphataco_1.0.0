@@ -1332,6 +1332,7 @@ model employees {
   org_chart_positions org_chart_positions[]
 
   @@index([type_of_contract], map: "idx_employees_type_of_contract")
+  @@index([company_id, is_active, lastname, firstname, id], map: "idx_employees_company_active_name")
   @@schema("public")
 }
 

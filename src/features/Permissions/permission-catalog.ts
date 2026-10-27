@@ -301,6 +301,55 @@ export const ACTION_OVERRIDES: Partial<Record<PermissionOverrideKey, ActionOverr
   'seleccion:candidatos:approve': { description: 'Aprobar o rechazar candidatos' },
 };
 
+// ============================================
+// APP MÓVIL
+// ============================================
+/**
+ * Permisos que también aplica la API de la app móvil (`/api/mobile/v1`). Son los MISMOS de la web: un usuario sin
+ * uno de estos permisos no puede hacer en la app lo que no puede hacer en la web. La API solo consulta claves de esta
+ * lista (su tipo lo exige), y el editor de roles y permisos las marca con la insignia «Móvil». Si la API empieza a
+ * usar otra clave, se agrega acá.
+ */
+export const MOBILE_PERMISSION_KEYS = [
+  // Partes diarios (líneas, recursos y estado)
+  'operaciones:detalle-parte-diario:view',
+  'operaciones:detalle-parte-diario:update',
+  'operaciones:detalle-parte-diario:delete',
+  'operaciones:detalle-parte-diario:assign_resources',
+  // Empleados (solo lectura): listados de activos y bajas, legajo y sus bloques
+  'empleados:empleados-activos:view',
+  'empleados:empleados-inactivos:view',
+  'empleados:employees:view',
+  'empleados:datos-personales:view',
+  'empleados:datos-contacto:view',
+  'empleados:datos-laborales:view',
+  'empleados:diagramas-empleado:view',
+  'empleados:new:view',
+  'empleados:indumentaria_empleado:view',
+  // Documentación del legajo
+  'documentacion:documentos-de-empleados:view',
+  'documentacion:documentos-de-empleados:view_private',
+  'documentacion:docs-empleados-permanentes:view',
+  'documentacion:docs-empleados-mensuales:view',
+] as const satisfies readonly PermissionOverrideKey[];
+
+export type MobilePermissionKey = (typeof MOBILE_PERMISSION_KEYS)[number];
+
+const MOBILE_PERMISSION_SET: ReadonlySet<string> = new Set(MOBILE_PERMISSION_KEYS);
+
+/** `true` si la acción de esa pestaña la usa también la app móvil. */
+export function isMobilePermission(moduleSlug: string | null, tabSlug: string, actionSlug: string): boolean {
+  if (!moduleSlug) return false;
+  return MOBILE_PERMISSION_SET.has(`${moduleSlug}:${tabSlug}:${actionSlug}`);
+}
+
+/** `true` si alguna acción de la pestaña la usa la app móvil (para marcar la pestaña en el editor). */
+export function isMobileTab(moduleSlug: string | null, tabSlug: string): boolean {
+  if (!moduleSlug) return false;
+  const prefix = `${moduleSlug}:${tabSlug}:`;
+  return MOBILE_PERMISSION_KEYS.some((key) => key.startsWith(prefix));
+}
+
 /** Nombre y descripción de una acción en una pestaña: override puntual, si no el genérico. */
 export function resolveActionCopy(
   moduleSlug: string,
