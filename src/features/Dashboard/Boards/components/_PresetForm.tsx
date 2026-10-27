@@ -186,12 +186,9 @@ export function PresetForm({ preset, layout, onSaved }: PresetFormProps) {
                 <FormLabel>Usuarios</FormLabel>
                 <FormControl>
                   <MultiSelectCombobox
-                    options={(candidates.data ?? []).map((user) => ({
-                      value: user.id,
-                      label: user.email && user.email !== user.name ? `${user.name} (${user.email})` : user.name,
-                    }))}
+                    options={(candidates.data ?? []).map((user) => ({ value: user.id, label: user.name }))}
                     placeholder={candidates.isLoading ? 'Cargando usuarios…' : 'Elegir usuarios'}
-                    searchPlaceholder="Buscar por nombre o correo"
+                    searchPlaceholder="Buscar por nombre"
                     emptyMessage="No hay otros usuarios en la empresa"
                     selectedValues={field.value}
                     onChange={(values) => field.onChange(values.filter(Boolean))}

@@ -342,29 +342,27 @@ async function loadCompanyUsers(owner: Owner) {
   const [members, company] = await Promise.all([
     prisma.share_company_users.findMany({
       where: { company_id: owner.companyId, is_active: true, profile: { credential_id: { not: null } } },
-      select: { profile: { select: { credential_id: true, fullname: true, email: true } } },
+      select: { profile: { select: { credential_id: true, fullname: true } } },
     }),
     prisma.company.findUnique({
       where: { id: owner.companyId },
-      select: { profile: { select: { credential_id: true, fullname: true, email: true } } },
+      select: { profile: { select: { credential_id: true, fullname: true } } },
     }),
   ]);
-  const byId = new Map<string, { id: string; name: string; email: string | null }>();
+  // Solo el nombre: el correo de los usuarios exige el permiso de Usuarios en la web, acá no se expone.
+  const byId = new Map<string, { id: string; name: string }>();
   for (const profile of [...members.map((member) => member.profile), company?.profile]) {
     if (!profile?.credential_id || profile.credential_id === owner.userId) continue;
     byId.set(profile.credential_id, {
       id: profile.credential_id,
-      name: profile.fullname || profile.email || 'Usuario sin nombre',
-      email: profile.email,
+      name: profile.fullname || 'Usuario sin nombre',
     });
   }
   return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, 'es'));
 }
 
 /** Usuarios de la empresa con los que se puede compartir un preset (para el selector múltiple). */
-export async function getDashboardShareCandidates(): Promise<
-  BoardActionResult<{ id: string; name: string; email: string | null }[]>
-> {
+export async function getDashboardShareCandidates(): Promise<BoardActionResult<{ id: string; name: string }[]>> {
   if (!(await canUseDashboard())) return { ok: false, error: FORBIDDEN_ERROR };
   const owner = await requireOwner();
   if (!owner) return { ok: false, error: NO_SESSION_ERROR };
@@ -546,8 +544,8 @@ class EmptyShareError extends Error {}
 const duplicatePresetSchema = z.object({ boardId: z.string().uuid(), name: boardNameSchema });
 
 /**
- * Duplica un preset que el usuario puede ver (propio o compartido) como uno propio y privado. Los widgets que el
- * usuario no puede ver se quitan de la copia.
+ * Duplica un preset PROPIO como uno nuevo y privado (renombrar, duplicar, eliminar y cambiar el alcance son solo del
+ * dueño; quien recibe un compartido lo copia con «Guardar como preset»). Se quitan los widgets que ya no puede ver.
  */
 export async function duplicateDashboardPreset(
   input: z.input<typeof duplicatePresetSchema>
@@ -560,8 +558,9 @@ export async function duplicateDashboardPreset(
   if (!owner) return { ok: false, error: NO_SESSION_ERROR };
   const visible = await getVisibleWidgetIds();
 
-  // Solo se duplica lo que el usuario ve en su selector (propio o compartido con él).
-  const source = (await getUserBoards()).find((board) => board.id === parsed.data.boardId && board.persisted);
+  const source = (await getUserBoards()).find(
+    (board) => board.id === parsed.data.boardId && board.persisted && board.isOwner
+  );
   if (!source) return { ok: false, error: NOT_FOUND_ERROR };
   const layout = source.layout.filter((item) => visible.has(item.widgetId as WidgetId));
 

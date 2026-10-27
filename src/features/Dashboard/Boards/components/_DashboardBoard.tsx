@@ -239,7 +239,7 @@ export function DashboardBoard({
         toast.error(result.error);
         return;
       }
-      toast.success(`Se duplicó «${board.name}» como preset propio (${result.data.widgets} widgets)`);
+      toast.success(`Se duplicó «${board.name}» (${result.data.widgets} widgets)`);
       goTo(boardHref(result.data.id));
     },
     onError: () => toast.error('No se pudo duplicar el preset. Intentá nuevamente.'),
@@ -357,73 +357,76 @@ export function DashboardBoard({
               <Settings2 aria-hidden="true" className="size-4" />
               Personalizar
             </Button>
-            <DropdownMenu modal={false}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  aria-label="Más acciones de tableros"
-                  disabled={busy}
-                >
-                  <MoreHorizontal aria-hidden="true" className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-60">
-                {board.isOwner ? (
-                  <>
-                    <DropdownMenuItem onSelect={() => nameSheet.openEdit({ id: board.id, name: board.name })}>
-                      <Pencil aria-hidden="true" className="size-4" />
-                      Renombrar tablero
-                    </DropdownMenuItem>
-                    {board.persisted ? (
-                      <DropdownMenuItem
-                        onSelect={() =>
-                          presetSheet.openEdit({
-                            id: board.id,
-                            name: board.name,
-                            visibility: board.visibility,
-                            sharedUserIds: board.sharedUserIds,
-                          })
-                        }
-                      >
-                        <Users aria-hidden="true" className="size-4" />
-                        Cambiar quién lo ve
+            {/* Quien no es dueño no tiene acciones sobre el preset: lo copia con «Guardar como preset». */}
+            {board.isOwner ? (
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label="Más acciones de tableros"
+                    disabled={busy}
+                  >
+                    <MoreHorizontal aria-hidden="true" className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-60">
+                  {board.isOwner ? (
+                    <>
+                      <DropdownMenuItem onSelect={() => nameSheet.openEdit({ id: board.id, name: board.name })}>
+                        <Pencil aria-hidden="true" className="size-4" />
+                        Renombrar tablero
                       </DropdownMenuItem>
-                    ) : null}
-                  </>
-                ) : null}
-                {board.persisted ? (
-                  <DropdownMenuItem onSelect={() => duplicateMutation.mutate()}>
-                    <Copy aria-hidden="true" className="size-4" />
-                    Duplicar como propio
-                  </DropdownMenuItem>
-                ) : null}
-                {board.isOwner ? (
-                  <>
-                    <DropdownMenuItem disabled={!canMoveUp} onSelect={() => moveMutation.mutate('up')}>
-                      <ArrowUp aria-hidden="true" className="size-4" />
-                      Mover antes en la lista
+                      {board.persisted ? (
+                        <DropdownMenuItem
+                          onSelect={() =>
+                            presetSheet.openEdit({
+                              id: board.id,
+                              name: board.name,
+                              visibility: board.visibility,
+                              sharedUserIds: board.sharedUserIds,
+                            })
+                          }
+                        >
+                          <Users aria-hidden="true" className="size-4" />
+                          Cambiar quién lo ve
+                        </DropdownMenuItem>
+                      ) : null}
+                    </>
+                  ) : null}
+                  {board.persisted && board.isOwner ? (
+                    <DropdownMenuItem onSelect={() => duplicateMutation.mutate()}>
+                      <Copy aria-hidden="true" className="size-4" />
+                      Duplicar tablero
                     </DropdownMenuItem>
-                    <DropdownMenuItem disabled={!canMoveDown} onSelect={() => moveMutation.mutate('down')}>
-                      <ArrowDown aria-hidden="true" className="size-4" />
-                      Mover después en la lista
+                  ) : null}
+                  {board.isOwner ? (
+                    <>
+                      <DropdownMenuItem disabled={!canMoveUp} onSelect={() => moveMutation.mutate('up')}>
+                        <ArrowUp aria-hidden="true" className="size-4" />
+                        Mover antes en la lista
+                      </DropdownMenuItem>
+                      <DropdownMenuItem disabled={!canMoveDown} onSelect={() => moveMutation.mutate('down')}>
+                        <ArrowDown aria-hidden="true" className="size-4" />
+                        Mover después en la lista
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem variant="destructive" onSelect={() => setConfirm('delete')}>
+                        <Trash2 aria-hidden="true" className="size-4" />
+                        Eliminar tablero
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
+                  {board.persisted && board.isOwner ? (
+                    <DropdownMenuItem onSelect={() => setConfirm('reset')}>
+                      <RotateCcw aria-hidden="true" className="size-4" />
+                      Restablecer tableros por defecto
                     </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem variant="destructive" onSelect={() => setConfirm('delete')}>
-                      <Trash2 aria-hidden="true" className="size-4" />
-                      Eliminar tablero
-                    </DropdownMenuItem>
-                  </>
-                ) : null}
-                {board.persisted && board.isOwner ? (
-                  <DropdownMenuItem onSelect={() => setConfirm('reset')}>
-                    <RotateCcw aria-hidden="true" className="size-4" />
-                    Restablecer tableros por defecto
-                  </DropdownMenuItem>
-                ) : null}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  ) : null}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
           </div>
         )}
       </div>
