@@ -3,6 +3,7 @@ import 'server-only';
 import type { Prisma } from '@/generated/prisma/client';
 import { auth } from '@/shared/lib/auth';
 import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
+import { setTenantContext } from '@/shared/lib/tenant-context';
 import { hashPassword } from 'better-auth/crypto';
 import { randomBytes, randomUUID } from 'node:crypto';
 
@@ -25,6 +26,25 @@ import { randomBytes, randomUUID } from 'node:crypto';
  * `auth-credentials.integration.test.ts`, que crea un usuario por acá y después lo loguea con
  * `auth.api.signInEmail()` contra el Postgres del compose.
  */
+
+/**
+ * Transacción que toca credenciales (`auth_user`, `auth_account`, `auth_verification`, `auth_session`). Esas tablas están
+ * cerradas al rol de la app (`20261027140000_rls_remaining_tables`): solo las escribe el cliente de sistema. Se usa ese
+ * cliente con el contexto de la empresa y del actor fijado a mano (para los DEFAULT de `company_id` y la auditoría).
+ * Como el sistema saltea la RLS, el perímetro de estas escrituras es el de la action que la llama: permiso y empresa
+ * activa (y el legajo o el rol de esa empresa) validados ANTES de llegar acá. La usan el acceso al portal y el alta de
+ * usuario de la empresa.
+ */
+export function withCredentialTransaction<T>(
+  companyId: string,
+  actorCredentialId: string,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>
+): Promise<T> {
+  return prisma.$transaction(async (tx) => {
+    await setTenantContext(tx, { companyId, userId: actorCredentialId, kind: 'user' });
+    return fn(tx);
+  });
+}
 
 /** Cliente mínimo que necesitan estos helpers: sirve tanto `prisma` como un `tx`. */
 export type CredentialTx = Pick<Prisma.TransactionClient, 'user' | 'account'>;
@@ -93,7 +113,11 @@ export async function createCredential(tx: CredentialTx, input: CreateCredential
  * Invalida las demás sesiones del usuario: cambiar la contraseña tiene que cerrar las sesiones
  * abiertas en otros dispositivos.
  */
-export async function setCredentialPassword(userId: string, password: string, keepSessionToken?: string): Promise<void> {
+export async function setCredentialPassword(
+  userId: string,
+  password: string,
+  keepSessionToken?: string
+): Promise<void> {
   const hash = await hashPassword(password);
   const now = new Date();
 

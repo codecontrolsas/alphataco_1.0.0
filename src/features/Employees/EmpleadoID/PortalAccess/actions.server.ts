@@ -5,7 +5,12 @@ import { isPortalEnabled } from '@/features/Portal/lib/feature-gate';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { withActor } from '@/shared/lib/actor';
-import { createCredential, createPasswordSetupLink, normalizeEmail } from '@/shared/lib/auth-credentials';
+import {
+  createCredential,
+  createPasswordSetupLink,
+  normalizeEmail,
+  withCredentialTransaction,
+} from '@/shared/lib/auth-credentials';
 import { findUserProfileByEmployee } from '@/shared/lib/employee-profile';
 import { appUrl } from '@/shared/lib/mail/shell';
 import { sendPortalAccessEnabledEmail, sendPortalInvitationEmail } from '@/shared/lib/mail/templates/auth';
@@ -13,7 +18,6 @@ import { prisma } from '@/shared/lib/prisma';
 import { prismaSystem } from '@/shared/lib/prisma-system';
 import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { setTenantContext } from '@/shared/lib/tenant-context';
 import { hashPassword } from 'better-auth/crypto';
 import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'node:crypto';
@@ -111,24 +115,6 @@ async function upsertEnabledAccess(
         ? [{ employee_id: input.employeeId, action: input.extraEvent, performed_by: input.actorProfileId }]
         : []),
     ],
-  });
-}
-
-/**
- * Transacción que toca credenciales (`auth_user`, `auth_account`, `auth_verification`, `auth_session`). Esas tablas están
- * cerradas al rol de la app (`20261027140000_rls_remaining_tables`): solo las escribe el cliente de sistema. Se usa ese
- * cliente con el contexto de la empresa y del actor fijado a mano (para los DEFAULT de `company_id` y la auditoría).
- * Como el sistema saltea la RLS, el perímetro de estas escrituras es el de la action: permiso y legajo de la empresa
- * activa, validados ANTES de llegar acá.
- */
-function withCredentialTransaction<T>(
-  companyId: string,
-  actorCredentialId: string,
-  fn: (tx: Prisma.TransactionClient) => Promise<T>
-): Promise<T> {
-  return prismaSystem.$transaction(async (tx) => {
-    await setTenantContext(tx, { companyId, userId: actorCredentialId, kind: 'user' });
-    return fn(tx);
   });
 }
 

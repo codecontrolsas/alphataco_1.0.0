@@ -1,14 +1,20 @@
 'use server';
 
-import type { Prisma } from '@/generated/prisma/client';
 import { buildFullname, registerUserSchema, type RegisterUserInput } from '@/features/Auth/schemas/register-user';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { COMPANY_USERS_INVALIDATION } from '@/shared/constants/cache-invalidation-map';
 import { withActor } from '@/shared/lib/actor';
-import { createCredential, createPasswordSetupLink, normalizeEmail } from '@/shared/lib/auth-credentials';
+import {
+  createCredential,
+  createPasswordSetupLink,
+  normalizeEmail,
+  withCredentialTransaction,
+} from '@/shared/lib/auth-credentials';
 import { sendInvitationEmail } from '@/shared/lib/mail/templates/auth';
 import { prisma } from '@/shared/lib/prisma';
+import { prismaSystem } from '@/shared/lib/prisma-system';
 import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { invalidateCacheTags } from '@/shared/utils/cache-invalidation';
@@ -23,6 +29,14 @@ import { invalidateCacheTags } from '@/shared/utils/cache-invalidation';
  * - La empresa sale SIEMPRE de `getActiveCompanyId()`; el caller no manda `companyId` ni se lee
  *   la cookie `actualComp` a mano.
  * - Exige `empresa.usuarios-empleados.create`, el mismo permiso que ya guardaba el botón en la UI.
+ *
+ * Bajo RLS (rol `alphataco_app`) hay dos cosas que el cliente de la app no puede hacer, y van por el de sistema DESPUÉS
+ * de validar sesión, permiso y rol:
+ * - Buscar el perfil por mail: `profile_read` solo muestra los perfiles de la empresa activa, y el que se invita suele
+ *   ser de otra (o de ninguna). Es una lectura acotada a un mail.
+ * - El alta completa (credencial + perfil + pertenencia + rol): las tablas `auth_*` están cerradas al rol de la app,
+ *   así que la transacción corre con `withCredentialTransaction` (sistema, con la empresa activa y el actor fijados).
+ * Sumar a la empresa a un perfil que ya existe no toca `auth_*` y sigue por el cliente de la app (RLS incluida).
  *
  * ── Qué cambió con P4 ──────────────────────────────────────────────────────────────────
  *
@@ -86,7 +100,8 @@ export async function registerUserWithRole(values: RegisterUserInput): Promise<R
     });
     if (!roleRow) return { success: false, error: 'El rol seleccionado no existe' };
 
-    const profile = await prisma.profile.findFirst({
+    // Cliente de sistema: el perfil puede ser de otra empresa y `profile_read` no lo mostraría (ver el encabezado).
+    const profile = await prismaSystem.profile.findFirst({
       where: { email: { equals: email, mode: 'insensitive' } },
       select: { id: true, credential_id: true },
     });
@@ -170,7 +185,8 @@ async function createUserForCompany({
 }): Promise<void> {
   const hasPassword = Boolean(password?.trim());
 
-  const { credentialId, invitationUrl } = await withActor(actor, async (tx) => {
+  // Cliente de sistema: `auth_*` está cerrada al rol de la app. El perímetro (sesión, permiso, rol) ya se validó.
+  const { credentialId, invitationUrl } = await withCredentialTransaction(companyId, actor, async (tx) => {
     const newCredentialId = await createCredential(tx, {
       email,
       name: fullname,
