@@ -3,15 +3,16 @@ import { SectionManagerServer } from '@/features/TabsManager/SectionManagerServe
 import { sectionTab } from '@/features/TabsManager/section-tab';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { SectionTableSkeleton } from '@/shared/components/skeletons/SectionTableSkeleton';
-import { FileText, ListChecks, Settings } from 'lucide-react';
+import { FileText, GraduationCap, ListChecks, Settings } from 'lucide-react';
 import ComplianceTabContent from './Compliance/ComplianceTabContent';
 import DocumentsTabContent from './Documents/DocumentsTabContent';
 import SettingsTabContent from './Settings/SettingsTabContent';
 import { HseSettingsSkeleton } from './Settings/fallback/HseSettingsSkeleton';
+import TrainingsTabContent from './Trainings/TrainingsTabContent';
 
 /**
  * Módulo HSE (ticket 804, fase 2: documentos). Secciones elegidas desde el sidebar (`?tab=`); los íconos son los de
- * `SUB_ITEM_ICONS` en `navigation.ts`. La fase 3 suma Capacitaciones como otra sección.
+ * `SUB_ITEM_ICONS` en `navigation.ts`. La fase 3 suma Capacitaciones (material y examen corregido en el servidor).
  */
 export default async function HseComponent({ searchParams }: { searchParams: DataTableSearchParams }) {
   const permissions = await getUserPermissionsMapServer();
@@ -30,6 +31,14 @@ export default async function HseComponent({ searchParams }: { searchParams: Dat
           text: 'Documentos',
           fallback: <SectionTableSkeleton filterCount={3} />,
           children: <DocumentsTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
+          moduleSlug: 'hse',
+          tabSlug: 'capacitaciones',
+          icon: GraduationCap,
+          text: 'Capacitaciones',
+          fallback: <SectionTableSkeleton filterCount={3} />,
+          children: <TrainingsTabContent searchParams={searchParams} permissions={permissions} />,
         }),
         sectionTab({
           moduleSlug: 'hse',

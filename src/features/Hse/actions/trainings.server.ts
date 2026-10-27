@@ -131,8 +131,7 @@ export async function fetchHseTrainingFormOptions() {
     checkPermissionServer('hse', 'capacitaciones', 'update'),
   ]);
   if (!canCreate && !canUpdate) throw new Error('No tenés permiso para editar capacitaciones');
-  const { positions, sectors, employees } = await getHseDocumentFormOptions();
-  return { positions, sectors, employees };
+  return getHseDocumentFormOptions();
 }
 
 // ============================================================================
