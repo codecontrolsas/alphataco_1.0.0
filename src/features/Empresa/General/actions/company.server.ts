@@ -7,11 +7,18 @@ import { prisma } from '@/shared/lib/prisma';
 import { prismaSystem } from '@/shared/lib/prisma-system';
 import { getSessionToken, getSessionUserId } from '@/shared/lib/session';
 import { writeCompanyClaim } from '@/shared/lib/session-claims';
-import { storagePublicUrl, storageUpload } from '@/shared/lib/storage';
+import { storageList, storagePublicUrl, storageRemove, storageUpload } from '@/shared/lib/storage';
 import { NoActiveCompanyError, assertCompanyAccess, getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { clearOtherDefaultCompanies } from '../lib/company-default';
-import { buildLogoPath, parseCompanyForm, type CompanyFormValues } from '../lib/company-form';
+import {
+  buildLogoPath,
+  isImageSignature,
+  logoFolder,
+  parseCompanyForm,
+  validateLogoFile,
+  type CompanyFormValues,
+} from '../lib/company-form';
 
 /**
  * Datos de la empresa (`company`): lectura de la empresa activa, alta y edición.
@@ -26,7 +33,7 @@ const logger = new Logger('features/Empresa/General/company');
 const LOGO_BUCKET = 'logo';
 
 export type CompanyMutationResult =
-  | { ok: true; data: { id: string } }
+  | { ok: true; data: { id: string }; warning?: string }
   | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
 // ─── Lecturas ────────────────────────────────────────────────────────────────
@@ -132,6 +139,8 @@ export async function getCompanyForEdit(companyId: string) {
         country: true,
         industry: true,
         description: true,
+        by_defect: true,
+        company_logo: true,
         cities: { select: { id: true, name: true } },
         provinces: { select: { id: true, name: true } },
       },
@@ -179,12 +188,36 @@ function logoFile(formData: FormData): File | null {
   return value instanceof File && value.size > 0 ? value : null;
 }
 
+/** Borra todo lo que haya en `<companyId>/logo/` (el logo puede haber quedado con otra extensión). */
+async function removeStoredLogos(companyId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const folder = logoFolder(companyId);
+  const listed = await storageList(LOGO_BUCKET, folder);
+  if (!listed.ok) return { ok: false, error: 'No se pudo revisar el logo guardado' };
+  const removed = await storageRemove(
+    LOGO_BUCKET,
+    listed.data.map((entry) => `${folder}${entry.name}`)
+  );
+  return removed.ok ? { ok: true } : { ok: false, error: 'No se pudo borrar el logo guardado' };
+}
+
 /**
- * Sube el logo a `<companyId>/logo/logo.<ext>` (pisa el anterior) y guarda la URL pública en
- * `company_logo`. Se hace después de la transacción: si falla, la empresa ya quedó creada/editada
- * y se devuelve el error para que la UI lo informe.
+ * Sube el logo a `<companyId>/logo/logo.<ext>` y guarda la URL pública en `company_logo`. Se hace
+ * después de la transacción: si falla, la empresa ya quedó creada/editada y se devuelve el error
+ * para que la UI lo informe.
+ *
+ * Valida tipo y tamaño (`validateLogoFile`) y además que los bytes sean de verdad una imagen: el
+ * archivo se sirve desde el mismo origen, así que no se acepta nada que no lo sea. Antes de subir
+ * se borra el logo anterior, que puede tener otra extensión y quedaría huérfano.
  */
 async function saveCompanyLogo(companyId: string, file: File): Promise<{ ok: true } | { ok: false; error: string }> {
+  const invalid = validateLogoFile(file);
+  if (invalid) return { ok: false, error: invalid };
+  const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  if (!isImageSignature(head)) return { ok: false, error: 'El archivo elegido no es una imagen válida.' };
+
+  const cleared = await removeStoredLogos(companyId);
+  if (!cleared.ok) return cleared;
+
   const path = buildLogoPath(companyId, file.name);
   const uploaded = await storageUpload(LOGO_BUCKET, path, file, { upsert: true, cacheControl: '60' });
   if (!uploaded.ok) return { ok: false, error: 'No se pudo subir el logo' };
@@ -194,6 +227,26 @@ async function saveCompanyLogo(companyId: string, file: File): Promise<{ ok: tru
     data: { company_logo: `${publicUrl}?v=${Date.now()}` },
   });
   return { ok: true };
+}
+
+/**
+ * Valida que el usuario de sesión pueda editar la empresa: pertenencia + owner o permiso
+ * `configuracion.general.update`. Mismo perímetro que `getCompanyForEdit`.
+ */
+async function assertCanEditCompany(
+  companyId: string
+): Promise<
+  { ok: true; credentialId: string; profileId: string; ownerId: string | null } | { ok: false; error: string }
+> {
+  await assertCompanyAccess(companyId);
+  const { credentialId, profileId } = await requireSessionProfile();
+  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { owner_id: true } });
+  if (!company) return { ok: false, error: 'Empresa no encontrada' };
+  const isOwner = company.owner_id === profileId;
+  if (!isOwner && !(await checkPermissionServer('configuracion', 'general', 'update'))) {
+    return { ok: false, error: 'No tenés permiso para editar esta empresa' };
+  }
+  return { ok: true, credentialId, profileId, ownerId: company.owner_id };
 }
 
 function toCompanyData(values: CompanyFormValues) {
@@ -233,6 +286,7 @@ export async function createCompany(formData: FormData): Promise<CompanyMutation
 
   try {
     const { credentialId, profileId } = await requireSessionProfile();
+
     if (await isCuitTaken(parsed.data.company_cuit)) {
       return {
         ok: false,
@@ -241,46 +295,50 @@ export async function createCompany(formData: FormData): Promise<CompanyMutation
       };
     }
 
-    const companyId = await withActor(credentialId, async (tx) => {
-      // Reemplaza al trigger update_company_by_defect: una sola default por owner (índice único
-      // parcial), así que se limpian las otras ANTES de guardar esta.
-      if (parsed.data.by_defect) await clearOtherDefaultCompanies(tx, profileId, null);
-      const company = await tx.company.create({
-        data: { ...toCompanyData(parsed.data), owner_id: profileId, company_logo: '' },
-        select: { id: true },
-      });
-
-      const membership = await tx.share_company_users.findFirst({
-        where: { company_id: company.id, profile_id: profileId },
-        select: { id: true },
-      });
-      if (!membership) {
-        await tx.share_company_users.create({ data: { company_id: company.id, profile_id: profileId } });
-      }
-
-      // El owner arranca como admin DE ESTA empresa: si no, la empresa recién creada no le
-      // mostraría ningún módulo y no existe todavía ningún admin que pueda darle permisos.
-      const adminRole = await tx.roles.findFirst({ where: { slug: 'admin', is_system: true }, select: { id: true } });
-      if (adminRole) {
-        // La unique es (user_id, role_id, company_id) y la empresa se acaba de crear en esta
-        // misma transacción, así que acá el duplicado NO puede ocurrir: `createMany` +
-        // `skipDuplicates` queda como seguro barato. Donde la carrera sí es alcanzable es en
-        // `assignRoleInCompany` (Auth/actions/register-user.ts), sobre una empresa que ya
-        // existe — ver `register-user.integration.test.ts`.
-        await tx.user_roles.createMany({
-          data: [{ user_id: credentialId, role_id: adminRole.id, company_id: company.id, assigned_by: credentialId }],
-          skipDuplicates: true,
+    const companyId = await withActor(
+      credentialId,
+      async (tx) => {
+        // Reemplaza al trigger update_company_by_defect: una sola default por owner (índice único
+        // parcial), así que se limpian las otras ANTES de guardar esta.
+        if (parsed.data.by_defect) await clearOtherDefaultCompanies(tx, profileId, null);
+        const company = await tx.company.create({
+          data: { ...toCompanyData(parsed.data), owner_id: profileId, company_logo: '' },
+          select: { id: true },
         });
-      } else {
-        logger.warn('Rol admin no encontrado: la empresa se creó sin rol para el owner', {
-          data: { companyId: company.id },
-        });
-      }
 
-      return company.id;
-      // Cliente de sistema: la empresa nueva todavia no es la empresa activa, y su alta, la membresia y el rol del dueno
-      // escriben sobre ella (fuera de la empresa activa del request).
-    }, prismaSystem);
+        const membership = await tx.share_company_users.findFirst({
+          where: { company_id: company.id, profile_id: profileId },
+          select: { id: true },
+        });
+        if (!membership) {
+          await tx.share_company_users.create({ data: { company_id: company.id, profile_id: profileId } });
+        }
+
+        // El owner arranca como admin DE ESTA empresa: si no, la empresa recién creada no le
+        // mostraría ningún módulo y no existe todavía ningún admin que pueda darle permisos.
+        const adminRole = await tx.roles.findFirst({ where: { slug: 'admin', is_system: true }, select: { id: true } });
+        if (adminRole) {
+          // La unique es (user_id, role_id, company_id) y la empresa se acaba de crear en esta
+          // misma transacción, así que acá el duplicado NO puede ocurrir: `createMany` +
+          // `skipDuplicates` queda como seguro barato. Donde la carrera sí es alcanzable es en
+          // `assignRoleInCompany` (Auth/actions/register-user.ts), sobre una empresa que ya
+          // existe — ver `register-user.integration.test.ts`.
+          await tx.user_roles.createMany({
+            data: [{ user_id: credentialId, role_id: adminRole.id, company_id: company.id, assigned_by: credentialId }],
+            skipDuplicates: true,
+          });
+        } else {
+          logger.warn('Rol admin no encontrado: la empresa se creó sin rol para el owner', {
+            data: { companyId: company.id },
+          });
+        }
+
+        return company.id;
+        // Cliente de sistema: la empresa nueva todavia no es la empresa activa, y su alta, la membresia y el rol del dueno
+        // escriben sobre ella (fuera de la empresa activa del request).
+      },
+      prismaSystem
+    );
 
     // La empresa recién creada pasa a ser la activa de esta sesión. El claim se puede escribir
     // sin más validación porque quien lo pide ACABA de quedar como `owner_id` unas líneas más
@@ -302,16 +360,18 @@ export async function createCompany(formData: FormData): Promise<CompanyMutation
     }
 
     const logo = logoFile(formData);
+    let warning: string | undefined;
     if (logo) {
       const saved = await saveCompanyLogo(companyId, logo);
       if (!saved.ok) {
         logger.warn('Empresa creada pero el logo no se pudo guardar', { data: { companyId } });
+        warning = `La compañía se registró, pero el logo no se pudo guardar: ${saved.error}`;
       }
     }
 
     revalidatePath('/dashboard', 'layout');
     logger.info('Empresa creada', { data: { companyId } });
-    return { ok: true, data: { id: companyId } };
+    return { ok: true, data: { id: companyId }, warning };
   } catch (error) {
     logger.error('Error al crear la empresa', { data: { error } });
     return { ok: false, error: error instanceof Error ? error.message : 'No se pudo registrar la compañía' };
@@ -327,15 +387,9 @@ export async function updateCompany(companyId: string, formData: FormData): Prom
   if (!parsed.ok) return { ok: false, error: 'Revisá los datos del formulario', fieldErrors: parsed.errors };
 
   try {
-    await assertCompanyAccess(companyId);
-    const { credentialId, profileId } = await requireSessionProfile();
-
-    const company = await prisma.company.findUnique({ where: { id: companyId }, select: { owner_id: true } });
-    if (!company) return { ok: false, error: 'Empresa no encontrada' };
-    const isOwner = company.owner_id === profileId;
-    if (!isOwner && !(await checkPermissionServer('configuracion', 'general', 'update'))) {
-      return { ok: false, error: 'No tenés permiso para editar esta empresa' };
-    }
+    const access = await assertCanEditCompany(companyId);
+    if (!access.ok) return { ok: false, error: access.error };
+    const { credentialId, ownerId } = access;
 
     if (await isCuitTaken(parsed.data.company_cuit, companyId)) {
       return {
@@ -347,14 +401,14 @@ export async function updateCompany(companyId: string, formData: FormData): Prom
 
     await withActor(credentialId, async (tx) => {
       // Reemplaza al trigger update_company_by_defect (ver createCompany).
-      if (parsed.data.by_defect) await clearOtherDefaultCompanies(tx, company.owner_id, companyId);
+      if (parsed.data.by_defect) await clearOtherDefaultCompanies(tx, ownerId, companyId);
       await tx.company.update({ where: { id: companyId }, data: toCompanyData(parsed.data) });
     });
 
     const logo = logoFile(formData);
     if (logo) {
       const saved = await saveCompanyLogo(companyId, logo);
-      if (!saved.ok) return { ok: false, error: 'Datos guardados, pero el logo no se pudo subir' };
+      if (!saved.ok) return { ok: false, error: `Datos guardados, pero el logo no se pudo subir: ${saved.error}` };
     }
 
     revalidatePath('/dashboard', 'layout');
@@ -363,5 +417,28 @@ export async function updateCompany(companyId: string, formData: FormData): Prom
   } catch (error) {
     logger.error('Error al actualizar la empresa', { data: { error, companyId } });
     return { ok: false, error: error instanceof Error ? error.message : 'No se pudo actualizar la compañía' };
+  }
+}
+
+/**
+ * Quita el logo de la empresa: borra los archivos de `<companyId>/logo/` y deja `company_logo` en null.
+ * Mismo permiso que editar la empresa. Borrar un logo que no existe no es error.
+ */
+export async function deleteCompanyLogo(companyId: string): Promise<CompanyMutationResult> {
+  try {
+    const access = await assertCanEditCompany(companyId);
+    if (!access.ok) return { ok: false, error: access.error };
+
+    const removed = await removeStoredLogos(companyId);
+    if (!removed.ok) return { ok: false, error: removed.error };
+
+    await prismaSystem.company.update({ where: { id: companyId }, data: { company_logo: null } });
+
+    revalidatePath('/dashboard', 'layout');
+    logger.info('Logo de empresa eliminado', { data: { companyId } });
+    return { ok: true, data: { id: companyId } };
+  } catch (error) {
+    logger.error('Error al quitar el logo de la empresa', { data: { error, companyId } });
+    return { ok: false, error: 'No se pudo quitar el logo' };
   }
 }

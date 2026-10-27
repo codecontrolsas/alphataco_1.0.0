@@ -50,7 +50,7 @@ export default async function CompanyComponent() {
               href={`/dashboard/configuration/companies/${company.id}`}
               className={buttonVariants({ variant: 'brand' })}
             >
-              Editar
+              Editar datos y logo
             </Link>
           </PermissionGuardServer>
         }

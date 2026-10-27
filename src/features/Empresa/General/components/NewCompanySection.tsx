@@ -1,6 +1,7 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { getIndustryTypes, hasAnyCompanyMembership } from '@/features/Empresa/General/actions/company.server';
 import CompanyFormFields from '@/features/Empresa/General/components/CompanyFormFields';
+import { CompanyLogoField } from '@/features/Empresa/General/components/CompanyLogoField';
 import CreateCompanyButton from '@/features/Empresa/General/components/CreateCompanyButton';
 import { getProvinces } from '@/shared/actions/countries.server';
 import { PageHeader } from '@/shared/components/common/PageHeader';
@@ -40,11 +41,14 @@ export default async function NewCompanySection() {
         </Alert>
       )}
 
-      <form className="flex flex-col gap-4">
+      <form className="flex flex-col gap-4" noValidate>
         <CompanyFormFields provinces={provinces} industryTypes={industryTypes} />
-        <SectionCard title="Logo">
-          <CreateCompanyButton />
+        <SectionCard title="Logo" description="Opcional. Se muestra en el menú, en los reportes y en los documentos">
+          <CompanyLogoField />
         </SectionCard>
+        <div className="flex justify-end">
+          <CreateCompanyButton />
+        </div>
       </form>
     </section>
   );
