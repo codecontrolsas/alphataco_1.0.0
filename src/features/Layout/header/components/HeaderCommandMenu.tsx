@@ -22,8 +22,12 @@ interface HeaderCommandMenuProps {
 export default function HeaderCommandMenu({ open, onOpenChange, items }: HeaderCommandMenuProps) {
   const router = useRouter();
 
-  const go = (href: string) => {
+  const go = (href: string, newTab = false) => {
     onOpenChange(false);
+    if (newTab) {
+      window.open(href, '_blank', 'noopener');
+      return;
+    }
     router.push(href);
   };
 
@@ -58,7 +62,7 @@ export default function HeaderCommandMenu({ open, onOpenChange, items }: HeaderC
                     <CommandItem
                       key={key}
                       value={`${module.name} ${sub.name}`}
-                      onSelect={() => go(subLinkHref(module.href, sub))}
+                      onSelect={() => go(subLinkHref(module.href, sub), sub.newTab)}
                     >
                       <Icon />
                       {sub.name}

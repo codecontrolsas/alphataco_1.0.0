@@ -8,13 +8,19 @@ import type { Prisma, PrismaClient } from '@/generated/prisma/client';
  *
  * Parte pura, sin Next ni sesión: la usan `tenant-db.ts` (request) y, más adelante, los jobs y los scripts.
  */
-export type TenantActorKind = 'user' | 'operator' | 'guest' | 'api' | 'job';
+export type TenantActorKind = 'user' | 'operator' | 'employee' | 'guest' | 'api' | 'job';
 
 export interface TenantContext {
   companyId: string;
   /** `profile.credential_id` del usuario; null para jobs y accesos sin sesión. */
   userId: string | null;
   kind: TenantActorKind;
+  /**
+   * Legajo vinculado a la sesión (`profile.employee_id`) cuando es de la empresa activa. Lo lee la capa RLS por empleado
+   * (`app_current_employee_id()`, ver `app_enable_employee_self` en `prisma/sql/tenant.sql`): sin él, las tablas del
+   * portal no devuelven filas propias. Lo resuelve SIEMPRE el servidor, nunca un dato del cliente.
+   */
+  employeeId?: string | null;
 }
 
 export type TenantTx = Prisma.TransactionClient;
@@ -24,6 +30,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 function assertContext(ctx: TenantContext): void {
   if (!UUID_RE.test(ctx.companyId)) throw new Error('companyId debe ser un uuid');
   if (ctx.userId !== null && !UUID_RE.test(ctx.userId)) throw new Error('userId debe ser un uuid');
+  if (ctx.employeeId != null && !UUID_RE.test(ctx.employeeId)) throw new Error('employeeId debe ser un uuid');
 }
 
 /**
@@ -32,6 +39,14 @@ function assertContext(ctx: TenantContext): void {
  */
 export function setTenantContext(tx: Pick<TenantTx, '$executeRaw'>, ctx: TenantContext) {
   assertContext(ctx);
+  // El legajo va solo cuando hay: cada contexto se fija al principio de su propia transacción, así que sin el
+  // `set_config` el valor queda NULL (no hereda nada de otra persona) y las demás sesiones no pagan un parámetro más.
+  if (ctx.employeeId) {
+    return tx.$executeRaw`SELECT set_config('app.company_id', ${ctx.companyId}, true),
+      set_config('app.user_id', ${ctx.userId ?? ''}, true),
+      set_config('app.actor_kind', ${ctx.kind}, true),
+      set_config('app.employee_id', ${ctx.employeeId}, true)`;
+  }
   return tx.$executeRaw`SELECT set_config('app.company_id', ${ctx.companyId}, true),
     set_config('app.user_id', ${ctx.userId ?? ''}, true),
     set_config('app.actor_kind', ${ctx.kind}, true)`;
@@ -120,7 +135,17 @@ export function runInCompanyScope<T>(
   return companyScope.run(ctx, async () => await fn());
 }
 
-/** Contexto fijado con `runInCompanyScope`, si la operación corre dentro de uno. */
+/**
+ * Corre `fn` con un contexto COMPLETO (empresa + usuario) como contexto de `prisma`, para quien ya lo resolvió sin
+ * cookie: la API móvil autentica por token de portador y reutiliza las consultas de la web (que usan el cliente
+ * contextual). Sin esto, con el rol de aplicación la RLS devolvería cero filas sin error.
+ */
+export function runInTenantScope<T>(ctx: TenantContext, fn: () => Promise<T>): Promise<T> {
+  assertContext(ctx);
+  return companyScope.run(ctx, async () => await fn());
+}
+
+/** Contexto fijado con `runInCompanyScope` o `runInTenantScope`, si la operación corre dentro de uno. */
 export function getCompanyScopeContext(): TenantContext | null {
   return companyScope.getStore() ?? null;
 }

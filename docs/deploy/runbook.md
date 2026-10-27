@@ -72,19 +72,19 @@ Secrets:
 
 Variables:
 
-| Variable                   | Valor                                                                                                                                                                                               |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `REGISTRY_USERNAME`        | Usuario CI del registry. Es **variable, no secret**: como secret GitHub enmascara sus substrings en todos los logs.                                                                                 |
-| `DOKPLOY_HEALTH_URL`       | `https://alphataco.31.97.42.82.sslip.io/api/health` (URL completa, terminada en `/api/health`; el deploy valida el formato).                                                                        |
-| `NEXT_PUBLIC_BASE_URL`     | `https://alphataco.31.97.42.82.sslip.io` — **obligatoria**: si falta, el build se corta (no se hornea `localhost`).                                                                                 |
-| `NEXT_PUBLIC_PROJECT_URL`  | `https://alphataco.31.97.42.82.sslip.io` — obligatoria.                                                                                                                                             |
-| `NEXT_PUBLIC_POSTHOG_KEY`  | Project key de PostHog (pública por diseño). Vacía = sin analítica.                                                                                                                                 |
-| `NEXT_PUBLIC_POSTHOG_HOST` | `https://us.i.posthog.com`                                                                                                                                                                          |
-| `NEXT_PUBLIC_SHOW_LOGS`    | `false` en producción (default si no se carga).                                                                                                                                                     |
+| Variable                   | Valor                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `REGISTRY_USERNAME`        | Usuario CI del registry. Es **variable, no secret**: como secret GitHub enmascara sus substrings en todos los logs.                                                                                                                                                                                                                                                             |
+| `DOKPLOY_HEALTH_URL`       | `https://alphataco.31.97.42.82.sslip.io/api/health` (URL completa, terminada en `/api/health`; el deploy valida el formato).                                                                                                                                                                                                                                                    |
+| `NEXT_PUBLIC_BASE_URL`     | `https://alphataco.31.97.42.82.sslip.io` — **obligatoria**: si falta, el build se corta (no se hornea `localhost`).                                                                                                                                                                                                                                                             |
+| `NEXT_PUBLIC_PROJECT_URL`  | `https://alphataco.31.97.42.82.sslip.io` — obligatoria.                                                                                                                                                                                                                                                                                                                         |
+| `NEXT_PUBLIC_POSTHOG_KEY`  | Project key de PostHog (pública por diseño). Vacía = sin analítica.                                                                                                                                                                                                                                                                                                             |
+| `NEXT_PUBLIC_POSTHOG_HOST` | `https://us.i.posthog.com`                                                                                                                                                                                                                                                                                                                                                      |
+| `NEXT_PUBLIC_SHOW_LOGS`    | `false` en producción (default si no se carga).                                                                                                                                                                                                                                                                                                                                 |
 | `CI_RUNNER`                | **Obligatoria.** Label del runner de Blacksmith (hoy `blacksmith-4vcpu-ubuntu-2404`; el de 2 vCPU no está disponible en esta organización). TODOS los jobs (CI, build, deploy y rollback) usan esta variable y no hay respaldo en GitHub: si está vacía, los jobs no arrancan y no se gastan minutos de GitHub Actions. Solo se cambia a mano, por decisión del dueño del repo. |
-| `REGISTRY_HOST`            | Opcional. Host del registro de imágenes. Vacía = el registro de esta instancia (`registry-31-97-42-82.sslip.io`). Un clon para otro cliente define el suyo. |
-| `IMAGE_NAME`               | Opcional. Nombre de la imagen dentro del registro. Vacía = `alphataco`. Que cada cliente tenga el suyo evita que dos instancias se pisen el tag `:main`. |
-| `STORAGE_IMAGE`            | Opcional (solo CI y compose). Imagen del almacenamiento S3. Vacía = `rustfs/rustfs:1.0.3`, la que fija `docker-compose.yml`. Definirla para usar un espejo propio u otra versión. |
+| `REGISTRY_HOST`            | Opcional. Host del registro de imágenes. Vacía = el registro de esta instancia (`registry-31-97-42-82.sslip.io`). Un clon para otro cliente define el suyo.                                                                                                                                                                                                                     |
+| `IMAGE_NAME`               | Opcional. Nombre de la imagen dentro del registro. Vacía = `alphataco`. Que cada cliente tenga el suyo evita que dos instancias se pisen el tag `:main`.                                                                                                                                                                                                                        |
+| `STORAGE_IMAGE`            | Opcional (solo CI y compose). Imagen del almacenamiento S3. Vacía = `rustfs/rustfs:1.0.3`, la que fija `docker-compose.yml`. Definirla para usar un espejo propio u otra versión.                                                                                                                                                                                               |
 
 Las `NEXT_PUBLIC_*` **se hornean en el bundle durante el build**: cargarlas en Dokploy no sirve, y
 cambiarlas exige una imagen nueva (ver "Operación").
@@ -107,8 +107,8 @@ Proyecto **Demos**, app `alphataco`:
 | `DATABASE_URL`                                                                                    | `postgresql://<user>:<pass>@<servicio-postgres>:5432/<db>` — nombre del servicio en `dokploy-network`, no la IP pública.                   |
 | `DIRECT_URL`                                                                                      | Igual que `DATABASE_URL` (no hay pooler). `prisma.config.ts` usa `DATABASE_URL` primero.                                                   |
 | `BETTER_AUTH_SECRET`                                                                              | `openssl rand -base64 32`. Cambiarla cierra todas las sesiones.                                                                            |
-| `S3_ENDPOINT`                                                                                     | `http://alphataco-storage:9000`                                                                                                             |
-| `S3_ACCESS_KEY` / `S3_SECRET_KEY`                                                                 | Credenciales de RustFS (no dejar las de fábrica de la imagen).                                                                                                                     |
+| `S3_ENDPOINT`                                                                                     | `http://alphataco-storage:9000`                                                                                                            |
+| `S3_ACCESS_KEY` / `S3_SECRET_KEY`                                                                 | Credenciales de RustFS (no dejar las de fábrica de la imagen).                                                                             |
 | `S3_REGION`                                                                                       | `us-east-1`                                                                                                                                |
 | `S3_FORCE_PATH_STYLE`                                                                             | `true`                                                                                                                                     |
 | `JOBS_TOKEN`                                                                                      | `openssl rand -hex 32`. Vacío = `/api/jobs/*` responde 401 (ver "Pendientes").                                                             |
@@ -261,6 +261,7 @@ funcionando.
    son los `appName` de Dokploy; confirmar la red con `docker network inspect dokploy-network`. Se puede repetir las
    veces que haga falta: solo copia lo que cambió. `--checksum` compara MD5/ETag, válido porque la app no hace subidas
    multipart.
+
 3. **Verificar**: la misma corrida con `check OLD:$B NEW:$B --one-way` en lugar de `sync` debe decir
    `0 differences found` en cada bucket.
 4. **Pasada final y cambio** (ventana corta): con la app sin uso, repetir el `sync` del paso 2 para llevar lo último,
@@ -332,7 +333,7 @@ Una migración es de riesgo si borra o reescribe datos (`DROP`, `UPDATE`/`DELETE
 - Probado con dos Postgres 16 en Docker: respaldo, retención (2 de 3), restauración con 500 filas y los tres casos de falla
   (base inexistente, base destino ya existente y respaldo ilegible).
 
-> Los **jobs** de la instancia en Dokploy no los dispara el `docker/cron/crontab` del compose sino los *schedules* de la Application
+> Los **jobs** de la instancia en Dokploy no los dispara el `docker/cron/crontab` del compose sino los _schedules_ de la Application
 > (ver «Mapa de la instancia en Dokploy»).
 
 ## Mapa de la instancia en Dokploy (proyecto `alphataco`)
@@ -340,14 +341,14 @@ Una migración es de riesgo si borra o reescribe datos (`DROP`, `UPDATE`/`DELETE
 La instancia que corre hoy es la **demo** (`SEED_COMPANY_NAME=Empresa Demo`, `DEMO_RESET_ENABLED=true` con reset diario a las 00:05 AR,
 `ARCA_MODE=mock`). Todo está en el proyecto **`alphataco`**, entorno **`demo`** (la landing queda en `production`):
 
-| Servicio | Tipo | Qué es |
-|---|---|---|
-| `alphataco-app` | Application (imagen `registry…/alphataco:main`) | Web + Server Actions. Dominio raíz. Tiene los **schedules** de jobs |
-| `alphataco-api` | Application (misma imagen, `node server.js`) | API móvil. `MOBILE_API_ENABLED=true`; dominio **el mismo** con path `/api/mobile` (Traefik elige la regla más larga). Sin schedules ni reset |
-| `alphataco-db` | Postgres 16 | Base. Respaldo diario 03:30 (ver abajo) |
-| `alphataco-storage` | Compose (RustFS 1.0.3 fijado por digest) | Almacenamiento S3 por `http://alphataco-storage:9000` (alias en `dokploy-network`, sin puertos publicados) |
-| `alphataco-storage-minio` | Compose (detenido) | MinIO anterior, **detenido y sin borrar** como respaldo (volumen intacto). Borrarlo es decisión del usuario |
-| `alphataco-landing` (entorno `production`) | Application (GitHub) | Landing pública |
+| Servicio                                   | Tipo                                            | Qué es                                                                                                                                       |
+| ------------------------------------------ | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `alphataco-app`                            | Application (imagen `registry…/alphataco:main`) | Web + Server Actions. Dominio raíz. Tiene los **schedules** de jobs                                                                          |
+| `alphataco-api`                            | Application (misma imagen, `node server.js`)    | API móvil. `MOBILE_API_ENABLED=true`; dominio **el mismo** con path `/api/mobile` (Traefik elige la regla más larga). Sin schedules ni reset |
+| `alphataco-db`                             | Postgres 16                                     | Base. Respaldo diario 03:30 (ver abajo)                                                                                                      |
+| `alphataco-storage`                        | Compose (RustFS 1.0.3 fijado por digest)        | Almacenamiento S3 por `http://alphataco-storage:9000` (alias en `dokploy-network`, sin puertos publicados)                                   |
+| `alphataco-storage-minio`                  | Compose (detenido)                              | MinIO anterior, **detenido y sin borrar** como respaldo (volumen intacto). Borrarlo es decisión del usuario                                  |
+| `alphataco-landing` (entorno `production`) | Application (GitHub)                            | Landing pública                                                                                                                              |
 
 - **Deploy:** el workflow `deploy` retaguea `:main` y llama al webhook de `alphataco-app`; si existe la variable de repo `MOBILE_CAPABILITIES_URL`,
   además llama al webhook de `alphataco-api` (secret `DOKPLOY_API_DEPLOY_WEBHOOK`, formato `http://<ip>:3000/api/deploy/<token>`) y espera a que
@@ -370,9 +371,9 @@ La instancia que corre hoy es la **demo** (`SEED_COMPANY_NAME=Empresa Demo`, `DE
 
 La migración `app_and_system_roles` crea dos roles **sin acceso** (`NOLOGIN`, sin contraseña) y no cambia ningún dueño ni conexión:
 
-| Rol | Atributos | Lo usará |
-| --- | --- | --- |
-| `alphataco_app` | sin `BYPASSRLS` | la app (Server Actions, páginas, `/api/*`) |
+| Rol                | Atributos       | Lo usará                                           |
+| ------------------ | --------------- | -------------------------------------------------- |
+| `alphataco_app`    | sin `BYPASSRLS` | la app (Server Actions, páginas, `/api/*`)         |
 | `alphataco_system` | con `BYPASSRLS` | jobs, seed, bootstrap de admin, demo y Better Auth |
 
 Si quien migra no puede crear roles, la migración avisa con un `WARNING` y sigue (no queda fallida). En ese caso un administrador de Postgres corre una vez el contenido de `prisma/migrations/20261025130000_app_and_system_roles/migration.sql` como superusuario.
@@ -393,7 +394,7 @@ apagado nada cambia**: el contenedor `app` no acepta `Authorization: Bearer` (el
 - **Encender (compose):** `COMPOSE_PROFILES=mobile MOBILE_UPSTREAM=api:3000 docker compose --env-file .env.docker up -d`. Caddy manda
   `/api/mobile/*` a `api`; sin el perfil cae en `app`, que responde 404. El servicio `api` no corre migraciones ni seed (arranca
   `node server.js`) y exige las mismas `DATABASE_URL`/`SYSTEM_DATABASE_URL` que `app`: **sin `SYSTEM_DATABASE_URL` el login móvil falla bajo RLS**.
-- **Producción en Dokploy:** hoy es una *Application* con Traefik hacia `app`; la API móvil no existe ahí hasta que se pase a Compose
+- **Producción en Dokploy:** hoy es una _Application_ con Traefik hacia `app`; la API móvil no existe ahí hasta que se pase a Compose
   con el perfil `mobile` (decisión del usuario). Mientras tanto la imagen trae las rutas apagadas.
 - **Contrato v1 (congelado, solo cambios compatibles):** `GET /capabilities` (sin auth), `POST|DELETE /session` (login/logout, devuelve
   el token de portador), `GET /me`, `GET /daily-reports?date=` (partes del día), `GET /daily-reports/{reportId}/rows` (líneas con recursos), `GET /resources/employees?q=` y `GET /resources/equipment?q=` (recursos activos para asignar), `GET /daily-report-rows/{rowId}`, `POST .../resources`, `POST .../status`. Errores con código estable
@@ -424,6 +425,37 @@ día, novedades de diagrama, documentos por vencer, indicadores de los últimos 
 - **Si una migración agrega una tabla de negocio**, el reset la vacía sola. Si agrega una columna
   NOT NULL sin default en una tabla que el reset llena, el reset falla hasta que se complete en el
   dominio correspondiente de `scripts/demo/domains/`.
+
+## Límite de empresas por instancia (`instance_settings.max_companies`)
+
+Cada instancia admite una cantidad máxima de empresas (ticket 807). El valor vive en la tabla global
+`instance_settings` (clave/valor, sin `company_id`), **por defecto 1** (lo siembra la migración
+`20261031100000_instance_settings`). Si la fila falta o el valor no es un entero >= 1, la app usa 1.
+
+- La app (`alphataco_app`) solo puede **leer** la tabla. La cambian el dueño de la base (psql de mantenimiento) o el
+  rol de sistema (`alphataco_system`, el que usará el panel de administración externo). No hay pantalla para editarlo.
+- Se aplica en el servidor (`createCompany`): si `count(company) >= max_companies` el alta se rechaza con un mensaje
+  en español. Cuenta todas las empresas (activas e inactivas) con el cliente de sistema y serializa las altas con un
+  `pg_advisory_xact_lock`. La UI no ofrece "Agregar compañía" sin lugar y muestra «Tu plan permite N empresa(s)».
+- `scripts/seed-company.ts` y el bootstrap no pasan por el límite: son la vía del sistema para la primera empresa.
+- `GET /api/admin/v1/status` lo expone en `limits.max_companies`, `limits.companies_total` y
+  `limits.companies_limit_reached`.
+
+Cambiarlo (como dueño de la base o `alphataco_system`):
+
+```sql
+-- Ver el valor actual y cuántas empresas hay
+SELECT value FROM instance_settings WHERE key = 'max_companies';
+SELECT count(*) FROM company;
+
+-- Permitir 3 empresas (el valor es jsonb: un entero)
+INSERT INTO instance_settings (key, value, description, updated_at)
+VALUES ('max_companies', '3'::jsonb, 'Cantidad máxima de empresas que se pueden crear en la instancia (entero >= 1).', now())
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
+```
+
+El cambio rige en la próxima petición (no hay caché entre requests). Bajar el límite por debajo de las empresas
+existentes no borra nada: solo impide crear nuevas.
 
 ## Pendientes
 

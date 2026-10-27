@@ -27,6 +27,7 @@ export const empleadosSection = defineSection({
         tab('empleados', 'datos-laborales'),
         tab('empleados', 'diagramas-empleado'),
         tab('empleados', 'indumentaria_empleado'),
+        tab('empleados', 'portal_empleado'),
       ],
       screens: [{ path: '/dashboard/employee/action' }],
       related: [

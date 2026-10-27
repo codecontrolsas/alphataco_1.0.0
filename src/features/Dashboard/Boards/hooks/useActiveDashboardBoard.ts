@@ -5,7 +5,7 @@ import {
   findActiveBoardIndex,
   templateBoardName,
 } from '@/features/Dashboard/lib/board-nav';
-import { templateKeyFromLegacyParams } from '@/features/Dashboard/lib/widget-registry';
+import { isActiveBoardTemplate, templateKeyFromLegacyParams } from '@/features/Dashboard/lib/widget-registry';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { getUserDashboardNavBoards } from '../actions/boards.server';
@@ -53,7 +53,9 @@ export function useActiveDashboardBoard(enabled: boolean): ActiveDashboardBoard 
   const key = params.board
     ? templateKeyFromBoardId(params.board)
     : templateKeyFromLegacyParams(params.tab ?? undefined, params.subtab ?? undefined);
-  if (key) return { name: templateBoardName(key), navTab: DASHBOARD_NAV_TAB_BY_TEMPLATE[key] };
+  // #802: un link a un tablero predefinido oculto cae en el primero de la lista (no se anuncia su nombre).
+  if (key && isActiveBoardTemplate(key))
+    return { name: templateBoardName(key), navTab: DASHBOARD_NAV_TAB_BY_TEMPLATE[key] };
   // Sin parámetros (o lista vacía): el primer acceso, como hasta ahora.
   if (!params.board) return undefined;
   return { name: null, navTab: null };

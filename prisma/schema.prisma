@@ -597,6 +597,7 @@ model company {
   user_roles                    user_roles[]
   user_permissions              user_permissions[]
   user_dashboards               user_dashboards[]
+  user_dashboard_shares         user_dashboard_shares[]
   vehicles                      vehicles[]
   work_orders                   work_orders[]
   workshops                     workshops[]
@@ -1330,8 +1331,11 @@ model employees {
   material_requests    material_requests[] @relation("material_request_employee")
   purchase_requests purchase_requests[] @relation("purchase_request_employee")
   org_chart_positions org_chart_positions[]
+  portal_access        employee_portal_access?
+  portal_access_events employee_portal_access_events[]
 
   @@index([type_of_contract], map: "idx_employees_type_of_contract")
+  @@index([company_id, is_active, lastname, firstname, id], map: "idx_employees_company_active_name")
   @@schema("public")
 }
 
@@ -1488,6 +1492,17 @@ model org_chart_positions {
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+/// Configuración global de la instancia (clave/valor, sin empresa). La app solo lee; la escriben el dueño o el
+/// rol de sistema (ver la migración `20261031100000_instance_settings`). Lectura tipada: `src/shared/lib/instance-settings.ts`.
+model instance_settings {
+  key         String   @id
+  value       Json
+  description String?
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@schema("public")
+}
+
 model industry_type {
   id         BigInt   @id @default(autoincrement())
   created_at DateTime @default(now()) @db.Timestamptz(6)
@@ -3357,13 +3372,33 @@ model user_dashboards {
   position   Int      @default(0)
   template   String?  @db.VarChar(40)
   layout     Json     @default("[]")
+  /// Alcance del preset (#802): private | company | users (con `user_dashboard_shares`).
+  visibility String   @default("private") @db.VarChar(20)
   created_at DateTime @default(now()) @db.Timestamptz(6)
   updated_at DateTime @default(now()) @db.Timestamptz(6)
   company    company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
   user       user     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  shares     user_dashboard_shares[]
 
   @@unique([user_id, company_id, name], map: "user_dashboards_user_company_name_key")
+  @@index([company_id, visibility], map: "idx_user_dashboards_company_visibility")
   @@index([user_id, company_id, position], map: "idx_user_dashboards_user_company_position")
+  @@schema("public")
+}
+
+/// Usuarios con los que se comparte un preset del Dashboard con alcance `users` (#802).
+model user_dashboard_shares {
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id   String          @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  dashboard_id String          @db.Uuid
+  user_id      String          @db.Uuid
+  created_at   DateTime        @default(now()) @db.Timestamptz(6)
+  dashboard    user_dashboards @relation(fields: [dashboard_id], references: [id], onDelete: Cascade)
+  user         user            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  company      company         @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@unique([dashboard_id, user_id], map: "user_dashboard_shares_dashboard_user_key")
+  @@index([user_id, company_id], map: "idx_user_dashboard_shares_user_company")
   @@schema("public")
 }
 
@@ -3902,6 +3937,7 @@ model user {
   accounts   account[]
   sessions   session[]
   dashboards user_dashboards[]
+  dashboard_shares user_dashboard_shares[]
 
   @@map("auth_user")
   @@schema("public")
@@ -6399,5 +6435,75 @@ model processed_commands {
   @@id([company_id, command_id])
   @@index([company_id], map: "idx_processed_commands_company_id")
   @@index([created_at], map: "idx_processed_commands_created_at")
+  @@schema("public")
+}
+
+// ── Portal de empleados (ticket 804, fase 1) ────────────────────────────────────────────────
+
+enum portal_access_status {
+  enabled
+  disabled
+
+  @@schema("public")
+}
+
+/// Cómo se le dio la credencial al empleado: invitación por mail, contraseña temporal o su usuario ya existente.
+enum portal_access_method {
+  invitation
+  temporary_password
+  existing_account
+
+  @@schema("public")
+}
+
+enum portal_access_event_action {
+  enabled
+  disabled
+  invitation_sent
+  temporary_password_issued
+
+  @@schema("public")
+}
+
+/// Acceso del empleado al portal (/portal). Lo habilita RR.HH. desde el legajo; no hay registro libre.
+/// RLS: aislamiento por empresa + `employee_self` restrictiva (el empleado solo ve su fila y no la escribe).
+model employee_portal_access {
+  id                 String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id         String                @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  employee_id        String                @unique(map: "employee_portal_access_employee_key") @db.Uuid
+  /// `auth_user.id` (= `profile.credential_id`) con el que entra el empleado.
+  credential_id      String                @db.Uuid
+  status             portal_access_status
+  method             portal_access_method
+  /// `true` si la credencial la creó el portal: solo entonces RR.HH. puede reemitir invitación o contraseña temporal.
+  created_credential Boolean               @default(false)
+  /// `profile.id` de quien habilitó o deshabilitó (sin FK, como el resto de las columnas de auditoría).
+  granted_by         String                @db.Uuid
+  granted_at         DateTime              @default(now()) @db.Timestamptz(6)
+  revoked_by         String?               @db.Uuid
+  revoked_at         DateTime?             @db.Timestamptz(6)
+  created_at         DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime              @default(now()) @db.Timestamptz(6)
+  employees          employees             @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@index([company_id], map: "idx_employee_portal_access_company_id")
+  @@index([credential_id], map: "idx_employee_portal_access_credential_id")
+  @@schema("public")
+}
+
+/// Bitácora del acceso al portal: quién habilitó, invitó, emitió contraseña temporal o deshabilitó a quién.
+model employee_portal_access_events {
+  id           String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id   String                     @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  employee_id  String                     @db.Uuid
+  action       portal_access_event_action
+  /// `profile.id` de quien hizo la acción.
+  performed_by String                     @db.Uuid
+  detail       String?
+  created_at   DateTime                   @default(now()) @db.Timestamptz(6)
+  employees    employees                  @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@index([company_id], map: "idx_employee_portal_access_events_company_id")
+  @@index([employee_id, created_at(sort: Desc)], map: "idx_employee_portal_access_events_employee")
   @@schema("public")
 }

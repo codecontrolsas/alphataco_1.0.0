@@ -46,6 +46,8 @@ export const ACTIONS = {
   // Enviar un documento al proveedor (por correo o marcándolo como enviado). Antes lo cubría
   // 'update'; es otra decisión: editar un borrador no es mandarlo afuera.
   send: { slug: 'send', name: 'Enviar' },
+  // Portal de empleados: dar o quitar a un empleado el acceso a /portal (crea o reutiliza su usuario).
+  portal_access: { slug: 'portal_access', name: 'Habilitar portal' },
 } as const;
 
 export type ActionSlug = keyof typeof ACTIONS;
@@ -590,6 +592,15 @@ export const PERMISSIONS = {
             parent: 'detalle-empleado',
             // `delete`: anular una entrega de ropa (Almacenes etapa 5).
             allowedActions: ['view', 'create', 'delete'],
+          },
+          // Portal de empleados (ticket 804): `view` ve el estado del acceso y su bitácora;
+          // `portal_access` lo habilita, reenvía la invitación o lo deshabilita.
+          portal_empleado: {
+            slug: 'portal_empleado',
+            name: 'Portal del empleado',
+            tabId: '9bd3625c-4245-4428-b2cf-fec178038f90',
+            parent: 'detalle-empleado',
+            allowedActions: ['view', 'portal_access'],
           },
         },
       },

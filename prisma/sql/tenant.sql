@@ -11,7 +11,8 @@ AS $function$
   SELECT nullif(current_setting('app.company_id', true), '')::uuid
 $function$;
 
--- function app_current_actor_kind: user | operator | guest | api | job; NULL si no se fijo.
+-- function app_current_actor_kind: user | operator | employee | guest | api | job; NULL si no se fijo.
+-- `employee` = sesion con legajo vinculado que NO es miembro ni duenio de la empresa (portal de empleados).
 CREATE OR REPLACE FUNCTION public.app_current_actor_kind()
  RETURNS text
  LANGUAGE sql
@@ -318,5 +319,63 @@ BEGIN
   EXECUTE format('CREATE POLICY perm_write_insert ON %s AS RESTRICTIVE FOR INSERT WITH CHECK (%s)', p_table, v_check);
   EXECUTE format('CREATE POLICY perm_write_update ON %s AS RESTRICTIVE FOR UPDATE USING (%s) WITH CHECK (%s)', p_table, v_check, v_check);
   EXECUTE format('CREATE POLICY perm_write_delete ON %s AS RESTRICTIVE FOR DELETE USING (%s)', p_table, v_check);
+END
+$function$;
+
+
+-- function app_current_employee_id: legajo de la sesion (portal de empleados); NULL si no se fijo.
+-- Lo fija la app con set_config('app.employee_id', ..., true) cuando la sesion (no anonima) tiene un legajo vinculado de
+-- la empresa activa. Nunca sale de un dato del cliente: lo resuelve `getTenantContext()` desde `profile.employee_id`.
+CREATE OR REPLACE FUNCTION public.app_current_employee_id()
+ RETURNS uuid
+ LANGUAGE sql
+ STABLE PARALLEL SAFE
+AS $function$
+  SELECT nullif(current_setting('app.employee_id', true), '')::uuid
+$function$;
+
+-- function app_enable_employee_self: capa RESTRICTIVA por empleado, que se SUMA (AND) a `tenant_isolation`.
+-- Para tablas con filas de un empleado (`p_column`): una fila se lee solo si es del legajo de la transaccion o si el
+-- usuario tiene el permiso de lectura del dashboard (`'modulo:tab:accion'`). Escribir exige el permiso de escritura; con
+-- `p_self_write` el empleado tambien puede escribir SUS filas (aceptaciones, intentos, lecturas de HSE).
+-- Falla cerrada: sin `app.employee_id` y sin permiso no se ve ninguna fila, aunque la action se olvide de filtrar.
+-- Los `(SELECT ...)` hacen que la funcion se evalue una vez por consulta (initplan) y no una vez por fila.
+-- Llamarla DESPUES de `app_enable_tenant_isolation`: una politica restrictiva sola no deja pasar nada.
+CREATE OR REPLACE FUNCTION public.app_enable_employee_self(
+  p_table regclass,
+  p_read_perm text,
+  p_write_perm text,
+  p_column text DEFAULT 'employee_id',
+  p_self_write boolean DEFAULT false
+)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_self text := format('%I = (SELECT public.app_current_employee_id())', p_column);
+  v_read text := format('(SELECT public.app_has_permission(%L, %L, %L))',
+    split_part(p_read_perm, ':', 1), split_part(p_read_perm, ':', 2), split_part(p_read_perm, ':', 3));
+  v_write text := format('(SELECT public.app_has_permission(%L, %L, %L))',
+    split_part(p_write_perm, ':', 1), split_part(p_write_perm, ':', 2), split_part(p_write_perm, ':', 3));
+  v_read_check text := format('(%s OR %s)', v_self, v_read);
+  v_write_check text := CASE WHEN p_self_write THEN format('(%s OR %s)', v_self, v_write) ELSE v_write END;
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_attribute a WHERE a.attrelid = p_table AND a.attname = p_column AND NOT a.attisdropped
+  ) THEN
+    RAISE EXCEPTION 'La tabla % no tiene columna %', p_table, p_column;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE format('%I.%I', schemaname, tablename)::regclass = p_table AND policyname = 'tenant_isolation') THEN
+    RAISE EXCEPTION 'La tabla % no tiene tenant_isolation: llamar antes a app_enable_tenant_isolation', p_table;
+  END IF;
+
+  EXECUTE format('DROP POLICY IF EXISTS employee_self_select ON %s', p_table);
+  EXECUTE format('DROP POLICY IF EXISTS employee_self_insert ON %s', p_table);
+  EXECUTE format('DROP POLICY IF EXISTS employee_self_update ON %s', p_table);
+  EXECUTE format('DROP POLICY IF EXISTS employee_self_delete ON %s', p_table);
+  EXECUTE format('CREATE POLICY employee_self_select ON %s AS RESTRICTIVE FOR SELECT USING %s', p_table, v_read_check);
+  EXECUTE format('CREATE POLICY employee_self_insert ON %s AS RESTRICTIVE FOR INSERT WITH CHECK (%s)', p_table, v_write_check);
+  EXECUTE format('CREATE POLICY employee_self_update ON %s AS RESTRICTIVE FOR UPDATE USING (%s) WITH CHECK (%s)', p_table, v_write_check, v_write_check);
+  EXECUTE format('CREATE POLICY employee_self_delete ON %s AS RESTRICTIVE FOR DELETE USING (%s)', p_table, v_write_check);
 END
 $function$;

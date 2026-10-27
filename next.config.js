@@ -4,7 +4,9 @@ const nextConfig = {
   // Las guías del manual se leen del disco en runtime (`src/features/Ayuda/Manual/lib`): sin esto,
   // el trazado de `standalone` no las copia y en producción el manual queda vacío.
   outputFileTracingIncludes: {
-    '/dashboard/help': ['./src/content/manual/**/*']
+    '/dashboard/help': ['./src/content/manual/**/*'],
+    // Página propia del manual (ticket 809).
+    '/manual': ['./src/content/manual/**/*']
   },
   cacheComponents: true,
   // El chequeo de tipos NO se repite en `next build`: ya lo corre `npm run check-types` (job `types-and-lint` del CI y

@@ -29,7 +29,7 @@ export default function TallerSectionContent({
       searchParams={searchParams}
       defaultView="talleres"
       permissions={permissions}
-      layout="menu"
+      layout="tabs"
       ariaLabel="Taller"
       preserveParams={['tab']}
       views={[

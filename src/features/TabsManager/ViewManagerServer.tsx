@@ -1,7 +1,9 @@
 import type { ModuleSlug } from '@/features/Permissions/permissions-map';
+import { cn } from '@/lib/utils';
 import { SectionCard } from '@/shared/components/common/SectionCard';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import { ViewNav, type ViewNavItem } from './components/ViewNav';
+import { ViewTabs } from './components/ViewTabs';
 import { buildEntryHref, resolveActiveEntry } from './lib/resolve-active';
 import type { ViewManagerServerProps } from './types';
 
@@ -19,6 +21,7 @@ export async function ViewManagerServer<M extends ModuleSlug = ModuleSlug>({
   permissions,
   preserveParams = ['tab'],
   layout = 'menu',
+  tabsLevel = 'primary',
   ariaLabel,
   actions,
 }: ViewManagerServerProps<M>) {
@@ -49,6 +52,36 @@ export async function ViewManagerServer<M extends ModuleSlug = ModuleSlug>({
   ) : (
     active.content
   );
+
+  if (layout === 'tabs') {
+    const primary = tabsLevel === 'primary';
+    // Con una sola vista no hay pestañas: igual se muestra su descripción para dar contexto.
+    const description = primary ? visible.find((view) => view.value === active.value)?.description : undefined;
+    return (
+      <div className="flex min-w-0 flex-col gap-4">
+        {showNav || actions ? (
+          <div
+            className={cn(
+              'flex min-w-0 flex-col gap-2 sm:flex-row sm:items-end sm:justify-between',
+              // Primer nivel: la fila queda fija bajo el header del dashboard (h-14) y ocupa todo el ancho
+              // del área de contenido (compensa el `px-4 sm:px-8` del layout).
+              primary &&
+                'bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-14 z-10 -mx-4 border-b px-4 backdrop-blur sm:-mx-8 sm:px-8'
+            )}
+          >
+            {showNav ? (
+              <ViewTabs items={items} activeValue={active.value} ariaLabel={ariaLabel} level={tabsLevel} />
+            ) : (
+              <span />
+            )}
+            {actions ? <div className="flex flex-wrap items-center gap-2 pb-2">{actions}</div> : null}
+          </div>
+        ) : null}
+        {description ? <p className="text-muted-foreground -mt-1 text-sm text-pretty">{description}</p> : null}
+        {content}
+      </div>
+    );
+  }
 
   if (layout === 'rail') {
     return (

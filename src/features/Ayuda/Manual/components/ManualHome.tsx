@@ -35,9 +35,12 @@ export function ManualHome({
   return (
     <div className="min-w-0 space-y-12">
       <section aria-labelledby="manual-home-title" className="border bg-card p-6 sm:p-8">
-        <h2 id="manual-home-title" className="text-2xl leading-tight font-semibold tracking-tight text-balance sm:text-3xl">
+        <h1
+          id="manual-home-title"
+          className="text-2xl leading-tight font-semibold tracking-tight text-balance sm:text-3xl"
+        >
           ¿Qué necesitás hacer en el sistema?
-        </h2>
+        </h1>
         <p className="mt-2 max-w-prose leading-relaxed text-pretty text-muted-foreground">
           Buscá una tarea o el nombre de una pantalla. Hay{' '}
           <span className="tabular-nums">{guidesLabel(totalGuides)}</span> con los pasos de cada módulo y de los
@@ -53,7 +56,9 @@ export function ManualHome({
           <h2 id="manual-start-title" className="text-lg font-semibold text-foreground">
             Empezá por acá
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">Si es tu primera vez en el sistema, leelas en este orden.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Si es tu primera vez en el sistema, leelas en este orden.
+          </p>
           <ol className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {startHere.map((guide, index) => (
               <li key={guide.slug}>
@@ -181,9 +186,7 @@ export function ManualHome({
                     ))}
                   </ul>
                   {rest > 0 && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Y {rest} más en el índice del manual.
-                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">Y {rest} más en el índice del manual.</p>
                   )}
                 </li>
               );

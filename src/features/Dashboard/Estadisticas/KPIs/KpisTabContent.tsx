@@ -14,7 +14,8 @@ export default async function KpisTabContent({
 }) {
   return (
     <ViewManagerServer
-      layout="menu"
+      layout="tabs"
+      tabsLevel="secondary"
       paramName="kpiview"
       defaultView="indicadores"
       ariaLabel="Indicadores"

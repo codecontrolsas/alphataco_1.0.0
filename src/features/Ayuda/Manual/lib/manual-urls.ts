@@ -1,14 +1,16 @@
 import type { ScreenRef } from '../catalog/types';
 import { isWildcardPath } from './route-table';
 
-/**
- * Todas las URLs del manual se arman acá: si algún día el manual pasa a una subruta propia, se
- * cambia esta función y nada más.
- */
+/** Ruta propia del manual (fuera del dashboard, ticket 809). */
+export const MANUAL_PATH = '/manual';
+
+/** URL vieja del manual dentro del dashboard; redirige a `MANUAL_PATH` conservando `?guide=`. */
+export const LEGACY_MANUAL_PATH = '/dashboard/help?tab=manual';
+
+/** Todas las URLs del manual se arman acá. */
 export function manualHref(slug?: string, anchor?: string): string {
-  const base = '/dashboard/help?tab=manual';
-  if (!slug) return base;
-  return `${base}&guide=${encodeURIComponent(slug)}${anchor ? `#${anchor}` : ''}`;
+  if (!slug) return MANUAL_PATH;
+  return `${MANUAL_PATH}?guide=${encodeURIComponent(slug)}${anchor ? `#${anchor}` : ''}`;
 }
 
 /** URL de una pantalla del sistema a partir de su referencia en el catálogo. */

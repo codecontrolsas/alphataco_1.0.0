@@ -2,27 +2,33 @@ import { getUserPermissionsMapServer } from '@/features/Permissions/actions/perm
 import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
 import { SectionManagerServer } from '@/features/TabsManager/SectionManagerServer';
 import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
-import { BookOpen, LifeBuoy } from 'lucide-react';
+import { LifeBuoy } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
-import { ManualTabContent } from './Manual/ManualTabContent';
-import { ManualSkeleton } from './Manual/fallback/ManualSkeleton';
+import { manualHref } from './Manual/lib/manual-urls';
 import { TicketsTabContent } from './Tickets/TicketsTabContent';
 import { MyTicketsListSkeleton } from './fallback/MyTicketsListSkeleton';
 
 type SearchParams = { [key: string]: string | string[] | undefined };
 
 /**
- * Módulo Ayuda: "Tickets" (soporte con TaskApp) y "Manual de uso". Cada sección es un
- * sub-item del sidebar (`?tab=`) y se filtra por su propio permiso.
+ * Módulo Ayuda: "Tickets" (soporte con TaskApp). El "Manual de uso" pasó a su página propia
+ * (`/manual`, ticket 809): los enlaces viejos `?tab=manual[&guide=…]` redirigen ahí, y quien solo
+ * puede ver el manual también cae ahí al entrar a Ayuda.
  */
 export default async function AyudaComponent({ searchParams }: { searchParams: SearchParams }) {
   const permissions = await getUserPermissionsMapServer();
 
-  // Antes la página exigía el permiso de tickets; ahora alcanza con cualquiera de las dos
-  // secciones. Sin ninguna, se vuelve al dashboard como antes.
   const isTabVisible = createTabVisibilityChecker(permissions);
-  if (!isTabVisible('ayuda', 'tickets') && !isTabVisible('ayuda', 'manual')) redirect('/dashboard');
+  const canSeeTickets = isTabVisible('ayuda', 'tickets');
+  const canSeeManual = isTabVisible('ayuda', 'manual');
+  if (!canSeeTickets && !canSeeManual) redirect('/dashboard');
+
+  const tab = typeof searchParams.tab === 'string' ? searchParams.tab : null;
+  if (canSeeManual && (tab === 'manual' || !canSeeTickets)) {
+    const guide = typeof searchParams.guide === 'string' && searchParams.guide ? searchParams.guide : undefined;
+    redirect(manualHref(guide));
+  }
 
   return (
     <SectionManagerServer
@@ -47,24 +53,6 @@ export default async function AyudaComponent({ searchParams }: { searchParams: S
             <SectionErrorBoundary title="No se pudieron mostrar los tickets">
               <Suspense fallback={<MyTicketsListSkeleton />}>
                 <TicketsTabContent searchParams={searchParams} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'manual',
-          label: (
-            <span className="flex items-center gap-2">
-              <BookOpen className="h-4 w-4" />
-              Manual de uso
-            </span>
-          ),
-          moduleSlug: 'ayuda',
-          tabSlug: 'manual',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar el manual">
-              <Suspense fallback={<ManualSkeleton />}>
-                <ManualTabContent searchParams={searchParams} permissions={permissions} />
               </Suspense>
             </SectionErrorBoundary>
           ),

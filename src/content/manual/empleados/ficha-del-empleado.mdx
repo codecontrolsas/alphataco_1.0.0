@@ -27,6 +27,7 @@ Debajo están las pestañas:
 | **Documentación** | Los documentos que se le exigen y su estado. |
 | **Diagramas** | Sus novedades día por día y el historial de cambios. |
 | **Indumentaria** | Las entregas de ropa y elementos de protección que recibió. |
+| **Portal** | Si el empleado puede entrar al portal de empleados, cómo recibió el acceso y quién se lo dio. |
 
 Mientras das de alta a un empleado, **Documentación** e **Indumentaria** aparecen con un candado y **Diagramas** no se muestra: se habilitan una vez guardado.
 
@@ -175,6 +176,17 @@ Cada entrega descuenta stock en **Almacenes**: es una salida imputada a este emp
 
 Los artículos, marcas y talles se configuran en <GuideLink to="catalogo-de-indumentaria">Catálogo de indumentaria</GuideLink>.
 
+## Portal
+
+Desde acá Recursos Humanos le da al empleado acceso al **portal de empleados** (`/portal`), donde ve sus datos desde el celular. No hay registro libre: sin esta habilitación nadie entra.
+
+- **Habilitar portal**: si el legajo ya tiene un usuario del sistema, se usa esa misma cuenta y el empleado entra con su contraseña de siempre. Si no, elegís **Invitación por correo** (recibe un enlace que vence en 24 horas y sirve una sola vez para elegir su contraseña) o **Contraseña temporal** (la ves una sola vez para entregársela; al entrar la tiene que cambiar). El correo es el usuario con el que entra.
+- Si el correo de la invitación no sale, se muestra el enlace de activación para entregarlo a mano.
+- **Reenviar invitación** y **Nueva contraseña temporal** solo aparecen si la cuenta la creó el portal: nunca se toca la contraseña de un usuario del sistema.
+- **Deshabilitar portal** corta la entrada en su próximo acceso. Si la cuenta la creó el portal, además se cierran sus sesiones.
+- Un legajo dado de baja no entra al portal aunque lo tenga habilitado.
+- La **Bitácora** muestra quién habilitó, invitó, generó contraseñas o deshabilitó, y cuándo.
+
 ## Dar de baja un empleado
 
 <Steps>
@@ -247,6 +259,7 @@ El circuito completo de ingresos y egresos está en <GuideLink to="altas-y-bajas
 | **Ver** en **Documentos de empleados** (módulo Documentación) | La pestaña **Documentación**. Subir documentos requiere **Editar** en documentos permanentes o mensuales; los documentos privados requieren el permiso de subir privados. |
 | **Ver** en **Diagramas** de la ficha | La solapa **Diagramas**. **Nuevo Diagrama** requiere **Ver** en **Cargar Diagramas** del módulo Empleados. |
 | **Ver** / **Crear** / **Eliminar** en **Indumentaria** | Ver las entregas / el botón **Nueva Entrega** / **Anular** una entrega. |
+| **Ver** / **Habilitar portal** en **Portal del empleado** | Ver el estado del acceso y su bitácora / habilitar, reenviar o deshabilitar el acceso. |
 
 El menú de acciones (**Dar de Baja Empleado** / **Activar Empleado**) está disponible para quien puede abrir la ficha.
 

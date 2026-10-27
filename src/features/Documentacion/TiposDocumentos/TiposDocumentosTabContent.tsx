@@ -95,7 +95,7 @@ export default async function TiposDocumentosTabContent({
       searchParams={searchParams}
       defaultView={defaultTab}
       preserveParams={['tab']}
-      layout="menu"
+      layout="tabs"
       ariaLabel="Tipos de documento"
       permissions={permissions}
       actions={

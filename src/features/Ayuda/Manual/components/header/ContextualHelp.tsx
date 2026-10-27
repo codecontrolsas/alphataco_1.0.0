@@ -15,11 +15,5 @@ export async function ContextualHelp() {
   const isTabVisible = createTabVisibilityChecker(permissions);
   if (!isTabVisible('ayuda', 'manual')) return null;
 
-  return (
-    <ContextualHelpButton
-      rules={buildRouteTable(visibleGuides(getManual().guides, permissions))}
-      // Sin Tickets, `/dashboard/help` sin `?tab=` cae directo en el manual.
-      manualIsHelpDefault={!isTabVisible('ayuda', 'tickets')}
-    />
-  );
+  return <ContextualHelpButton rules={buildRouteTable(visibleGuides(getManual().guides, permissions))} />;
 }

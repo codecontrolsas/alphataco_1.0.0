@@ -11,6 +11,12 @@ export type CompanySelectorProps = {
   sharedCompanies: CompanyRow[];
   allCompanies: CompanyRow[];
   currentCompany: CompanyRow[];
+  /**
+   * Límite de empresas de la instancia (ticket 807): sin lugar no se ofrece "Agregar compañía" y en su
+   * lugar se muestra `companyLimitText` («Tu plan permite N empresa(s)»).
+   */
+  canCreateCompany: boolean;
+  companyLimitText: string;
 };
 
 export type UserMenuProps = {

@@ -67,6 +67,13 @@ export type NavigationSubLink = {
   subTabSlug?: string;
   /** Contador a mostrar junto al sub-item (y, plegado, sobre el modulo). */
   badge?: NavBadge;
+  /**
+   * Ruta propia del sub-item cuando NO vive bajo `?tab=` del módulo (hoy: el Manual de uso, que es
+   * una página aparte). El permiso sigue siendo `tabSlug`.
+   */
+  href?: string;
+  /** Se abre en una pestaña nueva (`target="_blank"`): páginas que conviene tener al lado de la app. */
+  newTab?: boolean;
 };
 
 /** Clave única de un sub-item dentro de su módulo: la subtab si la tiene y, si no, la tab. */
@@ -74,8 +81,9 @@ export function subLinkKey(subLink: NavigationSubLink): string {
   return subLink.subTabSlug ?? subLink.tabSlug;
 }
 
-/** URL de un sub-item: `?tab=` y, si corresponde, `&subtab=`. */
+/** URL de un sub-item: su `href` propio o, si no tiene, `?tab=` y, si corresponde, `&subtab=`. */
 export function subLinkHref(moduleHref: string, subLink: NavigationSubLink): string {
+  if (subLink.href) return subLink.href;
   const subTab = subLink.subTabSlug ? `&subtab=${subLink.subTabSlug}` : '';
   return `${moduleHref}?tab=${subLink.tabSlug}${subTab}`;
 }
@@ -276,7 +284,8 @@ export const navigationLinks: NavigationLink[] = [
     position: 13,
     items: [
       { name: 'Tickets', tabSlug: 'tickets', badge: 'support-tickets' },
-      { name: 'Manual de uso', tabSlug: 'manual' },
+      // Página propia, fuera del dashboard: se lee al lado de la app sin dos menús (ticket 809).
+      { name: 'Manual de uso', tabSlug: 'manual', href: '/manual', newTab: true },
     ],
   },
   {

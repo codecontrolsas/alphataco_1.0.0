@@ -17,8 +17,8 @@ import remarkGfm from 'remark-gfm';
 import type { GuideSummary } from '../lib/guide-navigation';
 import type { LoadedGuide } from '../lib/manual-loader';
 import { manualHref } from '../lib/manual-urls';
-import { manualMdxComponents } from './mdx/mdx-components';
 import { ManualNotice } from './ManualNotice';
+import { manualMdxComponents } from './mdx/mdx-components';
 
 const logger = new Logger('features/Ayuda/Manual/GuideView');
 
@@ -55,7 +55,7 @@ export async function GuideView({
   const body = await renderBody(guide);
 
   return (
-    <article aria-labelledby="manual-guide-title" className="max-w-4xl min-w-0">
+    <article aria-labelledby="manual-guide-title" className="mx-auto max-w-3xl min-w-0">
       <Breadcrumb>
         <BreadcrumbList>
           <BreadcrumbItem>
@@ -73,12 +73,12 @@ export async function GuideView({
       </Breadcrumb>
 
       <header className="mt-4 border-b pb-6">
-        <h2
+        <h1
           id="manual-guide-title"
           className="text-2xl leading-tight font-semibold tracking-tight text-balance text-foreground sm:text-3xl"
         >
           {guide.frontmatter.title}
-        </h2>
+        </h1>
         <p className="mt-3 max-w-prose text-lg leading-relaxed text-pretty text-muted-foreground">
           {guide.frontmatter.summary}
         </p>
@@ -93,7 +93,8 @@ export async function GuideView({
             <span className="inline-flex items-center gap-1.5">
               <CalendarDays aria-hidden className="size-4" />
               <span>
-                Actualizada el <time dateTime={guide.frontmatter.updated}>{formatUpdated(guide.frontmatter.updated)}</time>
+                Actualizada el{' '}
+                <time dateTime={guide.frontmatter.updated}>{formatUpdated(guide.frontmatter.updated)}</time>
               </span>
             </span>
           )}

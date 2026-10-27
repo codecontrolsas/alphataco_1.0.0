@@ -5,8 +5,10 @@ import { SectionManagerServer } from '@/features/TabsManager/SectionManagerServe
 import { Suspense } from 'react';
 import EquipmentsTabContent from './Equipos/EquipmentsTabContent';
 import GeneralTabContent from './General/GeneralTabContent';
+import { TableSubtabSkeleton } from './General/fallback/SubtabSkeletons';
 import RrhhTabContent from './RRHH/RrhhTabContent';
 import TallerSectionContent from './Taller/TallerSectionContent';
+import UsersTabComponent from './Usuarios/UsersTabComponent';
 
 /**
  * Módulo Configuración (antes "Empresa").
@@ -24,6 +26,12 @@ import TallerSectionContent from './Taller/TallerSectionContent';
  *
  * Los `tabId` de las tres viajaron sin cambiar, así que los permisos ya asignados siguen
  * valiendo (ver la migración del rename).
+ *
+ * Navegación (rediseño de Configuración): el sidebar de la app es la única navegación entre
+ * secciones; dentro de cada sección, las vistas van en pestañas horizontales (`?subtab=`) con el
+ * contenido a ancho completo. "Usuarios y accesos" tiene su propio ítem en el sidebar, así que se
+ * monta como sección aparte (antes era además una pestaña de Organización: dos caminos al mismo
+ * lugar). Conserva su URL de siempre, `?tab=general&subtab=users` (y `?subtab=users`).
  */
 export default async function EmpresaComponent({
   searchParams,
@@ -33,20 +41,38 @@ export default async function EmpresaComponent({
   // Obtener permisos (usará cache pre-cargado en layout, sin query adicional)
   const permissions = await getUserPermissionsMapServer();
 
+  const tab = typeof searchParams.tab === 'string' ? searchParams.tab : undefined;
+  const isUsersSection = tab === 'users' || ((!tab || tab === 'general') && searchParams.subtab === 'users');
+  // Solo para elegir la sección activa: el contenido recibe la URL tal cual (Usuarios conserva `tab`/`subtab`).
+  const sectionParams = isUsersSection ? { ...searchParams, tab: 'users' } : searchParams;
+
   return (
     <SectionManagerServer
       paramName="tab"
-      searchParams={searchParams}
+      searchParams={sectionParams}
       defaultTab="general"
       permissions={permissions}
       tabs={[
         {
           value: 'general',
           label: 'Organización',
-          description: 'Datos de la empresa, fiscales, estructura (organigrama, sectores y centros de costo), usuarios e indicadores',
+          description: 'Datos de la empresa, datos fiscales, estructura, documentos e indicadores',
           moduleSlug: 'configuracion',
           tabSlug: 'general',
           content: <GeneralTabContent searchParams={searchParams} permissions={permissions} />,
+        },
+        {
+          value: 'users',
+          href: '?tab=general&subtab=users',
+          label: 'Usuarios y accesos',
+          description: 'Usuarios, roles y permisos, y accesos externos a la API',
+          moduleSlug: 'configuracion',
+          tabSlug: 'users',
+          content: (
+            <Suspense fallback={<TableSubtabSkeleton />}>
+              <UsersTabComponent searchParams={searchParams} permissions={permissions} />
+            </Suspense>
+          ),
         },
         {
           value: 'rrhh',

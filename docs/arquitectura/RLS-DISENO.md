@@ -413,6 +413,20 @@ CREATE POLICY company_write ON public.company FOR UPDATE USING (id = app_current
 
 **k) Sistema** (`jobs_runs`, `handle_errors`, `arca_locks`): `jobs_runs` y `arca_locks` sin acceso del rol de app salvo lo que la app use (ARCA usa `arca_locks` desde requests: dejar sin RLS); `handle_errors` solo `INSERT`.
 
+#### 7.4.x Capa por empleado (portal de empleados, ticket 804 — agregado 2026-10-27)
+
+Primera politica restrictiva por actor, admitida fuera de los lotes de P2-C (decision D8 del
+`BLUEPRINT-PORTAL-EMPLEADOS-Y-HSE.md`). `getTenantContext()` resuelve, con una consulta del cliente de sistema, el legajo
+vinculado a la sesion (no anonima) en la empresa activa y lo fija como `app.employee_id` (`setTenantContext` solo lo
+manda cuando hay); `kind` es `employee` si ademas la sesion no es miembro ni duenia de la empresa. El helper
+`app_enable_employee_self(tabla, permiso_lectura, permiso_escritura, columna, self_write)` suma, sobre `tenant_isolation`,
+politicas `AS RESTRICTIVE` por comando: leer exige `columna = app_current_employee_id()` o el permiso de lectura del
+dashboard; escribir exige el permiso de escritura (o la fila propia con `self_write`). Las funciones van envueltas en
+`(SELECT ...)` para que el planner las evalue una vez por consulta (initplan). Falla cerrada: sin legajo ni permiso no
+hay filas, aunque una action olvide filtrar. Primeras tablas: `employee_portal_access` y `employee_portal_access_events`
+(el empleado lee su fila, nunca la escribe). Verificado bajo `alphataco_app`: empleado A no ve a B ni a otra empresa,
+sin contexto 0 filas, UPDATE propio 0 filas, INSERT propio rechazado.
+
 ### 7.5 Roles y permisos dentro de la empresa
 
 La app ya resuelve permisos con `user_has_permission(user, company, module, tab, action)` sobre `user_roles` + `role_permissions` + `user_permissions` (overrides). En la base:

@@ -1,4 +1,5 @@
 import { fetchCurrentCompany, fetchUserCompanies } from '@/shared/actions/company.actions';
+import { companyLimitLabel, getCompanyLimitStatus } from '@/shared/lib/instance-settings';
 import { CompanySwitcher } from '../CompanySwitcher';
 
 /**
@@ -6,9 +7,10 @@ import { CompanySwitcher } from '../CompanySwitcher';
  * Se envuelve en Suspense desde `AppSidebar` para streaming independiente.
  */
 export async function CompanySwitcherAsync() {
-  const [currentCompany, { sharedCompanies, allCompanies }] = await Promise.all([
+  const [currentCompany, { sharedCompanies, allCompanies }, companyLimit] = await Promise.all([
     fetchCurrentCompany(),
     fetchUserCompanies(),
+    getCompanyLimitStatus(),
   ]);
 
   return (
@@ -16,6 +18,8 @@ export async function CompanySwitcherAsync() {
       sharedCompanies={sharedCompanies}
       allCompanies={allCompanies}
       currentCompany={currentCompany ?? []}
+      canCreateCompany={!companyLimit.reached}
+      companyLimitText={companyLimitLabel(companyLimit.max)}
     />
   );
 }

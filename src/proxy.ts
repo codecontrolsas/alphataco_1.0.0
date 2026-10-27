@@ -1,5 +1,6 @@
 import { Logger } from '@/lib/logger';
 import { auth } from '@/shared/lib/auth';
+import { prismaSystem } from '@/shared/lib/prisma-system';
 import { resolveDefaultCompanyId, writeCompanyClaim } from '@/shared/lib/session-claims';
 import { NextResponse, type NextRequest } from 'next/server';
 
@@ -11,7 +12,7 @@ const logger = new Logger('Proxy');
  * refrescaba el JWT en cada request.
  *
  * Responsabilidades:
- * 1. Verificar autenticación para /dashboard/*
+ * 1. Verificar autenticación para /dashboard/* y /manual
  * 2. Mandar al operario anónimo (QR) a /maintenance
  * 3. Verificar que el usuario tenga empresa, por el claim de la sesión
  *
@@ -40,7 +41,15 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL('/maintenance', req.url));
   }
 
-  // 3. Empresa: el claim lo estampó el servidor al abrir la sesión. Si está vacío puede ser que
+  // 3. Solo empleado (legajo vinculado, sin ser miembro activo ni duenio de ninguna empresa): no es usuario del
+  //    dashboard. Va al portal de empleados. Se mira ANTES del claim: el alta de sesion le estampa la empresa del
+  //    legajo, y con eso ya pasaba al dashboard (sin permisos, pero adentro).
+  if (await isEmployeeOnly(session.user.id)) {
+    logger.debug('Usuario solo empleado intentando acceder a dashboard, redirigiendo al portal');
+    return NextResponse.redirect(new URL('/portal', req.url));
+  }
+
+  // 4. Empresa: el claim lo estampó el servidor al abrir la sesión. Si está vacío puede ser que
   //    el usuario no tenga ninguna, o que lo hayan sumado a una DESPUÉS de abrir la sesión: se
   //    reintenta resolver contra la base y, si aparece, se estampa. Sin este auto-rescate el
   //    invitado a una empresa quedaría rebotando contra /dashboard/configuration/companies/new hasta relogearse.
@@ -64,11 +73,24 @@ export async function proxy(req: NextRequest) {
     }
   }
 
-  // 4. Usuario autenticado con compañía - permitir acceso
+  // 5. Usuario autenticado con compañía - permitir acceso
   return NextResponse.next();
 }
 
+/** Una consulta: tiene legajo vinculado y ninguna membresia activa ni empresa propia. */
+async function isEmployeeOnly(userId: string): Promise<boolean> {
+  const rows = await prismaSystem.$queryRaw<{ employee_only: boolean }[]>`
+    SELECT (p.employee_id IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM public.share_company_users s WHERE s.profile_id = p.id AND s.is_active)
+            AND NOT EXISTS (SELECT 1 FROM public.company c WHERE c.owner_id = p.id)) AS employee_only
+    FROM public.profile p
+    WHERE p.credential_id = ${userId}::uuid
+    LIMIT 1`;
+  return rows[0]?.employee_only === true;
+}
+
 export const config = {
-  // Solo proteger /dashboard/* - /maintenance/* es público para usuarios anónimos
-  matcher: ['/dashboard/:path*'],
+  // Proteger /dashboard/* y el manual (`/manual`, página propia fuera del dashboard: misma sesión y
+  // empresa que el resto). /maintenance/* es público para usuarios anónimos.
+  matcher: ['/dashboard/:path*', '/manual', '/manual/:path*'],
 };

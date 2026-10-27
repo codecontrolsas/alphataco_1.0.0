@@ -15,7 +15,7 @@ import {
 import { useUnreadSupportTicketsCount } from '@/features/Ayuda/hooks/useUnreadSupportTicketsCount';
 import { useActiveDashboardBoard } from '@/features/Dashboard/Boards/hooks/useActiveDashboardBoard';
 import { cn } from '@/lib/utils';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useMemo } from 'react';
@@ -199,9 +199,18 @@ export function NavMain({ accessibleModuleSlugs, visibleTabs }: NavMainProps) {
                           return (
                             <SidebarMenuSubItem key={subKey}>
                               <SidebarMenuSubButton asChild isActive={subKey === activeTab} className={ITEM_BUTTON}>
-                                <Link href={subLinkHref(item.href, subItem)}>
+                                <Link
+                                  href={subLinkHref(item.href, subItem)}
+                                  {...(subItem.newTab ? { target: '_blank', rel: 'noopener' } : {})}
+                                >
                                   {SubIcon && <SubIcon />}
                                   <span>{subItem.name}</span>
+                                  {subItem.newTab && (
+                                    <>
+                                      <ExternalLink aria-hidden="true" className="ml-auto !size-3.5 opacity-60" />
+                                      <span className="sr-only"> (se abre en una pestaña nueva)</span>
+                                    </>
+                                  )}
                                   {subCount > 0 && (
                                     <span
                                       className={cn(

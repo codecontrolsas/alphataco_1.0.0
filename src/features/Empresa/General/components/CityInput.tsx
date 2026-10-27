@@ -46,8 +46,11 @@ export default function CityInput({ provinces, defaultProvince, defaultCity }: P
     <>
       <div className="min-w-0 space-y-1.5">
         <Label htmlFor="province_id">Seleccione una provincia</Label>
-        <Select value={selectedProvince} onValueChange={handleProvinceChange} name="province_id">
-          <SelectTrigger id="province_id" name="province_id" className="w-full">
+        {/* El valor viaja en un input propio: el `<select>` oculto de Radix solo lo envía cuando la opción
+            ya está renderizada, y mientras las ciudades cargan el formulario mandaba la ciudad vacía. */}
+        <input type="hidden" name="province_id" value={selectedProvince ?? ''} />
+        <Select value={selectedProvince} onValueChange={handleProvinceChange}>
+          <SelectTrigger id="province_id" className="w-full">
             <SelectValue placeholder="Seleccionar Provincia" />
           </SelectTrigger>
           <SelectContent>
@@ -63,8 +66,9 @@ export default function CityInput({ provinces, defaultProvince, defaultCity }: P
       </div>
       <div className="min-w-0 space-y-1.5">
         <Label htmlFor="city">Seleccione una ciudad</Label>
-        <Select value={selectedCity} onValueChange={setSelectedCity} name="city" disabled={!selectedProvince}>
-          <SelectTrigger id="city" name="city" className="w-full">
+        <input type="hidden" name="city" value={selectedCity ?? ''} />
+        <Select value={selectedCity} onValueChange={setSelectedCity} disabled={!selectedProvince}>
+          <SelectTrigger id="city" className="w-full">
             <SelectValue placeholder={isLoading ? 'Cargando ciudades...' : 'Seleccionar Ciudad'} />
           </SelectTrigger>
           <SelectContent>

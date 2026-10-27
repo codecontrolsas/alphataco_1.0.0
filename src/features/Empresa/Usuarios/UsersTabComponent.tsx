@@ -20,7 +20,7 @@ export default function UsersTabComponent({
       paramName="usertab"
       searchParams={searchParams}
       defaultView="usuarios-empleados"
-      layout="menu"
+      layout="tabs"
       ariaLabel="Usuarios y accesos"
       preserveParams={['tab', 'subtab']}
       permissions={permissions}

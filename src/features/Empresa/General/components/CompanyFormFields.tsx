@@ -39,6 +39,15 @@ function FormField({ id, label, children }: { id: string; label: string; childre
 }
 
 export default function CompanyFormFields({ provinces, industryTypes, company }: CompanyFormFieldsProps) {
+  // Valores guardados que no están en el catálogo (datos viejos o cargados por script): se ofrecen
+  // igual, así el selector no aparece vacío y guardar no los pisa sin que el usuario lo note.
+  const industryOptions =
+    company?.industry && !industryTypes.some((ind) => ind.name === company.industry)
+      ? [...industryTypes, { id: -1, name: company.industry }]
+      : industryTypes;
+  const countryValue =
+    company?.country && company.country.toLowerCase() === 'argentina' ? company.country : 'argentina';
+
   return (
     <>
       <SectionCard title="Identificación">
@@ -65,7 +74,7 @@ export default function CompanyFormFields({ provinces, industryTypes, company }:
                 <SelectValue id="industry" placeholder="Seleccionar Industria" />
               </SelectTrigger>
               <SelectContent>
-                {industryTypes.map((ind) => (
+                {industryOptions.map((ind) => (
                   <SelectItem key={ind.id} value={ind.name}>
                     {ind.name}
                   </SelectItem>
@@ -92,8 +101,9 @@ export default function CompanyFormFields({ provinces, industryTypes, company }:
             </FormField>
           </div>
           <div className="flex items-center gap-2 md:col-span-2">
-            <Checkbox id="by_defect" name="by_defect" />
-            <Label htmlFor="by_defect">Marcar para seleccionar Compañia por defecto</Label>
+            {/* Sin `defaultChecked`, guardar la edición desmarcaba en silencio la empresa por defecto. */}
+            <Checkbox id="by_defect" name="by_defect" defaultChecked={company?.by_defect ?? false} />
+            <Label htmlFor="by_defect">Usar como compañía por defecto al ingresar</Label>
           </div>
         </div>
       </SectionCard>
@@ -125,12 +135,12 @@ export default function CompanyFormFields({ provinces, industryTypes, company }:
             <Input defaultValue={company?.address} id="address" name="address" placeholder="dirección de la compañía" />
           </FormField>
           <FormField id="country" label="Seleccione un país">
-            <Select defaultValue={company?.country} name="country">
+            <Select defaultValue={company?.country ? countryValue : undefined} name="country">
               <SelectTrigger id="country" name="country" className="w-full">
                 <SelectValue placeholder="Seleccionar país" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="argentina">Argentina</SelectItem>
+                <SelectItem value={countryValue}>Argentina</SelectItem>
               </SelectContent>
             </Select>
           </FormField>

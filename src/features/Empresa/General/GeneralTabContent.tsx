@@ -1,8 +1,8 @@
 import { Skeleton } from '@/components/ui/skeleton';
 import KpisTabContent from '@/features/Dashboard/Estadisticas/KPIs/KpisTabContent';
+import { CompanyDocsTableSkeleton } from '@/features/Documentacion/DocumentosEmpresa/fallback/CompanyDocsTableSkeleton';
 import { _CreateDocumentTypeButton } from '@/features/Documentacion/TiposDocumentos/components/_CreateDocumentTypeButton';
 import CompanyDocsList from '@/features/Empresa/General/Documentacion/components/CompanyDocsList';
-import { CompanyDocsTableSkeleton } from '@/features/Documentacion/DocumentosEmpresa/fallback/CompanyDocsTableSkeleton';
 import { PermissionGuardServer } from '@/features/Permissions/components/PermissionGuardServer';
 import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
 import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
@@ -10,7 +10,6 @@ import { document_applies } from '@/generated/prisma/enums';
 import { CatalogTableSurface } from '@/shared/components/common/CatalogFormSheet';
 import { SectionCard } from '@/shared/components/common/SectionCard';
 import { Suspense } from 'react';
-import UsersTabComponent from '../Usuarios/UsersTabComponent';
 import CostCenterList from './CostCenter/CostCenterList';
 import { CostCenterTableSkeleton } from './CostCenter/fallback/CostCenterTableSkeleton';
 import FiscalDataTabContent from './FiscalData/FiscalDataTabContent';
@@ -21,9 +20,12 @@ import OrgChartSection from './OrgChart/OrgChartSection';
 import { OrgChartSkeleton } from './OrgChart/fallback/OrgChartSkeleton';
 import CompanyComponent from './components/company/CompanyComponent';
 import { CompanySkeleton } from './fallback/CompanySkeleton';
-import { TableSubtabSkeleton } from './fallback/SubtabSkeletons';
 
-/** Configuración › Organización: ficha de la empresa y todo lo que define su estructura. */
+/**
+ * Configuración › Organización: ficha de la empresa y todo lo que define su estructura, en pestañas
+ * horizontales (`?subtab=`). "Usuarios y accesos" ya no es una pestaña de acá: tiene su propio ítem
+ * en el sidebar y se monta como sección aparte (`EmpresaComponent`), con la misma URL de siempre.
+ */
 export default function GeneralTabContent({
   searchParams,
   permissions,
@@ -42,7 +44,7 @@ export default function GeneralTabContent({
       defaultView="company"
       permissions={permissions}
       preserveParams={['tab']}
-      layout="rail"
+      layout="tabs"
       ariaLabel="Organización"
       views={[
         {
@@ -149,18 +151,6 @@ export default function GeneralTabContent({
           content: (
             <Suspense fallback={<Skeleton className="h-[300px] w-full rounded-md" />}>
               <KpisTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
-          ),
-        },
-        {
-          value: 'users',
-          label: 'Usuarios y accesos',
-          description: 'Usuarios, roles, permisos y accesos externos',
-          moduleSlug: 'configuracion',
-          tabSlug: 'users',
-          content: (
-            <Suspense fallback={<TableSubtabSkeleton />}>
-              <UsersTabComponent searchParams={searchParams} permissions={permissions} />
             </Suspense>
           ),
         },

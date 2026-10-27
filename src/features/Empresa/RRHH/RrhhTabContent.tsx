@@ -34,7 +34,7 @@ export default function RrhhTabContent({
       defaultView="positions"
       permissions={permissions}
       preserveParams={['tab']}
-      layout="rail"
+      layout="tabs"
       ariaLabel="Personal"
       views={[
         {

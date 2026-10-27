@@ -21,7 +21,14 @@ type ChangePassValues = z.infer<typeof changePassSchema>;
  * El token llega por la URL: el enlace del mail apunta a `/api/auth/reset-password/<token>`,
  * que lo valida y redirige a la página con `?token=`. La página se lo pasa a este formulario.
  */
-export function UpdateUserPasswordForm({ token }: { token: string }) {
+export function UpdateUserPasswordForm({
+  token,
+  redirectTo = '/login?reset=ok',
+}: {
+  token: string;
+  /** Adónde ir al guardar. El portal de empleados lo usa para volver a `/portal/login`. */
+  redirectTo?: string;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -34,7 +41,7 @@ export function UpdateUserPasswordForm({ token }: { token: string }) {
     startTransition(async () => {
       const result = await updatePasswordAction(values.password, token);
       if (result.success) {
-        router.replace('/login?reset=ok');
+        router.replace(redirectTo);
         return;
       }
       form.setError('root', { message: result.error });

@@ -1,4 +1,3 @@
-import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { s3Client } from '@/shared/lib/s3';
@@ -7,6 +6,8 @@ import { isStorageBucket } from '@/shared/lib/storage-buckets';
 import { resolveStorageObjectOwner, type StorageObjectOwner } from '@/shared/lib/storage-perimeter';
 import { DOWNLOAD_PARAM, isSafeStorageKey } from '@/shared/lib/storage-url';
 import { canUseAsActiveCompany, getActiveCompanyId } from '@/shared/lib/tenant';
+import { getTenantContextOrNull } from '@/shared/lib/tenant-db';
+import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { NextResponse } from 'next/server';
 
 /**
@@ -80,6 +81,11 @@ export async function GET(
 
   // Antes de tocar la base: sin sesión no hay nada que resolver.
   if (!(await getSessionUserId())) return notFound();
+
+  // El empleado del portal (legajo sin membresia) no lee archivos de la empresa por path: con la empresa activa del
+  // legajo podria pedir el documento de cualquier compañero adivinando la ruta. La fase 2 abre solo los documentos HSE
+  // publicados que le aplican. Los paneles de ropa y taller no sirven archivos por esta ruta.
+  if ((await getTenantContextOrNull())?.kind === 'employee') return notFound();
 
   try {
     const owner = await resolveStorageObjectOwner(bucket, key);

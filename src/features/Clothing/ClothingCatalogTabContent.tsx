@@ -17,7 +17,8 @@ export default async function ClothingCatalogTabContent({ searchParams, permissi
       defaultView="articulos"
       permissions={permissions}
       preserveParams={['tab', 'subtab']}
-      layout="menu"
+      layout="tabs"
+      tabsLevel="secondary"
       ariaLabel="Indumentaria y EPP"
       views={[
         {

@@ -9,6 +9,8 @@ export interface SectionNavItem {
   label: ReactNode;
   /** Contador de la sección (normalmente un Server Component dentro de su propio `<Suspense>`). */
   counter?: ReactNode;
+  /** URL de la sección si no es `?<paramName>=<value>`. */
+  href?: string;
 }
 
 interface PageHeaderProps {
@@ -65,7 +67,7 @@ export function PageHeader({ title, description, meta, actions, sections }: Page
               return (
                 <li key={item.value}>
                   <Link
-                    href={`?${sections.paramName}=${encodeURIComponent(item.value)}`}
+                    href={item.href ?? `?${sections.paramName}=${encodeURIComponent(item.value)}`}
                     aria-current={isActive ? 'page' : undefined}
                     className={cn(
                       'focus-visible:ring-ring flex min-h-10 items-center justify-between gap-2 rounded-md px-3 text-sm outline-none focus-visible:ring-2',

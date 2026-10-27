@@ -29,6 +29,8 @@ interface MultiSelectComboboxProps {
   closeOnSelect?: boolean;
   /** Placeholder del buscador; por defecto `Buscar <placeholder>...`. */
   searchPlaceholder?: string;
+  /** Nombre accesible del combo (opcional; sin él, el lector de pantalla lee solo el texto del botón). */
+  'aria-label'?: string;
 }
 
 export function MultiSelectCombobox({
@@ -45,6 +47,7 @@ export function MultiSelectCombobox({
   isLoading = false,
   closeOnSelect = false,
   searchPlaceholder,
+  'aria-label': ariaLabel,
 }: MultiSelectComboboxProps) {
   const [open, setOpen] = React.useState(false);
 
@@ -112,6 +115,7 @@ export function MultiSelectCombobox({
           disabled={disabled}
           variant="outline"
           role="combobox"
+          aria-label={ariaLabel}
           aria-expanded={open}
           className="w-full justify-between"
           data-testid={dataTestId}

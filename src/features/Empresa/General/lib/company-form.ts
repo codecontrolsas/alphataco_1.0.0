@@ -21,7 +21,9 @@ export const companyFormSchema = z.object({
     .string({ required_error: 'El nombre de la compañía es requerido' })
     .trim()
     .min(2, 'El nombre debe tener al menos 2 caracteres.')
-    .max(30, 'La compañia debe tener menos de 30 caracteres.'),
+    // La columna admite 255; el tope anterior (30) dejaba sin poder guardar razones sociales reales
+    // ("Transportes Patagonia DEMO S.A." tiene 31) y el error quedaba fuera de la vista (ticket 806).
+    .max(100, 'El nombre debe tener como máximo 100 caracteres.'),
   company_cuit: z
     .string({ required_error: 'El CUIT es requerido' })
     .transform(normalizeCuit)
@@ -31,7 +33,7 @@ export const companyFormSchema = z.object({
     .string({ required_error: 'La descripción es requerida' })
     .trim()
     .min(3, 'La descripción debe tener al menos 3 caracteres.')
-    .max(200, 'La descripción debe tener menos de 200 caracteres.'),
+    .max(500, 'La descripción debe tener como máximo 500 caracteres.'),
   website: z
     .string()
     .trim()
@@ -42,13 +44,13 @@ export const companyFormSchema = z.object({
     .string({ required_error: 'El teléfono es requerido' })
     .transform(normalizePhone)
     .refine((value) => value.length >= 5, 'El número de teléfono debe tener al menos 5 caracteres.')
-    .refine((value) => value.length <= 25, 'El número de teléfono debe tener menos de 25 caracteres.')
-    .refine((value) => /^\+?[0-9]{1,25}$/.test(value), 'El número de teléfono debe contener solo números'),
+    .refine((value) => value.length <= 20, 'El número de teléfono debe tener como máximo 20 caracteres.')
+    .refine((value) => /^\+?[0-9]{1,20}$/.test(value), 'El número de teléfono debe contener solo números'),
   address: z
     .string({ required_error: 'La dirección es requerida' })
     .trim()
     .min(4, 'La dirección debe tener al menos 4 caracteres.')
-    .max(50, 'La dirección debe tener menos de 50 caracteres.'),
+    .max(255, 'La dirección debe tener como máximo 255 caracteres.'),
   country: z.string({ required_error: 'El país es requerido' }).trim().min(2, 'Seleccioná un país.'),
   province_id: z.coerce
     .number({ invalid_type_error: 'Seleccioná una provincia.' })
@@ -103,7 +105,17 @@ export function parseCompanyForm(formData: FormData): ParseCompanyFormResult {
   return { ok: false, errors };
 }
 
-const LOGO_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tif', 'tiff', 'webp', 'svg']);
+/**
+ * Formatos de logo aceptados. Sin SVG: se sirve desde el mismo origen (`/api/files`) y un SVG con
+ * script sería un XSS almacenado. Sin BMP/TIFF: los navegadores no los muestran.
+ */
+const LOGO_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp']);
+export const LOGO_MIME_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const;
+/** `accept` del selector de archivos. */
+export const LOGO_ACCEPT = LOGO_MIME_TYPES.join(',');
+/** Tope del logo. El body de las server actions admite 10 MB y viaja junto con el resto del formulario. */
+export const LOGO_MAX_BYTES = 5 * 1024 * 1024;
+export const LOGO_HINT = 'PNG, JPG, WEBP o GIF, hasta 5 MB.';
 
 /** Extensión (minúsculas) de un archivo de logo permitido, o null. */
 export function logoExtension(fileName: string): string | null {
@@ -113,9 +125,38 @@ export function logoExtension(fileName: string): string | null {
   return LOGO_EXTENSIONS.has(ext) ? ext : null;
 }
 
+/**
+ * Valida nombre, tipo declarado y tamaño de un logo. Devuelve el mensaje de error o null.
+ * La usan el selector (antes de enviar) y el servidor (que además revisa los bytes reales).
+ */
+export function validateLogoFile(file: { name: string; size: number; type: string }): string | null {
+  if (!logoExtension(file.name) || (file.type && !(LOGO_MIME_TYPES as readonly string[]).includes(file.type))) {
+    return `El logo tiene que ser una imagen: ${LOGO_HINT}`;
+  }
+  if (file.size === 0) return 'El archivo del logo está vacío.';
+  if (file.size > LOGO_MAX_BYTES) return 'El logo supera los 5 MB. Elegí una imagen más liviana.';
+  return null;
+}
+
+/** true si los primeros bytes corresponden a PNG, JPEG, GIF o WEBP (no alcanza con la extensión). */
+export function isImageSignature(bytes: Uint8Array): boolean {
+  const starts = (sig: number[], offset = 0) => sig.every((byte, i) => bytes[offset + i] === byte);
+  return (
+    starts([0x89, 0x50, 0x4e, 0x47]) ||
+    starts([0xff, 0xd8, 0xff]) ||
+    starts([0x47, 0x49, 0x46, 0x38]) ||
+    (starts([0x52, 0x49, 0x46, 0x46]) && starts([0x57, 0x45, 0x42, 0x50], 8))
+  );
+}
+
+/** Carpeta del logo dentro del bucket `logo`: `<companyId>/logo/`. */
+export function logoFolder(companyId: string): string {
+  return `${companyId}/logo/`;
+}
+
 /** Path del logo dentro del bucket `logo`: `<companyId>/logo/logo.<ext>`. */
 export function buildLogoPath(companyId: string, fileName: string): string {
   const ext = logoExtension(fileName);
-  if (!ext) throw new Error('El logo debe ser una imagen (jpg, png, gif, bmp, tif, webp o svg)');
-  return `${companyId}/logo/logo.${ext}`;
+  if (!ext) throw new Error(`El logo tiene que ser una imagen: ${LOGO_HINT}`);
+  return `${logoFolder(companyId)}logo.${ext}`;
 }
