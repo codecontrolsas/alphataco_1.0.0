@@ -1,8 +1,13 @@
 'use client';
 
+import { withDocumentStatusColumn, withDocumentStatusFacet } from '@/features/Modules/lib/document-status-visibility';
 import { condition_enum, status_type } from '@/generated/prisma/enums';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
+import {
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+  type FacetResult,
+} from '@/shared/components/common/DataTable/types';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { conditionLabels, otherEquipmentStatusLabels } from '@/shared/utils/mappers';
@@ -28,13 +33,16 @@ interface Props {
   customerId: string;
   /** Botón de afectación (ya protegido por permisos en el padre). */
   toolbarActions?: React.ReactNode;
+  /** `documentacion` encendido: si no, se ocultan la columna y el filtro de estado documental (caché congelado). */
+  showDocumentStatus?: boolean;
 }
 
 /**
  * Equipos de la empresa afectados al cliente: paginados y filtrados en el servidor, acotados a la pivote
  * `contractor_equipment` de ESTE cliente.
  */
-export function _CustomerEquipmentDataTable({ customerId, toolbarActions }: Props) {
+export function _CustomerEquipmentDataTable({ customerId, toolbarActions, showDocumentStatus = true }: Props) {
+  const visibleColumns = useMemo(() => withDocumentStatusColumn(columns, showDocumentStatus), [showDocumentStatus]);
   const preferences = useTablePreferences(TABLE_ID);
   const [currentParams, setCurrentParams] = useState<DataTableSearchParams>({});
 
@@ -86,7 +94,7 @@ export function _CustomerEquipmentDataTable({ customerId, toolbarActions }: Prop
     [customerId]
   );
 
-  const facetedFilters = useMemo<DataTableFacetedFilterConfig[]>(
+  const allFacetedFilters = useMemo<DataTableFacetedFilterConfig[]>(
     () => [
       { columnId: 'intern_number', title: 'Número interno', type: 'text', placeholder: 'Buscar por número interno...' },
       { columnId: 'domain', title: 'Dominio', type: 'text', placeholder: 'Buscar por dominio...' },
@@ -100,6 +108,11 @@ export function _CustomerEquipmentDataTable({ customerId, toolbarActions }: Prop
       { columnId: 'affected_since', title: 'Afectado desde', type: 'dateRange' },
     ],
     [fetchActiveFacet, fetchConditionFacet, fetchFkFacet, fetchStatusFacet]
+  );
+
+  const facetedFilters = useMemo(
+    () => withDocumentStatusFacet(allFacetedFilters, showDocumentStatus),
+    [allFacetedFilters, showDocumentStatus]
   );
 
   const columnVisibility = useMemo(
@@ -120,7 +133,7 @@ export function _CustomerEquipmentDataTable({ customerId, toolbarActions }: Prop
 
   return (
     <DataTable
-      columns={columns}
+      columns={visibleColumns}
       data={[]}
       totalRows={0}
       searchParams={{}}

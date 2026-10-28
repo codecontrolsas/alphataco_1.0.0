@@ -109,17 +109,48 @@ describe.skipIf(!RUN)('pedidos de materiales desde el panel del operario (integr
       ],
     });
     await prisma.employee_workshop_sectors.create({ data: { employee_id: EMPLOYEE, workshop_sector_id: SECTOR_OWN } });
-    await prisma.measurement_units.create({ data: { id: UNIT, company_id: COMPANY, name: 'Litro', abbreviation: 'l' } });
-    await prisma.materials.create({ data: { id: MATERIAL, company_id: COMPANY, code: 'ACE', name: 'Aceite', unit_id: UNIT } });
+    await prisma.measurement_units.create({
+      data: { id: UNIT, company_id: COMPANY, name: 'Litro', abbreviation: 'l' },
+    });
+    await prisma.materials.create({
+      data: { id: MATERIAL, company_id: COMPANY, code: 'ACE', name: 'Aceite', unit_id: UNIT },
+    });
     await prisma.maintenance_orders.create({
       data: { id: ORDER, company_id: COMPANY, status: 'in_workshop', order_number: 'OM-T1' },
     });
     const planned = { planned_start_date: new Date('2026-10-01'), planned_end_date: new Date('2026-10-02') };
     await prisma.work_orders.createMany({
       data: [
-        { id: WO_OPEN, company_id: COMPANY, workshop_id: WORKSHOP, sector_id: SECTOR_OWN, status: 'in_progress', order_number: 'OT-T1', sequence_number: 1, ...planned },
-        { id: WO_OTHER_SECTOR, company_id: COMPANY, workshop_id: WORKSHOP, sector_id: SECTOR_OTHER, status: 'in_progress', order_number: 'OT-T2', sequence_number: 2, ...planned },
-        { id: WO_CLOSED, company_id: COMPANY, workshop_id: WORKSHOP, sector_id: SECTOR_OWN, status: 'completed', order_number: 'OT-T3', sequence_number: 3, ...planned },
+        {
+          id: WO_OPEN,
+          company_id: COMPANY,
+          workshop_id: WORKSHOP,
+          sector_id: SECTOR_OWN,
+          status: 'in_progress',
+          order_number: 'OT-T1',
+          sequence_number: 1,
+          ...planned,
+        },
+        {
+          id: WO_OTHER_SECTOR,
+          company_id: COMPANY,
+          workshop_id: WORKSHOP,
+          sector_id: SECTOR_OTHER,
+          status: 'in_progress',
+          order_number: 'OT-T2',
+          sequence_number: 2,
+          ...planned,
+        },
+        {
+          id: WO_CLOSED,
+          company_id: COMPANY,
+          workshop_id: WORKSHOP,
+          sector_id: SECTOR_OWN,
+          status: 'completed',
+          order_number: 'OT-T3',
+          sequence_number: 3,
+          ...planned,
+        },
       ],
     });
     await prisma.maintenance_order_items.createMany({
@@ -141,7 +172,9 @@ describe.skipIf(!RUN)('pedidos de materiales desde el panel del operario (integr
     if (!result.ok) throw new Error(result.error);
 
     const prisma = await db();
-    const created = await prisma.material_requests.findFirstOrThrow({ where: { number: result.data.number, company_id: COMPANY } });
+    const created = await prisma.material_requests.findFirstOrThrow({
+      where: { number: result.data.number, company_id: COMPANY },
+    });
     expect(created).toMatchObject({
       status: 'PENDING_APPROVAL',
       destination_type: 'MAINTENANCE_ORDER',
@@ -156,7 +189,7 @@ describe.skipIf(!RUN)('pedidos de materiales desde el panel del operario (integr
 
     const list = await getWorkOrderMaterialRequests(WO_OPEN);
     expect(list).toHaveLength(1);
-    expect(list[0]!.lines[0]).toMatchObject({ requested: '4', delivered: '0' });
+    expect(list![0]!.lines[0]).toMatchObject({ requested: '4', delivered: '0' });
   });
 
   it('una OT de otro sector se rechaza sin revelar si existe', async () => {
@@ -173,5 +206,27 @@ describe.skipIf(!RUN)('pedidos de materiales desde el panel del operario (integr
       ok: false,
       error: 'La OT OT-T3 ya está cerrada: no admite pedidos',
     });
+  });
+
+  it('con Almacenes apagado para la empresa el operario no ve ni pide materiales (F3.2)', async () => {
+    const { createOperatorMaterialRequest, getWorkOrderMaterialRequests, searchOperatorMaterialOptions } = await import(
+      './materials.server'
+    );
+    const { prismaSystem } = await import('@/shared/lib/prisma-system');
+    const row = { company_id: COMPANY, module_key: 'almacenes' };
+    await prismaSystem.company_modules.create({ data: { ...row, enabled: false, changed_by: 'test', reason: 'test' } });
+    try {
+      expect(await getWorkOrderMaterialRequests(WO_OPEN)).toBeNull();
+      expect(await searchOperatorMaterialOptions('')).toEqual({ items: [], total: 0 });
+      const before = await (await db()).material_requests.count({ where: { company_id: COMPANY } });
+      expect(await createOperatorMaterialRequest(request(WO_OPEN))).toEqual({
+        ok: false,
+        error: 'Los pedidos de materiales no están habilitados.',
+      });
+      expect(await (await db()).material_requests.count({ where: { company_id: COMPANY } })).toBe(before);
+    } finally {
+      await prismaSystem.company_modules.deleteMany({ where: row });
+    }
+    expect(await getWorkOrderMaterialRequests(WO_OPEN)).not.toBeNull();
   });
 });

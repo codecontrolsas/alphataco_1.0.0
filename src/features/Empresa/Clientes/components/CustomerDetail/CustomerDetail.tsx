@@ -31,6 +31,8 @@ interface CustomerDetailProps {
   /** Permisos del usuario cargados en el servidor (`modulo:tab:accion`). */
   permissionsMap: Record<string, boolean>;
   contractsPreferences: CustomerDetailPreferences;
+  /** `documentacion` encendido (calculado en el servidor): si no, empleados y equipos no muestran el estado documental. */
+  showDocumentStatus: boolean;
   onClose: () => void;
 }
 
@@ -50,6 +52,7 @@ export function CustomerDetail({
   initialCustomer,
   permissionsMap,
   contractsPreferences,
+  showDocumentStatus,
   onClose,
 }: CustomerDetailProps) {
   const can = (tab: string, action: 'view' | 'create' | 'update') =>
@@ -212,13 +215,21 @@ export function CustomerDetail({
 
         {can('empleados-cliente', 'view') ? (
           <TabsContent value="empleados">
-            <CustomerEmployeesTab customer={customer} canUpdate={can('empleados-cliente', 'update')} />
+            <CustomerEmployeesTab
+              customer={customer}
+              canUpdate={can('empleados-cliente', 'update')}
+              showDocumentStatus={showDocumentStatus}
+            />
           </TabsContent>
         ) : null}
 
         {can('equipos-cliente', 'view') ? (
           <TabsContent value="equipos">
-            <CustomerEquipmentTab customer={customer} canUpdate={can('equipos-cliente', 'update')} />
+            <CustomerEquipmentTab
+              customer={customer}
+              canUpdate={can('equipos-cliente', 'update')}
+              showDocumentStatus={showDocumentStatus}
+            />
           </TabsContent>
         ) : null}
 

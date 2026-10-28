@@ -1,8 +1,13 @@
 'use client';
 
+import { withDocumentStatusColumn, withDocumentStatusFacet } from '@/features/Modules/lib/document-status-visibility';
 import { status_type } from '@/generated/prisma/enums';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
+import {
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+  type FacetResult,
+} from '@/shared/components/common/DataTable/types';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { employeeStatusLabels } from '@/shared/utils/mappers';
@@ -28,13 +33,16 @@ interface Props {
   customerId: string;
   /** Botón de afectación (ya protegido por permisos en el padre). */
   toolbarActions?: React.ReactNode;
+  /** `documentacion` encendido: si no, se ocultan la columna y el filtro de estado documental (caché congelado). */
+  showDocumentStatus?: boolean;
 }
 
 /**
  * Empleados afectados al cliente: paginados y filtrados en el servidor, acotados a la pivote
  * `contractor_employee` de ESTE cliente.
  */
-export function _CustomerEmployeesDataTable({ customerId, toolbarActions }: Props) {
+export function _CustomerEmployeesDataTable({ customerId, toolbarActions, showDocumentStatus = true }: Props) {
+  const visibleColumns = useMemo(() => withDocumentStatusColumn(columns, showDocumentStatus), [showDocumentStatus]);
   const preferences = useTablePreferences(TABLE_ID);
   const [currentParams, setCurrentParams] = useState<DataTableSearchParams>({});
 
@@ -72,7 +80,7 @@ export function _CustomerEmployeesDataTable({ customerId, toolbarActions }: Prop
     [customerId]
   );
 
-  const facetedFilters = useMemo<DataTableFacetedFilterConfig[]>(
+  const allFacetedFilters = useMemo<DataTableFacetedFilterConfig[]>(
     () => [
       { columnId: 'file', title: 'Legajo (exacto)', type: 'text', placeholder: 'Número de legajo completo' },
       {
@@ -96,6 +104,11 @@ export function _CustomerEmployeesDataTable({ customerId, toolbarActions }: Prop
     [fetchActiveFacet, fetchFkFacet, fetchStatusFacet]
   );
 
+  const facetedFilters = useMemo(
+    () => withDocumentStatusFacet(allFacetedFilters, showDocumentStatus),
+    [allFacetedFilters, showDocumentStatus]
+  );
+
   const columnVisibility = useMemo(
     () => ({
       ...Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((id) => [id, false])),
@@ -114,7 +127,7 @@ export function _CustomerEmployeesDataTable({ customerId, toolbarActions }: Prop
 
   return (
     <DataTable
-      columns={columns}
+      columns={visibleColumns}
       data={[]}
       totalRows={0}
       searchParams={{}}

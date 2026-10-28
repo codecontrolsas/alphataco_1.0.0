@@ -3,6 +3,7 @@ import { EquipmentDocumentStatus } from '@/features/Documentacion/DocumentosEqui
 import { DocumentStatusChip } from '@/features/Documentacion/shared/components/DocumentStatusChip';
 import { getCostCenterOptions } from '@/features/Empresa/General/actions/cost-centers.server';
 import { EquipmentBreadcrumb } from '@/features/Equipos/components/EquipmentBreadcrumb';
+import { ModuleGate } from '@/features/Modules/components/ModuleGate';
 import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
 import { RecordSectionsServer } from '@/features/TabsManager/RecordSectionsServer';
 import { Boxes, ClipboardCheck, FileText, LayoutDashboard, QrCode, Truck, Wrench } from 'lucide-react';
@@ -78,13 +79,18 @@ export function VehicleReadView({
         vehicle={vehicle}
         sectorName={sectorName}
         documentStatus={
-          isTabVisible('documentacion', 'documentos-de-equipos') ? (
-            <Suspense fallback={<DocumentStatusChip status={vehicle.status} />}>
-              <EquipmentDocumentStatus equipmentId={vehicle.id} status={vehicle.status} />
-            </Suspense>
-          ) : (
-            <DocumentStatusChip status={vehicle.status} />
-          )
+          // El chip se muestra aunque no haya permiso de documentos: solo lo oculta el módulo apagado (no es un permiso).
+          <Suspense fallback={null}>
+            <ModuleGate module="documentacion">
+              {isTabVisible('documentacion', 'documentos-de-equipos') ? (
+                <Suspense fallback={<DocumentStatusChip status={vehicle.status} />}>
+                  <EquipmentDocumentStatus equipmentId={vehicle.id} status={vehicle.status} />
+                </Suspense>
+              ) : (
+                <DocumentStatusChip status={vehicle.status} />
+              )}
+            </ModuleGate>
+          </Suspense>
         }
       />
 

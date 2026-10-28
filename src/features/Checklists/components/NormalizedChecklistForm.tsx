@@ -48,6 +48,7 @@ export function NormalizedChecklistForm({
   defaultAnswers,
   readOnly = false,
   canSubmit = true,
+  canRequestRepair = true,
   defaultEmployeeId,
   defaultEmployeeName,
   defaultKilometer,
@@ -142,6 +143,7 @@ export function NormalizedChecklistForm({
     setCreatedAnswerId,
   } = useChecklistSubmit({
     canSubmit,
+    canRequestRepair,
     template,
     visibleSections,
     hitchSectionCodes,

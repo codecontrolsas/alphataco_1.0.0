@@ -1,6 +1,11 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import {
+  withDocumentStatusColumn,
+  withDocumentStatusDefault,
+  withDocumentStatusFacet,
+} from '@/features/Modules/lib/document-status-visibility';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
 import {
@@ -73,6 +78,8 @@ interface EmployeeDataTableProps {
   tableId: string;
   /** Flat permissions map from server: "module:tab:action" → boolean */
   permissionsMap: Record<string, boolean>;
+  /** `documentacion` encendido: si no, se ocultan la columna y el filtro de estado (caché documental congelado). */
+  showDocumentStatus: boolean;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
 }
@@ -95,6 +102,7 @@ export default function _EmployeeDataTable({
   isActive,
   tableId,
   permissionsMap,
+  showDocumentStatus,
   initialColumnVisibility,
   initialFilterVisibility,
 }: EmployeeDataTableProps) {
@@ -107,7 +115,10 @@ export default function _EmployeeDataTable({
   );
 
   // Columns
-  const columns = useMemo(() => getColumns(permissions, isActive), [permissions, isActive]);
+  const columns = useMemo(
+    () => withDocumentStatusColumn(getColumns(permissions, isActive), showDocumentStatus),
+    [permissions, isActive, showDocumentStatus]
+  );
 
   // ─── Filtros facetados con lazy-load ───────────────────────────────────────
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(() => {
@@ -120,7 +131,7 @@ export default function _EmployeeDataTable({
       icons: Record<string, LucideIcon | undefined>
     ) => facets.fixed(columnId, title, enumFilterOptions(Object.values(values), labels, icons), UNASSIGNED);
 
-    return [
+    const allFacets: DataTableFacetedFilterConfig[] = [
       // ── Enums ──────────────────────────────────────────────────────────────
       enumFacet('status', 'Estado', status_type, employeeStatusLabels, employeeStatusIcons),
       enumFacet('gender', 'Genero', gender_enum, genderLabels, genderIcons),
@@ -188,14 +199,18 @@ export default function _EmployeeDataTable({
       dateRangeFilter('created_at', 'Fecha de creacion'),
       dateRangeFilter('termination_date', 'Fecha de baja'),
     ];
-  }, [isActive]);
+    return withDocumentStatusFacet(allFacets, showDocumentStatus);
+  }, [isActive, showDocumentStatus]);
 
   // Las preferencias guardadas tienen prioridad; el resto de filtros arranca oculto.
   const { currentParams, tableProps } = useServerTableView({
     searchParams,
     tableId,
     hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
-    defaultVisibleFilters: isActive ? DEFAULT_VISIBLE_FILTERS_ACTIVE : DEFAULT_VISIBLE_FILTERS_INACTIVE,
+    defaultVisibleFilters: withDocumentStatusDefault(
+      isActive ? DEFAULT_VISIBLE_FILTERS_ACTIVE : DEFAULT_VISIBLE_FILTERS_INACTIVE,
+      showDocumentStatus
+    ),
     facetedFilters,
     initialColumnVisibility,
     savedFilterVisibility: initialFilterVisibility,

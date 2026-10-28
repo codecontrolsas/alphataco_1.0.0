@@ -1,6 +1,7 @@
 import { Skeleton } from '@/components/ui/skeleton';
 import { getCustomerById } from '@/features/Empresa/Clientes/actions/customers.server';
 import CustomerComponent from '@/features/Empresa/Clientes/components/CustomerComponent';
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { cn } from '@/lib/utils';
 import BackButton from '@/shared/components/common/BackButton';
@@ -25,9 +26,10 @@ export default async function CustomerFormAction({ searchParams }: PageProps) {
   const cookiesStore = await cookies();
 
   // La ficha pide sus propios datos (áreas, sectores, contratos, empleados, equipos) al abrir cada pestaña.
-  const [customer, permissionsMap] = await Promise.all([
+  const [customer, permissionsMap, showDocumentStatus] = await Promise.all([
     id ? getCustomerById(id) : Promise.resolve(null),
     getUserPermissionsMapServer(),
+    isModuleEnabled('documentacion'),
   ]);
 
   return (
@@ -41,6 +43,7 @@ export default async function CustomerFormAction({ searchParams }: PageProps) {
           <CustomerComponent
             customer={customer}
             permissionsMap={permissionsMap}
+            showDocumentStatus={showDocumentStatus}
             contractsPreferences={{
               servicesFilters: readCookieJson(cookiesStore.get('services-table-filters')?.value, []),
               servicesVisibility: readCookieJson(cookiesStore.get('services-table')?.value, {}),

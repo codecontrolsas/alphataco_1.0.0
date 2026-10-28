@@ -221,7 +221,7 @@ export const fetchEquipmentUsageForChecklist = async (equipmentId: string) => {
     });
     if (!vehicle?.company_id) return null;
 
-    return { kilometer: vehicle.kilometer, engine_hours: vehicle.engine_hours };
+    return { company_id: vehicle.company_id, kilometer: vehicle.kilometer, engine_hours: vehicle.engine_hours };
   } catch (error) {
     logger.error('Error al obtener el uso del equipo para el checklist', { data: { error, equipmentId } });
     return null;

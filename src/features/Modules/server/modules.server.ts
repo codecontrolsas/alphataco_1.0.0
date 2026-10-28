@@ -86,6 +86,14 @@ export const getDisabledTabIds = cache(async (): Promise<ReadonlySet<string>> =>
   }
 });
 
+/**
+ * ¿La clave está encendida para ESA empresa? Para rutinas de servidor que ya conocen la empresa y pueden correr dentro de
+ * una transacción ajena (cachés derivados: `refreshDocumentStatus`, `syncHse*`). Sin `cache()`: lee el estado vigente.
+ */
+export async function isModuleEnabledForCompany(key: ModuleKey, companyId: string): Promise<boolean> {
+  return key === CORE_MODULE || (await getEnabledModulesFor(companyId)).has(key);
+}
+
 export async function isModuleEnabled(key: ModuleKey): Promise<boolean> {
   return key === CORE_MODULE || (await getEnabledModules()).has(key);
 }

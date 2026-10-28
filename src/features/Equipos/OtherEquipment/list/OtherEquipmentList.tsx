@@ -1,4 +1,5 @@
 import { Card, CardContent } from '@/components/ui/card';
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { applyTablePreferences, stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
@@ -35,7 +36,11 @@ export async function OtherEquipmentList({ searchParams, permissions }: OtherEqu
   const preferences = await getTablePreferences(tableId);
   const tableParams = applyTablePreferences(urlParams, preferences);
 
-  const { data, total } = await getOtherEquipmentPaginated(tableParams);
+  const [{ data, total }, showDocumentStatus] = await Promise.all([
+    getOtherEquipmentPaginated(tableParams),
+    // `documentacion` apagado: sin columna ni filtro de estado documental (F3.2).
+    isModuleEnabled('documentacion'),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -47,6 +52,7 @@ export async function OtherEquipmentList({ searchParams, permissions }: OtherEqu
       <Card>
         <CardContent className="pt-6">
           <_OtherEquipmentDataTable
+            showDocumentStatus={showDocumentStatus}
             data={data}
             totalRows={total}
             searchParams={tableParams}

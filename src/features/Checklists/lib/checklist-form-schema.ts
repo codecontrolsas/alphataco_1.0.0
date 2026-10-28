@@ -143,6 +143,8 @@ export type NormalizedChecklistFormProps = {
   readOnly?: boolean; // Modo solo lectura
   /** `false` si el usuario del dashboard no tiene `formularios:formularios:create`: se muestra el formulario sin poder enviarlo. El QR/operario no lo pasa (default `true`). */
   canSubmit?: boolean;
+  /** `false` si el módulo `mantenimiento` está apagado: el checklist se guarda sin ofrecer solicitudes de reparación. Default `true`. */
+  canRequestRepair?: boolean;
   defaultEmployeeId?: string;
   defaultEmployeeName?: string;
   defaultKilometer?: string;

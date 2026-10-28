@@ -5,9 +5,11 @@ import { EmployeeMetrics } from './EmployeeMetrics';
 export async function EmployeeMetricsSection({
   tableId,
   metrics,
+  showDocumentStatus,
 }: {
   tableId: string;
+  showDocumentStatus: boolean;
   metrics: ReturnType<typeof getEmployeeStatusMetrics>;
 }) {
-  return <EmployeeMetrics tableId={tableId} metrics={await metrics} />;
+  return <EmployeeMetrics tableId={tableId} metrics={await metrics} showDocumentStatus={showDocumentStatus} />;
 }
