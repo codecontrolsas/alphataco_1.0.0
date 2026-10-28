@@ -1,8 +1,8 @@
 import 'server-only';
 
 import { HSE_FILES_BUCKET } from '@/features/Hse/lib/constants';
-import { isHseEnabled } from '@/features/Hse/lib/feature-gate';
 import { effectiveAssignmentStatus, toPercent } from '@/features/Hse/lib/training-status';
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import type { PortalEmployee } from '@/features/Portal/actions/perimeter';
 import { argentinaDate } from '@/shared/lib/argentina-time';
 import { prisma } from '@/shared/lib/prisma';
@@ -24,7 +24,7 @@ const ATTENTION_ORDER = { in_progress: 0, pending: 1, expired: 2, failed: 3, pas
 
 /** Capacitaciones vigentes del empleado: lo que requiere acción primero. Vacío si HSE está apagado. */
 export const getMyHseTrainings = cache(async (employee: PortalEmployee) => {
-  if (!(await isHseEnabled())) return [];
+  if (!(await isModuleEnabled('hse'))) return [];
   const today = argentinaDate();
   const rows = await prisma.hse_training_assignments.findMany({
     where: { employee_id: employee.employeeId, archived_at: null, training: { status: 'published' } },
@@ -98,7 +98,7 @@ export type PortalHseTraining = Awaited<ReturnType<typeof getMyHseTrainings>>[nu
 
 /** Detalle de una capacitación del empleado: material (con su lectura), intentos y si puede rendir. */
 export async function getMyHseTraining(employee: PortalEmployee, trainingId: string) {
-  if (!(await isHseEnabled()) || !UUID_RE.test(trainingId)) return null;
+  if (!(await isModuleEnabled('hse')) || !UUID_RE.test(trainingId)) return null;
   const today = argentinaDate();
   const assignment = await prisma.hse_training_assignments.findFirst({
     where: {
@@ -246,7 +246,7 @@ export async function getMyHseMaterial(employee: PortalEmployee, trainingId: str
  * la base (`deadline_at - now()`): el reloj del navegador no decide nada.
  */
 export async function getMyOpenHseExam(employee: PortalEmployee, trainingId: string) {
-  if (!(await isHseEnabled()) || !UUID_RE.test(trainingId)) return null;
+  if (!(await isModuleEnabled('hse')) || !UUID_RE.test(trainingId)) return null;
   return prisma.$transaction(async (tx) => {
     const attempt = await tx.hse_training_attempts.findFirst({
       where: { employee_id: employee.employeeId, training_id: trainingId, status: 'in_progress' },
@@ -304,7 +304,7 @@ export type PortalHseExam = NonNullable<Awaited<ReturnType<typeof getMyOpenHseEx
 
 /** Resultado de un intento cerrado del empleado (sin detalle por pregunta: revelaría la clave). */
 export async function getMyHseAttemptResult(employee: PortalEmployee, attemptId: string) {
-  if (!(await isHseEnabled()) || !UUID_RE.test(attemptId)) return null;
+  if (!(await isModuleEnabled('hse')) || !UUID_RE.test(attemptId)) return null;
   const attempt = await prisma.hse_training_attempts.findFirst({
     where: { id: attemptId, employee_id: employee.employeeId, status: { not: 'in_progress' } },
     select: {

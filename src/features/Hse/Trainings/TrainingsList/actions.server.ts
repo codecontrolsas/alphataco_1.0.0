@@ -1,5 +1,6 @@
 'use server';
 
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import {
   buildTreasuryDateRangeWhere,
@@ -19,7 +20,6 @@ import { prisma } from '@/shared/lib/prisma';
 import type { SingleFacetResult } from '@/shared/lib/table-list-query';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { HSE_TRAINING_KIND_LABELS, HSE_TRAINING_STATUS_LABELS } from '../../lib/constants';
-import { isHseEnabled } from '../../lib/feature-gate';
 
 const logger = new Logger('features/Hse/Trainings/TrainingsList');
 
@@ -42,7 +42,7 @@ const activeAssignment = { archived_at: null };
 const notPassed = { archived_at: null, status: { not: 'passed' as const } };
 
 async function resolveCompanyId(): Promise<string | null> {
-  if (!(await isHseEnabled())) return null;
+  if (!(await isModuleEnabled('hse'))) return null;
   if (!(await checkPermissionServer('hse', 'capacitaciones', 'view'))) return null;
   return getActiveCompanyId();
 }

@@ -1,4 +1,3 @@
-import { assertPortalEnabledByEnv } from '@/features/Portal/lib/feature-gate';
 import type { Metadata, Viewport } from 'next';
 
 export const metadata: Metadata = {
@@ -15,10 +14,10 @@ export const viewport: Viewport = {
 };
 
 /**
- * Todas las rutas del portal pasan por la misma puerta: apagado por la variable, 404. El estado del módulo (F3) lo corta
- * `PortalPanel` con la empresa del legajo y el login; este layout es síncrono y no puede leer la base.
+ * El layout es síncrono (con `cacheComponents` no puede leer la base fuera de un Suspense), así que no corta por módulo.
+ * El corte por el estado del módulo `portal` (F3.6) está en cada entrada: `login` y `activate` por la instancia
+ * (`requireInstanceRoute`) y el panel por la empresa del legajo (`PortalPanel`, `requireCompanyRoute`).
  */
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
-  assertPortalEnabledByEnv();
   return children;
 }

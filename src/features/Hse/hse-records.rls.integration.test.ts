@@ -32,6 +32,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
  */
 const state = vi.hoisted(() => ({ ctx: null as TenantContext | null, files: new Map<string, Uint8Array>() }));
 
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  connection: async () => undefined,
+}));
 vi.mock('next/cache', () => ({
   cacheTag: () => undefined,
   cacheLife: () => undefined,

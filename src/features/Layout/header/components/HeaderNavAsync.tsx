@@ -1,4 +1,3 @@
-import { withoutDisabledHse } from '@/features/Hse/lib/feature-gate';
 import {
   getUserAccessibleModulesServer,
   getUserPermissionsMapServer,
@@ -19,7 +18,7 @@ export async function HeaderNavAsync() {
 
   return (
     <HeaderNav
-      accessibleModuleSlugs={withoutDisabledHse(accessibleModules.map((module) => module.module_slug))}
+      accessibleModuleSlugs={accessibleModules.map((module) => module.module_slug)}
       visibleTabs={resolveVisibleTabs(permissions)}
     />
   );

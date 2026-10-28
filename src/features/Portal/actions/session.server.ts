@@ -1,8 +1,8 @@
 'use server';
 
 import { signInLinkedEmployee } from '@/features/Auth/lib/employee-login';
+import { isModuleEnabled, isModuleEnabledForCompany } from '@/features/Modules/server/modules.server';
 import { requirePortalEmployee } from '@/features/Portal/actions/perimeter';
-import { isPortalEnabled } from '@/features/Portal/lib/feature-gate';
 import { Logger } from '@/lib/logger';
 import { auth } from '@/shared/lib/auth';
 import { prismaSystem } from '@/shared/lib/prisma-system';
@@ -28,7 +28,7 @@ const NO_ACCESS_MESSAGE = 'Tu acceso al portal no está habilitado. Pedíselo a 
  * estampa el alta de sesión podría ser otra empresa si la persona además es miembro de una.
  */
 export async function portalLogin(email: string, password: string): Promise<{ error?: string; success?: boolean }> {
-  if (!(await isPortalEnabled())) return { error: 'El portal no está disponible.' };
+  if (!(await isModuleEnabled('portal'))) return { error: 'El portal no está disponible.' };
 
   const login = await signInLinkedEmployee(email, password, {
     requireCompany: true,
@@ -39,7 +39,7 @@ export async function portalLogin(email: string, password: string): Promise<{ er
 
   // La empresa del legajo es la que manda (F3.3): el chequeo de arriba solo conoció la instancia o la empresa de una
   // sesión previa. Con el portal apagado para ESA empresa no se abre sesión (todo o nada, como el resto del login).
-  if (!(await isPortalEnabled(employee.company_id))) {
+  if (!(await isModuleEnabledForCompany('portal', employee.company_id))) {
     await login.rejectSession();
     return { error: 'El portal no está disponible.' };
   }

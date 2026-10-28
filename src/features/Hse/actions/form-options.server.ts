@@ -1,7 +1,7 @@
 'use server';
 
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
-import { isHseEnabled } from '../lib/feature-gate';
 import { getHseDocumentFormOptions } from './queries.server';
 
 /**
@@ -9,7 +9,7 @@ import { getHseDocumentFormOptions } from './queries.server';
  * empleados puede ser larga). Exige poder crear o editar documentos.
  */
 export async function fetchHseDocumentFormOptions() {
-  if (!(await isHseEnabled())) throw new Error('El módulo HSE no está disponible');
+  if (!(await isModuleEnabled('hse'))) throw new Error('El módulo HSE no está disponible');
   const [canCreate, canUpdate] = await Promise.all([
     checkPermissionServer('hse', 'documentos-hse', 'create'),
     checkPermissionServer('hse', 'documentos-hse', 'update'),

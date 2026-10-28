@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { isHseEnabled } from '@/features/Hse/lib/feature-gate';
+import { isModuleEnabledForCompany } from '@/features/Modules/server/modules.server';
 import { notify } from '@/features/Notifications/lib/dispatch.server';
 import { Logger } from '@/lib/logger';
 import { argentinaDate } from '@/shared/lib/argentina-time';
@@ -160,7 +160,7 @@ export async function runHseExpiryJob(deps: HseExpiryJobDeps = {}): Promise<JobS
     job: JOB,
     date,
     work: async (company) => {
-      if (!(await isHseEnabled(company.id)))
+      if (!(await isModuleEnabledForCompany('hse', company.id)))
         return { skipped: true, reason: 'HSE apagado en la instancia o en la empresa' };
 
       const { candidates, trainings, currentAcks } = await collectCandidates(company.id, date, limit);

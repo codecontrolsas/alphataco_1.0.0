@@ -90,7 +90,7 @@ export const getDisabledTabIds = cache(async (): Promise<ReadonlySet<string>> =>
  * ¿La clave está encendida para ESA empresa? Para rutinas de servidor que ya conocen la empresa y pueden correr dentro de
  * una transacción ajena (cachés derivados: `refreshDocumentStatus`, `syncHse*`). Sin `cache()`: lee el estado vigente.
  */
-export async function isModuleEnabledForCompany(key: ModuleKey, companyId: string): Promise<boolean> {
+export async function isModuleEnabledForCompany(key: ModuleKey, companyId: string | null): Promise<boolean> {
   return key === CORE_MODULE || (await getEnabledModulesFor(companyId)).has(key);
 }
 
@@ -106,20 +106,4 @@ export async function requireModule(key: ModuleKey): Promise<void> {
 /** Para páginas: 404 si la clave está apagada (el módulo «no existe» para esa empresa; sin página de «no contratado»). */
 export async function requireModulePage(key: ModuleKey): Promise<void> {
   if (!(await isModuleEnabled(key))) notFound();
-}
-
-/**
- * Compatibilidad con las compuertas por variable de entorno (`HSE_ENABLED`, `PORTAL_ENABLED`) hasta F3.6: decide el
- * estado del módulo y, si no se puede leer (base sin la migración de F3, error de conexión), se comporta como antes de
- * F3 (encendido) y lo deja en el log.
- */
-export async function isModuleEnabledOrLegacy(key: ModuleKey, companyId?: string | null): Promise<boolean> {
-  try {
-    if (companyId !== undefined) return (await readEnabledModules(companyId)).has(key);
-    await connection();
-    return (await readEnabledModules(await activeCompanyIdOrNull())).has(key);
-  } catch (error) {
-    logger.warn('Estado del módulo no disponible: se usa la variable de entorno', { data: { error, key } });
-    return true;
-  }
 }

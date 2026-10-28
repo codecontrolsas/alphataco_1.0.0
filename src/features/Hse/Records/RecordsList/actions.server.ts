@@ -1,5 +1,6 @@
 'use server';
 
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import {
   buildTreasuryDateRangeWhere,
@@ -18,7 +19,6 @@ import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import type { SingleFacetResult } from '@/shared/lib/table-list-query';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { isHseEnabled } from '../../lib/feature-gate';
 import { HSE_RECORD_MODALITY_LABELS, HSE_RECORD_STATUS_LABELS } from '../../lib/pdf-content';
 
 const logger = new Logger('features/Hse/Records/RecordsList');
@@ -40,7 +40,7 @@ const EXPORT_LIMIT = 5_000;
 const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
 
 async function resolveCompanyId(): Promise<string | null> {
-  if (!(await isHseEnabled())) return null;
+  if (!(await isModuleEnabled('hse'))) return null;
   if (!(await checkPermissionServer('hse', 'actas', 'view'))) return null;
   return getActiveCompanyId();
 }

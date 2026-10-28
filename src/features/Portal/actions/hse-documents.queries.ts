@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { HSE_FILES_BUCKET } from '@/features/Hse/lib/constants';
-import { isHseEnabled } from '@/features/Hse/lib/feature-gate';
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import type { PortalEmployee } from '@/features/Portal/actions/perimeter';
 import { prisma } from '@/shared/lib/prisma';
 import { UUID_RE } from '@/shared/lib/storage-buckets';
@@ -80,7 +80,7 @@ const STATUS_ORDER = { pending: 0, rejected: 1, accepted: 2 } as const;
 
 /** Documentos vigentes del empleado: pendientes primero, después los más nuevos. Vacío si HSE está apagado. */
 export const getMyHseDocuments = cache(async (employee: PortalEmployee): Promise<PortalHseDocument[]> => {
-  if (!(await isHseEnabled())) return [];
+  if (!(await isModuleEnabled('hse'))) return [];
   const rows = await fetchAcks(employee.employeeId);
   return (
     rows
@@ -93,7 +93,7 @@ export const getMyHseDocuments = cache(async (employee: PortalEmployee): Promise
 
 /** Un documento vigente del empleado, o `null` (no existe, no es suyo, ya no le aplica o HSE apagado). */
 export async function getMyHseDocument(employee: PortalEmployee, ackId: string): Promise<PortalHseDocument | null> {
-  if (!(await isHseEnabled()) || !UUID_RE.test(ackId)) return null;
+  if (!(await isModuleEnabled('hse')) || !UUID_RE.test(ackId)) return null;
   const row = await prisma.hse_document_acknowledgements.findFirst({
     where: { id: ackId, ...vigentWhere(employee.employeeId) },
     select: ACK_SELECT,

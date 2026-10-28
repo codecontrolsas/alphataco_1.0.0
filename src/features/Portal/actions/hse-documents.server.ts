@@ -1,10 +1,9 @@
 'use server';
 
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { isHseEnabled } from '@/features/Hse/lib/feature-gate';
 import { hseAcknowledgeSchema, type HseAcknowledgeInput } from '@/features/Hse/schemas/documents';
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import { requirePortalEmployee, type PortalEmployee } from '@/features/Portal/actions/perimeter';
-import { isPortalEnabled } from '@/features/Portal/lib/feature-gate';
 import { checkSignaturePassword, requestFingerprint } from '@/features/Portal/lib/signature.server';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
@@ -26,7 +25,8 @@ const NOT_AVAILABLE = 'Este documento ya no está disponible para responder. Rec
 export async function respondHseDocument(
   input: HseAcknowledgeInput
 ): Promise<ActionResult<{ status: 'accepted' | 'rejected' }>> {
-  if (!(await isPortalEnabled()) || !(await isHseEnabled())) return fail('El portal no está disponible.');
+  if (!(await isModuleEnabled('portal')) || !(await isModuleEnabled('hse')))
+    return fail('El portal no está disponible.');
   const parsed = hseAcknowledgeSchema.safeParse(input);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Revisá los datos');
   const data = parsed.data;

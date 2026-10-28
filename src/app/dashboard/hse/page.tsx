@@ -1,6 +1,6 @@
 import { companyPageMetadata } from '@/app/_lib/company-metadata';
 import HseComponent from '@/features/Hse/HseComponent';
-import { assertHseEnabled } from '@/features/Hse/lib/feature-gate';
+import { requireModulePage } from '@/features/Modules/server/modules.server';
 
 export async function generateMetadata() {
   return (
@@ -15,7 +15,7 @@ export default async function HsePage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  await assertHseEnabled();
+  await requireModulePage('hse');
   const resolvedSearchParams = await searchParams;
   return <HseComponent searchParams={resolvedSearchParams} />;
 }

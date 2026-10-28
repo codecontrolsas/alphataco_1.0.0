@@ -741,7 +741,7 @@ export const MODULE_CATALOG: Readonly<Record<ModuleKey, ModuleDef>> = {
   movil: {
     key: 'movil',
     name: 'API móvil',
-    description: 'API de la app móvil (proceso `api`). En F3.1 convive con MOBILE_API_ENABLED.',
+    description: 'API de la app móvil (proceso `api`). `MOBILE_API_ENABLED` solo decide qué contenedor la atiende.',
     requires: ['empleados'],
     softDeps: ['operaciones'],
     softImpactMessages: { operaciones: 'La app deja de ofrecer los partes diarios.' },

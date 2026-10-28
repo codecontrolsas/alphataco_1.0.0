@@ -1,6 +1,7 @@
 'use server';
 
 import { errorMessage, fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
@@ -13,7 +14,6 @@ import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'node:crypto';
 import { HSE_FILES_BUCKET } from '../lib/constants';
-import { isHseEnabled } from '../lib/feature-gate';
 import { cleanFileName, hseVersionPath, validatePdfUpload } from '../lib/pdf-file';
 import {
   hseDocumentFormSchema,
@@ -42,7 +42,7 @@ type HseAction = 'create' | 'update' | 'delete' | 'approve';
 async function requireHse(
   action: HseAction
 ): Promise<{ ok: true; companyId: string; profileId: string; credentialId: string } | { ok: false; error: string }> {
-  if (!(await isHseEnabled())) return { ok: false, error: 'El módulo HSE no está disponible' };
+  if (!(await isModuleEnabled('hse'))) return { ok: false, error: 'El módulo HSE no está disponible' };
   if (!(await checkPermissionServer('hse', 'documentos-hse', action))) return { ok: false, error: NO_PERMISSION };
   const [profile, companyId] = await Promise.all([getServerAuthProfile(), getActiveCompanyId()]);
   if (!profile) return { ok: false, error: SESSION_EXPIRED };

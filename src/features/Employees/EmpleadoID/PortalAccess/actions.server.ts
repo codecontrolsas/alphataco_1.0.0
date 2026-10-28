@@ -1,7 +1,7 @@
 'use server';
 
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
-import { isPortalEnabled } from '@/features/Portal/lib/feature-gate';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { withActor } from '@/shared/lib/actor';
@@ -152,7 +152,7 @@ export async function enableEmployeePortalAccess(values: EnablePortalAccessInput
   const { employeeId, method } = parsed.data;
 
   try {
-    if (!(await isPortalEnabled()))
+    if (!(await isModuleEnabled('portal')))
       return { success: false, error: 'El portal de empleados está apagado en esta instancia.' };
     if (!(await checkPermissionServer(PORTAL_TAB.module, PORTAL_TAB.tab, 'portal_access'))) {
       return { success: false, error: 'No tenés permiso para habilitar el portal.' };

@@ -1,6 +1,7 @@
 'use server';
 
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
@@ -8,7 +9,6 @@ import { withActor } from '@/shared/lib/actor';
 import { UUID_RE } from '@/shared/lib/storage-buckets';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
-import { isHseEnabled } from '../lib/feature-gate';
 import { hseDocumentTypeSchema, type HseDocumentTypeValues } from '../schemas/documents';
 
 /** Tipos de documento HSE (Configuración). Un tipo en uso no se borra: se desactiva. */
@@ -16,7 +16,7 @@ import { hseDocumentTypeSchema, type HseDocumentTypeValues } from '../schemas/do
 const logger = new Logger('features/Hse/types');
 
 async function requireSettings(action: 'create' | 'update' | 'delete') {
-  if (!(await isHseEnabled())) return null;
+  if (!(await isModuleEnabled('hse'))) return null;
   if (!(await checkPermissionServer('hse', 'configuracion-hse', action))) return null;
   const [profile, companyId] = await Promise.all([getServerAuthProfile(), getActiveCompanyId()]);
   return profile ? { companyId, credentialId: profile.credentialId } : null;
