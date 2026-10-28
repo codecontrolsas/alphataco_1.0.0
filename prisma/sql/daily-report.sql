@@ -1001,6 +1001,7 @@ END;$function$;
 CREATE OR REPLACE FUNCTION public.marcar_prepartes_vencidos(p_company_ids uuid[] DEFAULT NULL)
  RETURNS void
  LANGUAGE plpgsql
+ SET "TimeZone" TO 'America/Argentina/Buenos_Aires'
 AS $function$BEGIN
     UPDATE public.preparte
     SET 
