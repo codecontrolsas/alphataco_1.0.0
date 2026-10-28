@@ -537,6 +537,8 @@ model companies_employees {
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model company {
   id                            String                          @id(map: "companies_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_modules               company_modules[]
+  module_change_log             module_change_log[]
   company_name                  String                          @db.VarChar(255)
   description                   String
   website                       String?                         @db.VarChar(255)
@@ -1518,6 +1520,66 @@ model instance_settings {
   description String?
   updated_at  DateTime @default(now()) @db.Timestamptz(6)
 
+  @@schema("public")
+}
+
+/// Control de módulos (F3): módulos encendidos en la instancia. Sin fila = apagado (salvo `nucleo`, que decide el código).
+/// La app no la lee ni la escribe (REVOKE + RLS sin políticas): la lee por `app_enabled_modules()` y la escribe el rol
+/// de sistema (API de administración, scripts). Ver la migración `20261104100000_module_control`.
+model instance_modules {
+  module_key String   @id
+  enabled    Boolean
+  changed_at DateTime @default(now()) @db.Timestamptz(6)
+  changed_by String
+  reason     String
+
+  @@schema("public")
+}
+
+/// Control de módulos (F3): lo que una empresa apaga. Solo RESTRINGE: `enabled=false` apaga; sin fila o `true` hereda la
+/// instancia. Una empresa nunca enciende lo que la instancia tiene apagado.
+model company_modules {
+  company_id String   @db.Uuid
+  module_key String
+  enabled    Boolean  @default(false)
+  changed_at DateTime @default(now()) @db.Timestamptz(6)
+  changed_by String
+  reason     String
+  company    company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@id([company_id, module_key])
+  @@schema("public")
+}
+
+/// Control de módulos (F3): auditoría de cada cambio de estado. Solo INSERT.
+model module_change_log {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  request_id   String   @db.Uuid
+  scope        String
+  company_id   String?  @db.Uuid
+  module_key   String
+  from_enabled Boolean?
+  to_enabled   Boolean
+  cause        String
+  actor_email  String
+  origin       String
+  reason       String
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  company      company? @relation(fields: [company_id], references: [id], onDelete: SetNull)
+
+  @@index([created_at(sort: Desc)])
+  @@index([request_id])
+  @@schema("public")
+}
+
+/// Control de módulos (F3): pertenencia pestaña → clave del catálogo funcional, con la herencia expandida (una fila por
+/// cada clave que habilita la pestaña). La escribe `scripts/sync-module-catalog.ts` en cada arranque.
+model module_tab_owners {
+  tab_id     String @db.Uuid
+  module_key String
+  tabs       tabs   @relation(fields: [tab_id], references: [id], onDelete: Cascade)
+
+  @@id([tab_id, module_key])
   @@schema("public")
 }
 
@@ -2699,6 +2761,7 @@ model tabs {
   tabs             tabs?              @relation("tabsTotabs", fields: [parent_tab_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   other_tabs       tabs[]             @relation("tabsTotabs")
   user_permissions user_permissions[]
+  module_tab_owners module_tab_owners[]
 
   @@unique([module_id, slug])
   @@index([module_id], map: "idx_tabs_module_id")

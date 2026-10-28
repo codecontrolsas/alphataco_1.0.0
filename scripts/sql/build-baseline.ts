@@ -39,6 +39,8 @@ const DOMAIN_ORDER = [
   'invoicing',
   'timezone',
   'tenant',
+  // Después de `tenant`: sus funciones `LANGUAGE sql` usan app_current_company_id() y se validan al crearse.
+  'modules',
   'hse',
 ] as const;
 

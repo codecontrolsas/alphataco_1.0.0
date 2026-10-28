@@ -69,6 +69,9 @@ $function$;
 -- Task 13b: `user_permissions` también ganó `company_id`. Las DOS fuentes que combina esta
 -- función quedan acotadas a la empresa: un permiso custom otorgado en una empresa ya no vale
 -- en las demás donde el usuario entre.
+-- F3 (control de módulos): se excluyen las pestañas de las claves apagadas para la empresa
+-- (`app_disabled_tab_ids`, prisma/sql/modules.sql). Los permisos otorgados no se tocan: solo se filtran, así que al
+-- reencender un módulo cada usuario recupera exactamente lo que tenía.
 CREATE OR REPLACE FUNCTION public.get_user_permissions(p_user_id uuid, p_company_id uuid)
  RETURNS TABLE(module_id uuid, module_slug text, module_name text, tab_id uuid, tab_slug text, tab_name text, action_id uuid, action_slug text, action_name text, source text, is_granted boolean, role_id bigint, role_name text, role_color text)
  LANGUAGE plpgsql
@@ -104,6 +107,8 @@ BEGIN
             AND m.is_active = true
             AND t.is_active = true
             AND r.is_active = true
+            -- F3: pestañas de módulos apagados en la instancia o en la empresa (una evaluación por llamada).
+            AND t.id NOT IN (SELECT public.app_disabled_tab_ids(p_company_id))
     ),
     user_custom_permissions AS (
         -- Get custom permissions (overrides)
@@ -130,6 +135,7 @@ BEGIN
             AND up.company_id = p_company_id
             AND m.is_active = true
             AND t.is_active = true
+            AND t.id NOT IN (SELECT public.app_disabled_tab_ids(p_company_id))
     )
     -- Combine both, with custom permissions taking precedence
     SELECT DISTINCT ON (
