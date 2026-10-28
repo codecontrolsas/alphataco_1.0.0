@@ -8,7 +8,7 @@ import { StackedCell } from '@/shared/components/common/StackedCell';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { formSourceLabels } from '@/shared/utils/mappers';
 import { type ColumnDef } from '@tanstack/react-table';
-import { CheckCircle2, CircleOff, ClipboardCheck, FileText, XCircle, type LucideIcon } from 'lucide-react';
+import { CheckCircle2, CircleOff, ClipboardCheck, FileText, Pencil, XCircle, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import type { FormListItem } from './actions.server';
 
@@ -33,11 +33,18 @@ const SOURCE_TONE_CLASS: Record<string, string> = {
   custom_form: 'text-warn',
 };
 
+const ACTION_LINK_CLASS =
+  'border-input bg-background hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium whitespace-nowrap shadow-sm transition-colors focus-visible:ring-2 focus-visible:outline-none';
+
 // ============================================================================
 // COLUMNAS
 // ============================================================================
 
-export function getColumns(permissions: PermissionChecker): ColumnDef<FormListItem>[] {
+/**
+ * `canConfigure`: `formularios:formularios:update` con el módulo Checklists encendido. Abre el editor de las plantillas
+ * de checklist, también de las inactivas (si no, una plantilla recién creada —nace inactiva— quedaría inalcanzable).
+ */
+export function getColumns(permissions: PermissionChecker, canConfigure = false): ColumnDef<FormListItem>[] {
   const canView = permissions.hasPermission('formularios', 'formularios', 'view');
 
   return [
@@ -47,8 +54,9 @@ export function getColumns(permissions: PermissionChecker): ColumnDef<FormListIt
       meta: { title: 'Nombre' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
       cell: ({ row }) => {
-        const { id, name, description, is_active } = row.original;
+        const { id, name, description, is_active, source } = row.original;
         const inactive = is_active === false;
+        const editable = canConfigure && source === 'checklist_template';
 
         return (
           <StackedCell
@@ -57,6 +65,10 @@ export function getColumns(permissions: PermissionChecker): ColumnDef<FormListIt
             primary={
               canView && !inactive ? (
                 <Link href={`/dashboard/forms/${id}`} title={name} className="hover:underline">
+                  {name}
+                </Link>
+              ) : editable ? (
+                <Link href={`/dashboard/forms/${id}/edit`} title={`${name} (Inactivo)`} className="hover:underline">
                   {name}
                 </Link>
               ) : (
@@ -185,15 +197,29 @@ export function getColumns(permissions: PermissionChecker): ColumnDef<FormListIt
       enableHiding: false,
       header: () => null,
       cell: ({ row }) => {
-        if (!canView || row.original.is_active === false) return null;
+        const { id, name, is_active, source } = row.original;
+        const showView = canView && is_active !== false;
+        const showEdit = canConfigure && source === 'checklist_template';
+        if (!showView && !showEdit) return null;
 
         return (
-          <Link
-            href={`/dashboard/forms/${row.original.id}`}
-            className="border-input bg-background hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium whitespace-nowrap shadow-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
-          >
-            Ver formulario
-          </Link>
+          <div className="flex items-center gap-2">
+            {showView && (
+              <Link href={`/dashboard/forms/${id}`} className={ACTION_LINK_CLASS}>
+                Ver formulario
+              </Link>
+            )}
+            {showEdit && (
+              <Link
+                href={`/dashboard/forms/${id}/edit`}
+                className={ACTION_LINK_CLASS}
+                aria-label={`Editar plantilla ${name}`}
+              >
+                <Pencil className="size-3.5" aria-hidden="true" />
+                Editar
+              </Link>
+            )}
+          </div>
         );
       },
     },

@@ -1,3 +1,4 @@
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { FormsList } from './FormsList';
 
@@ -15,5 +16,8 @@ interface Props {
 // ============================================================================
 
 export default async function FormulariosTabContent({ searchParams, permissionsMap }: Props) {
-  return <FormsList searchParams={searchParams} permissionsMap={permissionsMap} />;
+  // Las plantillas de checklist viven en tablas del módulo Checklists: sin él no hay nada que configurar.
+  const canConfigure =
+    permissionsMap['formularios:formularios:update'] === true && (await isModuleEnabled('checklists'));
+  return <FormsList searchParams={searchParams} permissionsMap={permissionsMap} canConfigure={canConfigure} />;
 }

@@ -15,11 +15,12 @@ import { checkPermissionServer } from '@/features/Permissions/actions/permission
 const MODULE_SLUG = 'formularios';
 const TAB_SLUG = 'formularios';
 
-export type FormsAction = 'view' | 'create';
+export type FormsAction = 'view' | 'create' | 'update';
 
 const ACTION_VERBS: Record<FormsAction, string> = {
   view: 'ver',
   create: 'crear',
+  update: 'configurar',
 };
 
 /** ¿La sesión tiene la acción en Formularios? */

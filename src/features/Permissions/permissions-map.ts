@@ -788,7 +788,7 @@ export const PERMISSIONS = {
         name: 'Formularios',
         tabId: '80000000-0000-0000-0000-000000000001',
         parent: null,
-        allowedActions: ['view', 'create'],
+        allowedActions: ['view', 'create', 'update'], // create = cargar respuestas; update = configurar las plantillas de checklist
         subtabs: {},
       },
     },

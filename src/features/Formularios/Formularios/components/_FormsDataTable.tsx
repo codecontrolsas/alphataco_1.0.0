@@ -1,5 +1,6 @@
 'use client';
 
+import { buttonVariants } from '@/components/ui/button';
 import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
 import {
@@ -18,7 +19,8 @@ import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { formSourceLabels } from '@/shared/utils/mappers';
 import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, XCircle } from 'lucide-react';
+import { CheckCircle2, Plus, XCircle } from 'lucide-react';
+import Link from 'next/link';
 import { useCallback, useMemo } from 'react';
 import {
   getAllFormsForExport,
@@ -39,6 +41,8 @@ interface Props {
   searchParams: DataTableSearchParams;
   tableId: string;
   permissionsMap: Record<string, boolean>;
+  /** Puede configurar plantillas de checklist (permiso `update` + módulo Checklists encendido). */
+  canConfigure: boolean;
   initialColumnVisibility: Record<string, boolean>;
   initialFilterVisibility: Record<string, boolean>;
 }
@@ -76,6 +80,7 @@ export function _FormsDataTable({
   searchParams,
   tableId,
   permissionsMap,
+  canConfigure,
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
@@ -102,7 +107,7 @@ export function _FormsDataTable({
   });
   const isTruncated = coverage != null && coverage.shown < coverage.total;
 
-  const columns = useMemo(() => getColumns(permissions), [permissions]);
+  const columns = useMemo(() => getColumns(permissions, canConfigure), [permissions, canConfigure]);
 
   const exportConfig: DataTableExportConfig<FormListItem> = useMemo(
     () => ({
@@ -149,6 +154,14 @@ export function _FormsDataTable({
         emptyMessage="No hay formularios registrados"
         data-testid="forms-table"
         exportConfig={exportConfig}
+        toolbarActions={
+          canConfigure ? (
+            <Link href="/dashboard/forms/new" className={buttonVariants({ size: 'sm' })}>
+              <Plus className="size-4" aria-hidden="true" />
+              Nueva plantilla
+            </Link>
+          ) : undefined
+        }
       />
     </div>
   );

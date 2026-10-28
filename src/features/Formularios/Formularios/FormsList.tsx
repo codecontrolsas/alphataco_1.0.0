@@ -12,6 +12,7 @@ import { _FormsDataTable } from './components/_FormsDataTable';
 interface Props {
   searchParams: DataTableSearchParams;
   permissionsMap: Record<string, boolean>;
+  canConfigure: boolean;
 }
 
 // ============================================================================
@@ -20,7 +21,7 @@ interface Props {
 
 const TABLE_ID = 'forms';
 
-export async function FormsList({ searchParams, permissionsMap }: Props) {
+export async function FormsList({ searchParams, permissionsMap, canConfigure }: Props) {
   // Extraer solo los params de esta tabla (quitar prefijo del namespace)
   const tableParams = stripPrefixFromSearchParams(searchParams, TABLE_ID);
 
@@ -38,6 +39,7 @@ export async function FormsList({ searchParams, permissionsMap }: Props) {
           searchParams={tableParams}
           tableId={TABLE_ID}
           permissionsMap={permissionsMap}
+          canConfigure={canConfigure}
           initialColumnVisibility={preferences.columnVisibility ?? {}}
           initialFilterVisibility={preferences.filterVisibility ?? {}}
         />
