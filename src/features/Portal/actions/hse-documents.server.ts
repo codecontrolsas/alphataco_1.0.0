@@ -3,9 +3,11 @@
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { hseAcknowledgeSchema, type HseAcknowledgeInput } from '@/features/Hse/schemas/documents';
 import { isModuleEnabled } from '@/features/Modules/server/modules.server';
+import { notifySafe } from '@/features/Notifications/lib/dispatch.server';
 import { requirePortalEmployee, type PortalEmployee } from '@/features/Portal/actions/perimeter';
 import { checkSignaturePassword, requestFingerprint } from '@/features/Portal/lib/signature.server';
 import { Logger } from '@/lib/logger';
+import { renderHseDocumentRejectedEmail } from '@/shared/lib/mail/templates/hse';
 import { prisma } from '@/shared/lib/prisma';
 import { revalidatePath } from 'next/cache';
 
@@ -59,7 +61,7 @@ export async function respondHseDocument(
         },
         select: {
           version_id: true,
-          document: { select: { current_version_id: true } },
+          document: { select: { id: true, title: true, current_version_id: true } },
           version: { select: { file_sha256: true } },
         },
       });
@@ -82,14 +84,33 @@ export async function respondHseDocument(
           updated_at: new Date(),
         },
       });
-      return updated.count === 1 ? status : null;
+      return updated.count === 1 ? { status, documentId: ack.document.id, title: ack.document.title } : null;
     });
     if (!result) return fail(NOT_AVAILABLE);
     logger.info('Documento HSE respondido desde el portal', {
-      data: { employeeId: employee.employeeId, ackId: data.ackId, status: result },
+      data: { employeeId: employee.employeeId, ackId: data.ackId, status: result.status },
     });
+    if (result.status === 'rejected' && data.decision === 'reject') {
+      // A HSE le llega por los roles que tienen el aviso (campanita y/o mail). Nunca rompe la respuesta ya guardada.
+      await notifySafe({
+        event: 'hse.document_rejected',
+        companyId: employee.companyId,
+        dedupeKey: `hse.document_rejected:${data.ackId}`,
+        title: `${employee.lastname} ${employee.firstname}`.trim() + ` rechazó «${result.title}»`,
+        body: data.reason,
+        href: `/dashboard/hse/documents/${result.documentId}`,
+        email: renderHseDocumentRejectedEmail({
+          employee: `${employee.lastname} ${employee.firstname}`.trim(),
+          file: employee.file,
+          title: result.title,
+          reason: data.reason,
+          documentId: result.documentId,
+        }),
+        metadata: { ackId: data.ackId, documentId: result.documentId, employeeId: employee.employeeId },
+      });
+    }
     revalidatePath('/portal', 'layout');
-    return ok({ status: result });
+    return ok({ status: result.status });
   } catch (error) {
     logger.error('Error al responder el documento HSE', { data: { error, ackId: data.ackId } });
     return fail('No se pudo registrar tu respuesta. Intentá de nuevo.');

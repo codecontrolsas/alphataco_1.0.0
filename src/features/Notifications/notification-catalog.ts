@@ -112,6 +112,16 @@ export const NOTIFICATION_EVENTS = {
     requiresLabel: 'Ver órdenes de compra',
     defaultChannels: ['in_app', 'email'],
   },
+  'hse.document_rejected': {
+    module: 'hse',
+    moduleLabel: 'HSE',
+    label: 'Un empleado rechazó un documento HSE',
+    description: 'Cuando un empleado rechaza un documento desde el portal, con el motivo que escribió.',
+    audience: 'role',
+    requires: [{ module: 'hse', tab: 'documentos-hse', action: 'view' }],
+    requiresLabel: 'Ver los documentos HSE',
+    defaultChannels: ['in_app', 'email'],
+  },
   'hse.expiry_weekly': {
     module: 'hse',
     moduleLabel: 'HSE',

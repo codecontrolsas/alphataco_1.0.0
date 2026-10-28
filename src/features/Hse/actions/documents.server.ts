@@ -15,6 +15,7 @@ import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'node:crypto';
 import { HSE_FILES_BUCKET } from '../lib/constants';
 import { cleanFileName, hseVersionPath, validatePdfUpload } from '../lib/pdf-file';
+import { noticeAfterCommit } from '../lib/publication-notices.after';
 import {
   hseDocumentFormSchema,
   hseNewVersionSchema,
@@ -322,7 +323,7 @@ export async function publishHseDocument(documentId: string): Promise<ActionResu
   if (!UUID_RE.test(documentId)) return fail(NOT_FOUND);
 
   try {
-    const pending = await withActor(auth.credentialId, async (tx) => {
+    const { pending, versionId } = await withActor(auth.credentialId, async (tx) => {
       const document = await tx.hse_documents.findFirst({
         where: { id: documentId, company_id: auth.companyId },
         select: {
@@ -349,11 +350,13 @@ export async function publishHseDocument(documentId: string): Promise<ActionResu
       });
       if (updated.count !== 1) throw new Error('El documento ya está publicado o retirado');
       await syncHseAcknowledgements(tx, { companyId: auth.companyId, documentId });
-      return tx.hse_document_acknowledgements.count({
+      const count = await tx.hse_document_acknowledgements.count({
         where: { version_id: version.id, archived_at: null, status: 'pending' },
       });
+      return { pending: count, versionId: version.id };
     });
     logger.info('Documento HSE publicado', { data: { documentId, pending } });
+    noticeAfterCommit({ kind: 'document', companyId: auth.companyId, documentId, versionId });
     revalidateHse(documentId);
     return ok({ pending });
   } catch (error) {
@@ -428,6 +431,7 @@ export async function publishHseDocumentVersion(
       return { version, pending };
     });
     logger.info('Versión nueva de documento HSE', { data: { documentId, version: result.version } });
+    noticeAfterCommit({ kind: 'document', companyId: auth.companyId, documentId, versionId });
     revalidateHse(documentId);
     return ok(result);
   } catch (error) {

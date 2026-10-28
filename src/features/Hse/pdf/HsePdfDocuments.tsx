@@ -4,6 +4,8 @@ import type { PdfLogo, ReactPdf } from '@/shared/lib/pdf/types';
 import type { Styles } from '@react-pdf/renderer';
 import 'server-only';
 import { HSE_TRAINING_KIND_LABELS } from '../lib/constants';
+import { formatDuration } from '../lib/durations';
+import type { EvaluationPdfData } from '../lib/evaluation-content';
 import {
   HSE_ATTENDEE_RESULT_LABELS,
   HSE_INSTRUCTOR_KIND_LABELS,
@@ -46,6 +48,7 @@ const s = {
   colLicense: { width: 80 },
   colRole: { flex: 1 },
   colInstructorSign: { width: 110 },
+  question: { marginBottom: 6, paddingBottom: 4, borderBottomWidth: 0.5, borderBottomColor: C.rule },
   empty: { paddingVertical: 6, textAlign: 'center', color: C.muted },
   footer: { ...basePdfStyles.footer, fontSize: 6.5 },
 } satisfies Styles;
@@ -308,6 +311,107 @@ export function RecordPdfDocument(
         </View>
 
         {Footer(rp, `Acta N° ${data.number}`, meta.sha256)}
+      </Page>
+    </Document>
+  );
+}
+
+const EVALUATION_RESULT_LABELS = { correct: 'Correcta', wrong: 'Incorrecta', unanswered: 'Sin responder' } as const;
+
+/**
+ * Hoja de evaluación de UN intento cerrado: quién rindió, cuándo, cuánto tardó y el resultado; en la versión del
+ * dashboard también cada pregunta con lo que respondió y la opción correcta. No es un documento firmado: se arma al
+ * momento (un intento cerrado no cambia) y no se guarda.
+ */
+export function EvaluationPdfDocument(rp: ReactPdf, data: EvaluationPdfData, logo: PdfLogo) {
+  const { Document, Page, View, Text } = rp;
+  const { employee, training, attempt, questions } = data;
+  const number = shortId(attempt.id);
+  const closedAt = attempt.submittedAt ?? attempt.startedAt;
+
+  return (
+    <Document title={`Evaluación ${number}`} author={data.company.name} subject={training.title}>
+      <Page size="A4" style={s.page}>
+        {HeaderBlock(
+          rp,
+          s,
+          {
+            company: data.company,
+            title: 'EVALUACIÓN DE CAPACITACIÓN',
+            number,
+            date: formatArgentinaDateTime(closedAt).slice(0, 10),
+            dateLabel: 'Rendida',
+          },
+          logo
+        )}
+
+        <View style={s.row}>
+          <View style={s.card}>
+            <Text style={s.boxTitle}>EMPLEADO</Text>
+            {Kv(rp, s, 'Apellido y nombre', employee.fullName)}
+            {Kv(rp, s, 'Legajo', employee.file ?? '—')}
+            {Kv(rp, s, 'CUIL', employee.cuil ?? '—')}
+          </View>
+          <View style={s.gap} />
+          <View style={s.card}>
+            <Text style={s.boxTitle}>CAPACITACIÓN</Text>
+            {Kv(rp, s, 'Título', training.title)}
+            {Kv(rp, s, 'Intento', `N° ${attempt.number}`)}
+            {Kv(rp, s, 'Empezó', formatArgentinaDateTime(attempt.startedAt))}
+            {Kv(
+              rp,
+              s,
+              attempt.status === 'expired' ? 'Venció' : 'Cerró',
+              attempt.submittedAt ? formatArgentinaDateTime(attempt.submittedAt) : '—'
+            )}
+            {Kv(rp, s, 'Duración', formatDuration(attempt.durationSeconds))}
+          </View>
+        </View>
+
+        <View style={s.box}>
+          <Text style={s.boxTitle}>RESULTADO</Text>
+          {Kv(
+            rp,
+            s,
+            'Puntaje',
+            `${percent(attempt.scorePercent)} (${attempt.scorePoints ?? 0} de ${attempt.maxPoints} puntos)`
+          )}
+          {Kv(rp, s, 'Aprobación mínima', `${training.passingScore} %`)}
+          {Kv(rp, s, 'Resultado', attempt.passed ? 'APROBADO' : 'DESAPROBADO')}
+          {attempt.status === 'expired'
+            ? Kv(rp, s, 'Observación', 'Se acabó el tiempo: se corrigió con lo respondido hasta ese momento.')
+            : null}
+        </View>
+
+        {questions === null ? (
+          <Text style={s.muted}>
+            Esta constancia de resultado no incluye el detalle de las respuestas. El área de HSE conserva la hoja
+            completa.
+          </Text>
+        ) : (
+          <View>
+            <Text style={s.sectionTitle}>RESPUESTAS</Text>
+            {questions.length === 0 ? <Text style={s.empty}>El examen no tiene preguntas registradas.</Text> : null}
+            {questions.map((q, index) => (
+              <View key={index} style={s.question} wrap={false}>
+                <Text style={s.bold}>
+                  {index + 1}. {q.prompt} ({q.points} pt{q.points === 1 ? '' : 's'})
+                </Text>
+                {Kv(rp, s, 'Respondió', q.chosen ?? '(sin responder)')}
+                {q.result !== 'correct' ? Kv(rp, s, 'Correcta', q.correct) : null}
+                {Kv(rp, s, 'Resultado', EVALUATION_RESULT_LABELS[q.result])}
+              </View>
+            ))}
+          </View>
+        )}
+
+        <Text
+          style={s.footer}
+          fixed
+          render={({ pageNumber, totalPages }) =>
+            `Evaluación ${number} · ${data.company.name} · Página ${pageNumber} de ${totalPages}`
+          }
+        />
       </Page>
     </Document>
   );

@@ -1346,6 +1346,7 @@ model employees {
   hse_training_attempts    hse_training_attempts[]
   hse_training_answers     hse_training_answers[]
   hse_training_reads       hse_training_material_reads[]
+  hse_material_opens       hse_training_material_opens[]
   hse_training_instructors        hse_training_instructors[]
   hse_record_instructors          hse_training_record_instructors[]
   hse_record_attendances          hse_training_record_attendees[]
@@ -6829,6 +6830,7 @@ model hse_trainings {
   assignments        hse_training_assignments[]
   attempts           hse_training_attempts[]
   reads              hse_training_material_reads[]
+  material_opens     hse_training_material_opens[]
   instructors        hse_training_instructors[]
   records            hse_training_records[]
   certificates       hse_training_certificates[]
@@ -6875,6 +6877,7 @@ model hse_training_materials {
   created_at  DateTime                      @default(now()) @db.Timestamptz(6)
   training    hse_trainings                 @relation(fields: [training_id], references: [id], onDelete: Cascade)
   reads       hse_training_material_reads[]
+  opens       hse_training_material_opens[]
 
   @@index([training_id], map: "idx_hse_training_materials_training")
   @@index([company_id], map: "idx_hse_training_materials_company_id")
@@ -7172,6 +7175,27 @@ model hse_training_record_attendees {
 
 /// Constancia de aprobación FIRMADA por el empleado (una por intento aprobado). Inmutable: contenido congelado al
 /// firmar (datos del momento, firma, IP, navegador, hora del servidor) con su huella; solo se anula (con motivo).
+/// Primera y última vez que el empleado ABRIÓ un material (clic en el enlace del portal). Existe aparte de
+/// `hse_training_material_reads` a propósito: ahí la fila significa "ya lo leí" y destraba el examen, abrir no. Con esta
+/// marca y `read_at` se mide el tiempo de estudio (apertura → "Ya lo leí"). Lo escribe solo `hse_mark_material_opened`.
+model hse_training_material_opens {
+  id              String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id      String                 @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  training_id     String                 @db.Uuid
+  material_id     String                 @db.Uuid
+  employee_id     String                 @db.Uuid
+  first_opened_at DateTime               @default(now()) @db.Timestamptz(6)
+  last_opened_at  DateTime               @default(now()) @db.Timestamptz(6)
+  training        hse_trainings          @relation(fields: [training_id], references: [id], onDelete: Cascade)
+  material        hse_training_materials @relation(fields: [material_id], references: [id], onDelete: Cascade)
+  employee        employees              @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@unique([material_id, employee_id], map: "hse_training_material_opens_material_employee_key")
+  @@index([employee_id, training_id], map: "idx_hse_training_material_opens_employee")
+  @@index([company_id], map: "idx_hse_training_material_opens_company_id")
+  @@schema("public")
+}
+
 model hse_training_certificates {
   id                   String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   company_id           String                   @default(dbgenerated("app_current_company_id()")) @db.Uuid

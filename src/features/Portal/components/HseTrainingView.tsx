@@ -1,3 +1,4 @@
+import { HseEvaluationPdfButton } from '@/features/Hse/components/HseEvaluationPdfButton';
 import { HseStatusBadge } from '@/features/Hse/components/HseStatusBadge';
 import { HSE_TRAINING_KIND_LABELS } from '@/features/Hse/lib/constants';
 import { HSE_ASSIGNMENT_STATUS_UI, HSE_ATTEMPT_STATUS_UI } from '@/features/Hse/lib/status-presentation';
@@ -10,6 +11,7 @@ import moment from 'moment';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { HseCertificatePanel } from './HseCertificatePanel';
+import { HseMaterialOpenLink } from './HseMaterialOpenLink';
 import { HseMaterialReadButton } from './HseMaterialReadButton';
 import { HseStartAttemptButton } from './HseStartAttemptButton';
 
@@ -113,17 +115,28 @@ export async function HseTrainingView({ trainingId }: { trainingId: string }) {
                   </div>
                   <div className="grid gap-2 sm:flex sm:flex-wrap">
                     {m.url && (
-                      <a href={m.url} target="_blank" rel="noopener noreferrer" className={actionLink}>
+                      <HseMaterialOpenLink
+                        materialId={m.id}
+                        href={m.url}
+                        newTab
+                        className={actionLink}
+                        trackOpen={!m.readAt}
+                      >
                         <ExternalLink aria-hidden="true" className="size-4" />
                         {m.kind === 'file' ? 'Abrir el PDF' : 'Abrir el enlace'}
                         <span className="sr-only"> «{m.title}» (se abre en otra pestaña)</span>
-                      </a>
+                      </HseMaterialOpenLink>
                     )}
                     {m.downloadUrl && (
-                      <a href={m.downloadUrl} className={actionLink}>
+                      <HseMaterialOpenLink
+                        materialId={m.id}
+                        href={m.downloadUrl}
+                        className={actionLink}
+                        trackOpen={!m.readAt}
+                      >
                         <Download aria-hidden="true" className="size-4" /> Descargar
                         <span className="sr-only"> «{m.title}»</span>
-                      </a>
+                      </HseMaterialOpenLink>
                     )}
                     {!m.readAt && training.status !== 'passed' && (
                       <HseMaterialReadButton materialId={m.id} trainingId={training.trainingId} title={m.title} />
@@ -203,6 +216,14 @@ export async function HseTrainingView({ trainingId }: { trainingId: string }) {
                         {a.passed ? 'Aprobado' : 'Desaprobado'}
                       </span>
                       {a.status === 'expired' && <HseStatusBadge ui={HSE_ATTEMPT_STATUS_UI.expired} />}
+                      <HseEvaluationPdfButton
+                        attemptId={a.id}
+                        scope="portal"
+                        size="sm"
+                        variant="ghost"
+                        label="PDF"
+                        accessibleLabel={`Descargar en PDF el resultado del intento ${a.number}`}
+                      />
                     </>
                   )}
                 </div>

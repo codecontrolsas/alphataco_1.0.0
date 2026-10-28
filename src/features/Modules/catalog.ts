@@ -715,6 +715,7 @@ export const MODULE_CATALOG: Readonly<Record<ModuleKey, ModuleDef>> = {
       'hse_training_attempts',
       'hse_training_answers',
       'hse_training_material_reads',
+      'hse_training_material_opens',
       'hse_training_instructors',
       'hse_training_records',
       'hse_training_record_instructors',
