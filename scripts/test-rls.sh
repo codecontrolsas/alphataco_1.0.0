@@ -36,6 +36,7 @@ npx vitest run --no-file-parallelism \
   src/features/Hse/hse-records.rls.integration.test.ts \
   src/features/Employees/EmpleadoID/PortalAccess/portal-access.rls.integration.test.ts \
   src/features/Dashboard/Boards/dashboard-presets.rls.integration.test.ts \
+  src/features/Formularios/TemplateEditor/checklist-templates.rls.integration.test.ts \
   src/shared/lib/instance-settings.rls.integration.test.ts \
   src/features/Empresa/General/first-company.rls.integration.test.ts \
   src/features/MobileApi/employees/mobile-employees.rls.integration.test.ts \
