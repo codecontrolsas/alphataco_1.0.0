@@ -49,14 +49,15 @@ $function$;
 
 -- function app_disabled_tab_ids: pestañas apagadas para la empresa (alguna clave que la habilita no está encendida).
 -- `module_tab_owners` ya trae la herencia expandida (una fila por cada clave del nodo y de sus ancestros). El
--- CTE evalúa las claves encendidas UNA vez por llamada, no por fila.
+-- CTE MATERIALIZED evalúa las claves encendidas UNA vez por llamada (sin MATERIALIZED, Postgres lo inlinea y llama a
+-- `app_enabled_modules` por cada fila: ~7 ms por llamada en vez de décimas).
 CREATE OR REPLACE FUNCTION public.app_disabled_tab_ids(p_company uuid)
  RETURNS SETOF uuid
  LANGUAGE sql
  STABLE SECURITY DEFINER
  SET search_path = public, pg_temp
 AS $function$
-  WITH enabled AS (SELECT public.app_enabled_modules(p_company) AS keys)
+  WITH enabled AS MATERIALIZED (SELECT public.app_enabled_modules(p_company) AS keys)
   SELECT DISTINCT o.tab_id
   FROM public.module_tab_owners o, enabled e
   WHERE NOT (o.module_key = ANY (e.keys))
