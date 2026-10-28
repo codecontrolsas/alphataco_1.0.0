@@ -214,7 +214,7 @@ describe.skipIf(!RUN_RLS)('job hse-expiry (integración)', () => {
     const before = sent.length;
     const same = await runJob(DAY);
     expect(same.units.find((u) => u.companyId === COMPANY_A)?.status).toBe('skipped');
-    expect(sent.length).toBe(before);
+    expect(sent.slice(before).filter((m) => Object.values(MAIL).includes(String(m.to)))).toEqual([]);
 
     await runJob(plus(1));
     // Lo ya avisado no se repite; entra solo lo que cruzó el umbral (el del día 31 ahora está a 30 días).
@@ -225,7 +225,9 @@ describe.skipIf(!RUN_RLS)('job hse-expiry (integración)', () => {
       ['Vence el día 31', 'upcoming'],
       ['Ya vencida', 'expired'],
     ]);
-    const mails = sent.slice(before);
+    // Solo los de la suite: en una base con datos propios el job también avisa a otras empresas.
+    const ours = new Set<string>(Object.values(MAIL));
+    const mails = sent.slice(before).filter((m) => ours.has(String(m.to)));
     expect(mails.map((m) => String(m.to)).sort()).toEqual([MAIL.E1, MAIL.E2].sort());
     const toE1 = mails.find((m) => String(m.to) === MAIL.E1)!;
     expect(toE1.text).toContain('Vence el día 31');
