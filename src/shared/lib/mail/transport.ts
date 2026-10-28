@@ -75,6 +75,40 @@ export interface MailAttachment {
 /** Firma del emisor, para poder inyectar un doble en los tests de los jobs. */
 export type SendMail = (message: MailMessage) => Promise<boolean>;
 
+/**
+ * Lista blanca de dominios de destino (`MAIL_ALLOWED_DOMAINS`, separados por comas).
+ *
+ * Sirve para instancias de demostración o prueba que tienen SMTP real pero datos sembrados con
+ * direcciones ficticias: los correos a otros dominios se descartan (se loguean) en lugar de rebotar
+ * contra el servidor SMTP y dañar su reputación. Vacía o ausente = sin restricción (producción).
+ */
+export function allowedMailDomains(): readonly string[] {
+  return (process.env.MAIL_ALLOWED_DOMAINS ?? '')
+    .split(',')
+    .map((domain) => domain.trim().toLowerCase())
+    .filter((domain) => domain.length > 0);
+}
+
+/** Deja solo las direcciones cuyo dominio está en la lista blanca (sin lista, deja todas). */
+export function filterByAllowedDomains(
+  addresses: readonly string[],
+  allowed: readonly string[]
+): { kept: string[]; dropped: string[] } {
+  if (allowed.length === 0) return { kept: [...addresses], dropped: [] };
+  const kept: string[] = [];
+  const dropped: string[] = [];
+  for (const address of addresses) {
+    const domain = address.trim().toLowerCase().split('@').pop() ?? '';
+    (allowed.includes(domain) ? kept : dropped).push(address);
+  }
+  return { kept, dropped };
+}
+
+function toList(value: string | readonly string[] | undefined): string[] {
+  if (!value) return [];
+  return typeof value === 'string' ? [value] : [...value];
+}
+
 function joinAddresses(value: string | readonly string[] | undefined): string | undefined {
   if (!value) return undefined;
   const list = typeof value === 'string' ? [value] : value;
@@ -89,7 +123,29 @@ function joinAddresses(value: string | readonly string[] | undefined): string | 
  * token ya quedó emitido, el indicador ya quedó guardado — y reventar acá sólo agregaría una
  * segunda falla. Quien necesite que el fallo se vea (los jobs) lo registra en `jobs_runs`.
  */
-export const sendMail: SendMail = async (message) => {
+export const sendMail: SendMail = async (rawMessage) => {
+  const allowed = allowedMailDomains();
+  const message: MailMessage =
+    allowed.length === 0
+      ? rawMessage
+      : {
+          ...rawMessage,
+          to: filterByAllowedDomains(toList(rawMessage.to), allowed).kept,
+          cc: filterByAllowedDomains(toList(rawMessage.cc), allowed).kept,
+          bcc: filterByAllowedDomains(toList(rawMessage.bcc), allowed).kept,
+        };
+  if (allowed.length > 0) {
+    const dropped = filterByAllowedDomains(
+      [...toList(rawMessage.to), ...toList(rawMessage.cc), ...toList(rawMessage.bcc)],
+      allowed
+    ).dropped;
+    if (dropped.length > 0) {
+      logger.info('Mail a dominios fuera de MAIL_ALLOWED_DOMAINS: se descartan esos destinatarios', {
+        data: { dropped: dropped.length, subject: rawMessage.subject },
+      });
+    }
+  }
+
   const to = joinAddresses(message.to);
   if (!to) {
     logger.warn('Mail sin destinatarios: no se envía', { data: { subject: message.subject } });

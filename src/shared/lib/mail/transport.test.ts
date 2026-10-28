@@ -46,3 +46,44 @@ describe('sendMail con adjuntos', () => {
     expect(message.attachments).toBeUndefined();
   });
 });
+
+describe('sendMail con MAIL_ALLOWED_DOMAINS', () => {
+  beforeEach(() => {
+    vi.stubEnv('SMTP_HOST', 'smtp.test');
+    resetMailTransport();
+    sendMailSpy.mockReset();
+    sendMailSpy.mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    resetMailTransport();
+  });
+
+  it('sin la variable envía a cualquier dominio', async () => {
+    expect(await sendMail({ to: 'a@cualquiera.com', subject: 'x', text: 'y' })).toBe(true);
+    expect(sendMailSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('con la variable descarta los destinatarios de otros dominios', async () => {
+    vi.stubEnv('MAIL_ALLOWED_DOMAINS', 'codecontrol.com.ar, Ejemplo.COM');
+    const ok = await sendMail({
+      to: ['ok@codecontrol.com.ar', 'ficticio@patagonia-demo.com.ar'],
+      cc: ['otro@ejemplo.com'],
+      bcc: ['x@fuera.com'],
+      subject: 'x',
+      text: 'y',
+    });
+    expect(ok).toBe(true);
+    const [message] = sendMailSpy.mock.calls[0];
+    expect(message.to).toBe('ok@codecontrol.com.ar');
+    expect(message.cc).toBe('otro@ejemplo.com');
+    expect(message.bcc).toBeUndefined();
+  });
+
+  it('si ningún destinatario queda permitido no envía nada', async () => {
+    vi.stubEnv('MAIL_ALLOWED_DOMAINS', 'codecontrol.com.ar');
+    expect(await sendMail({ to: 'ficticio@patagonia-demo.com.ar', subject: 'x', text: 'y' })).toBe(false);
+    expect(sendMailSpy).not.toHaveBeenCalled();
+  });
+});
