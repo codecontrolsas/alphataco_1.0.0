@@ -64,6 +64,8 @@ jobs:
           sed -i 's/^JOBS_TOKEN=.*/JOBS_TOKEN=devtoken/' .env.docker
           sed -i "s/^BETTER_AUTH_SECRET=.*/BETTER_AUTH_SECRET=$(openssl rand -hex 24)/" .env.docker
           printf 'RUN_SEED=true\nSEED_COMPANY_NAME=E2E Empresa\n' >> .env.docker
+          # Token de escritura del control de módulos (F3): lo usa e2e/modules.spec.ts para apagar y encender un módulo.
+          echo 'ADMIN_MODULES_TOKEN=e2e-modules-token' >> .env.docker
           [ -z "$STORAGE_IMAGE" ] || echo "STORAGE_IMAGE=$STORAGE_IMAGE" >> .env.docker
 
       # Version de Playwright del lockfile: es la key del cache del navegador.
@@ -168,6 +170,7 @@ jobs:
           CI: 'true'
           # Mismo host que NEXT_PUBLIC_BASE_URL: Better Auth valida el origen de los POST.
           E2E_BASE_URL: http://localhost:3000
+          E2E_ADMIN_MODULES_TOKEN: e2e-modules-token
         run: npx playwright test
 
       - name: Errores de RLS en los logs de la app

@@ -8,6 +8,7 @@ import { portalLogin, portalLogout } from '@/features/Portal/actions/session.ser
 import { assertPortalEnabled } from '@/features/Portal/lib/feature-gate';
 import { CircleAlert, CircleCheck } from 'lucide-react';
 import { redirect } from 'next/navigation';
+import { connection } from 'next/server';
 import { Suspense } from 'react';
 
 export const metadata = { title: 'Ingresar' };
@@ -23,7 +24,9 @@ const DENIED_MESSAGES: Record<string, string> = {
 };
 
 async function PortalLoginContent({ searchParams }: PortalLoginPageProps) {
-  // Antes de saber la empresa, el módulo `portal` se corta por la instancia (F3).
+  // Antes de saber la empresa, el módulo `portal` se corta por la instancia (F3). Dato por request: `connection()`
+  // antes de la consulta (con `cacheComponents`, leer la base sin eso rompe el prerender).
+  await connection();
   await assertPortalEnabled(null);
   const [session, { activado }] = await Promise.all([getPortalSession(), searchParams]);
   if (session.ok) redirect('/portal');
