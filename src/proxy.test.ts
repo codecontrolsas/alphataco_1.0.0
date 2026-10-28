@@ -52,3 +52,48 @@ describe('proxy: enlaces viejos al manual', () => {
     expect(response.headers.get('location')).toContain('/login');
   });
 });
+
+describe('proxy: quién entra al dashboard', () => {
+  beforeEach(() => {
+    getSession.mockResolvedValue({
+      user: { id: '22222222-2222-4222-8222-222222222222', isAnonymous: false },
+      session: { company: COMPANY, token: 't' },
+    });
+    queryRaw.mockResolvedValue([{ employee_only: false }]);
+  });
+
+  it('solo empleado (legajo sin membresía ni empresa propia): va al portal, aunque la sesión tenga empresa', async () => {
+    queryRaw.mockResolvedValue([{ employee_only: true }]);
+    const response = await run('http://app.test/dashboard/employee');
+    expect(response.headers.get('location')).toBe('http://app.test/portal');
+  });
+
+  it('sin perfil (la consulta no devuelve fila) no se lo trata como empleado', async () => {
+    queryRaw.mockResolvedValue([]);
+    const response = await run('http://app.test/dashboard');
+    expect(response.headers.get('location')).toBeNull();
+  });
+
+  it('el operario anónimo del QR va a /maintenance', async () => {
+    getSession.mockResolvedValue({ user: { id: 'x', isAnonymous: true }, session: { company: COMPANY, token: 't' } });
+    const response = await run('http://app.test/dashboard');
+    expect(response.headers.get('location')).toBe('http://app.test/maintenance');
+  });
+
+  it('sin empresa resoluble va al alta de empresa (y ahí no rebota)', async () => {
+    getSession.mockResolvedValue({
+      user: { id: '22222222-2222-4222-8222-222222222222', isAnonymous: false },
+      session: { company: null, token: 't' },
+    });
+    expect((await run('http://app.test/dashboard')).headers.get('location')).toBe(
+      'http://app.test/dashboard/configuration/companies/new'
+    );
+    expect((await run('http://app.test/dashboard/configuration/companies/new')).headers.get('location')).toBeNull();
+  });
+
+  it('sin sesión recuerda adónde iba (solo en GET)', async () => {
+    getSession.mockResolvedValue(null);
+    const response = await run('http://app.test/dashboard/hse?tab=actas');
+    expect(response.headers.get('location')).toBe('http://app.test/login?next=%2Fdashboard%2Fhse%3Ftab%3Dactas');
+  });
+});

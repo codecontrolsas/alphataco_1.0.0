@@ -22,6 +22,10 @@
 # mismo efecto que tendria el job corriendo de verdad a las 00:30, y ambas operaciones son
 # idempotentes, pero conviene saberlo antes de correrlo sobre una base que estas usando para
 # probar otra cosa. En CI la base arranca vacia, asi que no aplica.
+#
+# El de avisos HSE (`hse-expiry.integration.test.ts`) corre con la fecha de HOY y con fechas futuras (+1, +31 y +32
+# dias) sobre TODAS las empresas: en una base con datos propios deja avisos de vencimiento de esas fechas. Borra las
+# filas de `jobs_runs` que abrio, asi no bloquea la corrida real del dia.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -47,4 +51,5 @@ npx vitest run --no-file-parallelism \
   src/features/Jobs/lib/auth.test.ts \
   src/features/Jobs/jobs/jobs.integration.test.ts \
   src/features/Jobs/jobs/warehouse-batch-expiry.integration.test.ts \
+  src/features/Jobs/jobs/hse-expiry.integration.test.ts \
   src/features/Notifications/lib/dispatch.integration.test.ts

@@ -7,8 +7,11 @@
  *   - Manejo defensivo: a choferes, v2 publicada hace pocos días (la v1 aceptada queda como historia).
  *   - EPP en taller: al sector Mantenimiento, v1, ~50% aceptado.
  *   - Trabajo en altura: borrador (no lo ve nadie).
- * Capacitaciones (fase 3): matafuegos (a todos, con límite de tiempo), manejo en ruta (choferes) y un borrador, con
- * intentos aprobados, desaprobados y sin intentos rendidos con las funciones reales del examen.
+ * Capacitaciones (fase 3): matafuegos (a todos, con límite de tiempo), manejo en ruta (choferes), primeros auxilios
+ * (publicada hace más de un año) y un borrador, con intentos aprobados, desaprobados y sin intentos rendidos con las
+ * funciones reales del examen.
+ * Avisos de vencimiento (job `hse-expiry`, ventana de 30 días): una aprobación de primeros auxilios vence en 10 días y
+ * otra venció hace 5, y el instructivo de EPP vence en 15 días; así el job tiene qué avisar cualquier día que se corra.
  * Actas y constancias (fase 4): capacitadores habituales, un acta CERRADA de matafuegos (con firmas antes y después
  * del cierre) y un acta en borrador de manejo en ruta, todo con las funciones reales (firma y cierre). Los PDF y el
  * registro en el legajo se generan en la primera descarga, como en producción.
@@ -72,6 +75,8 @@ const DOCS: DemoHseDoc[] = [
     publishedDaysAgo: [15],
     acceptedShare: 0.5,
     rejectedShare: 0,
+    // Vence dentro de la ventana de avisos (30 días): el job `hse-expiry` lo avisa a los del sector.
+    expiresInDays: 15,
   },
   {
     key: 'trabajo-altura',
@@ -341,6 +346,43 @@ const TRAININGS: DemoTraining[] = [
     exhaustedShare: 0.1,
   },
   {
+    key: 'primeros-auxilios',
+    title: 'Primeros auxilios',
+    kind: 'refresher',
+    description: 'Actualización anual: evaluación de la escena, RCP básica y control de hemorragias.',
+    targets: [{ kind: 'all' }],
+    // Publicada hace más de un año: hay aprobaciones a punto de vencer y vencidas (ver `pinTrainingExpiries`).
+    publishedDaysAgo: 400,
+    passingScore: 70,
+    maxAttempts: 2,
+    timeLimitMinutes: null,
+    validityMonths: 12,
+    materials: [
+      {
+        title: 'Guía de RCP básica',
+        kind: 'link',
+        url: 'https://www.argentina.gob.ar/salud/rcp',
+        required: false,
+      },
+    ],
+    questions: [
+      {
+        prompt: '¿Qué es lo primero que hay que hacer ante un accidentado?',
+        points: 1,
+        options: ['Evaluar que la escena sea segura', 'Moverlo a un lugar cómodo', 'Darle agua'],
+        correct: 0,
+      },
+      {
+        prompt: '¿Cuántas compresiones por minuto lleva la RCP en un adulto?',
+        points: 1,
+        options: ['Entre 100 y 120', 'Entre 40 y 60', 'Más de 200'],
+        correct: 0,
+      },
+    ],
+    passedShare: 0.35,
+    exhaustedShare: 0,
+  },
+  {
     key: 'altura',
     title: 'Trabajo en altura',
     kind: 'specific',
@@ -562,8 +604,59 @@ async function seedHseTrainings(ctx: Ctx): Promise<void> {
     await tx.$executeRaw`SELECT set_config('app.company_id', ${company.id}, true), set_config('app.employee_id', '', true), set_config('app.actor_kind', '', true)`;
   }
 
+  await pinTrainingExpiries(ctx);
   const assigned = await tx.hse_training_assignments.count({ where: { company_id: company.id } });
   ctx.log(`HSE: ${TRAININGS.length} capacitaciones, ${assigned} asignaciones, ${attempts} intentos rendidos`);
+}
+
+/** Aprobaciones de primeros auxilios con vencimiento fijo relativo a hoy: una vence en 10 días y otra venció hace 5. */
+const PINNED_EXPIRIES = [10, -5];
+
+/**
+ * Deja vencimientos visibles para el job `hse-expiry` (avisa lo que vence en ≤ 30 días o ya venció): las dos primeras
+ * aprobaciones de primeros auxilios (orden estable por empleado) pasan a vencer en los días de `PINNED_EXPIRIES`. La
+ * fecha de aprobación se corre a «vencimiento − vigencia» (la misma cuenta de `hse_grade_attempt`), sin triggers como
+ * el resto de las fechas al pasado. Cada reset las vuelve a calcular contra el día de hoy.
+ */
+async function pinTrainingExpiries(ctx: Ctx): Promise<void> {
+  const { tx, cal } = ctx;
+  const training = TRAININGS.find((t) => t.key === 'primeros-auxilios');
+  if (!training?.validityMonths) return;
+  const trainingId = demoId('hse-training', training.key);
+  const passed = await tx.hse_training_assignments.findMany({
+    where: { training_id: trainingId, status: 'passed', archived_at: null, passed_attempt_id: { not: null } },
+    orderBy: { employee_id: 'asc' },
+    take: PINNED_EXPIRIES.length,
+    select: { id: true, passed_attempt_id: true },
+  });
+  for (const [index, assignment] of passed.entries()) {
+    const validUntil = cal.ymd(PINNED_EXPIRIES[index] as number);
+    const approved = new Date(`${validUntil}T00:00:00Z`);
+    approved.setUTCMonth(approved.getUTCMonth() - training.validityMonths);
+    const submittedAt = cal.at(cal.offsetOf(approved.toISOString().slice(0, 10)), 11);
+    const startedAt = new Date(submittedAt.getTime() - 8 * 60_000);
+    await withoutTriggers(tx, async () => {
+      await tx.hse_training_attempts.update({
+        where: { id: assignment.passed_attempt_id as string },
+        data: { started_at: startedAt, submitted_at: submittedAt, deadline_at: null },
+        select: { id: true },
+      });
+      await tx.hse_training_answers.updateMany({
+        where: { attempt_id: assignment.passed_attempt_id as string },
+        data: { answered_at: submittedAt },
+      });
+      await tx.hse_training_assignments.update({
+        where: { id: assignment.id },
+        data: {
+          last_attempt_at: startedAt,
+          passed_at: submittedAt,
+          valid_until: new Date(`${validUntil}T00:00:00Z`),
+        },
+        select: { id: true },
+      });
+    });
+  }
+  ctx.log(`HSE: ${passed.length} aprobaciones con vencimiento fijo (avisos de vencimiento)`);
 }
 
 const INSTRUCTORS: Record<string, { kind: 'external'; fullName: string; license: string | null; roleTitle: string }[]> =
