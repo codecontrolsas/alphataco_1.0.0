@@ -72,7 +72,7 @@ export async function GET(
 
   if (!isStorageBucket(bucket)) return notFound();
   // HSE apagado en la instancia: sus archivos no se sirven.
-  if (bucket === 'hse-files' && !isHseEnabled()) return notFound();
+  if (bucket === 'hse-files' && !(await isHseEnabled())) return notFound();
 
   // Next ya decodifica cada segmento del catch-all (`getRouteMatcher` hace
   // `match.split('/').map(decode)`), y `buildStorageFileUrl` codifica segmento a segmento

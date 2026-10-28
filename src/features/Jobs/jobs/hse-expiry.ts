@@ -160,7 +160,8 @@ export async function runHseExpiryJob(deps: HseExpiryJobDeps = {}): Promise<JobS
     job: JOB,
     date,
     work: async (company) => {
-      if (!isHseEnabled()) return { skipped: true, reason: 'HSE apagado en la instancia' };
+      if (!(await isHseEnabled(company.id)))
+        return { skipped: true, reason: 'HSE apagado en la instancia o en la empresa' };
 
       const { candidates, trainings, currentAcks } = await collectCandidates(company.id, date, limit);
       const contacts = await employeeEmails(company.id, [...new Set(candidates.map((c) => c.employeeId))]);

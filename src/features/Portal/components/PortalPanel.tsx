@@ -1,4 +1,5 @@
 import { getPortalSession } from '@/features/Portal/actions/perimeter';
+import { assertPortalEnabled } from '@/features/Portal/lib/feature-gate';
 import { redirect } from 'next/navigation';
 import { ForcedPasswordChange } from './ForcedPasswordChange';
 import { PortalShell } from './PortalShell';
@@ -12,6 +13,8 @@ export async function PortalPanel({ children }: { children: React.ReactNode }) {
   if (!session.ok) redirect('/portal/login');
 
   const { employee } = session;
+  // Módulo `portal` apagado para la empresa del legajo (o en la instancia): el portal «no existe».
+  await assertPortalEnabled(employee.companyId);
   const shellEmployee = {
     companyName: employee.companyName,
     firstname: employee.firstname,

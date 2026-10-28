@@ -42,7 +42,7 @@ type HseAction = 'create' | 'update' | 'delete' | 'approve';
 async function requireHse(
   action: HseAction
 ): Promise<{ ok: true; companyId: string; profileId: string; credentialId: string } | { ok: false; error: string }> {
-  if (!isHseEnabled()) return { ok: false, error: 'El módulo HSE no está disponible' };
+  if (!(await isHseEnabled())) return { ok: false, error: 'El módulo HSE no está disponible' };
   if (!(await checkPermissionServer('hse', 'documentos-hse', action))) return { ok: false, error: NO_PERMISSION };
   const [profile, companyId] = await Promise.all([getServerAuthProfile(), getActiveCompanyId()]);
   if (!profile) return { ok: false, error: SESSION_EXPIRED };

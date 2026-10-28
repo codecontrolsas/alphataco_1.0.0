@@ -5,6 +5,7 @@ import { AuthSkeleton } from '@/features/Auth/components/AuthSkeleton';
 import { CredentialsLoginForm } from '@/features/Auth/components/CredentialsLoginForm';
 import { getPortalSession } from '@/features/Portal/actions/perimeter';
 import { portalLogin, portalLogout } from '@/features/Portal/actions/session.server';
+import { assertPortalEnabled } from '@/features/Portal/lib/feature-gate';
 import { CircleAlert, CircleCheck } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
@@ -22,6 +23,8 @@ const DENIED_MESSAGES: Record<string, string> = {
 };
 
 async function PortalLoginContent({ searchParams }: PortalLoginPageProps) {
+  // Antes de saber la empresa, el módulo `portal` se corta por la instancia (F3).
+  await assertPortalEnabled(null);
   const [session, { activado }] = await Promise.all([getPortalSession(), searchParams]);
   if (session.ok) redirect('/portal');
 

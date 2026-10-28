@@ -16,7 +16,7 @@ import { hseDocumentTypeSchema, type HseDocumentTypeValues } from '../schemas/do
 const logger = new Logger('features/Hse/types');
 
 async function requireSettings(action: 'create' | 'update' | 'delete') {
-  if (!isHseEnabled()) return null;
+  if (!(await isHseEnabled())) return null;
   if (!(await checkPermissionServer('hse', 'configuracion-hse', action))) return null;
   const [profile, companyId] = await Promise.all([getServerAuthProfile(), getActiveCompanyId()]);
   return profile ? { companyId, credentialId: profile.credentialId } : null;

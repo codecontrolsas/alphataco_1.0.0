@@ -47,7 +47,7 @@ const EXPORT_LIMIT = 20_000;
 const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
 
 async function resolveCompanyId(): Promise<string | null> {
-  if (!isHseEnabled()) return null;
+  if (!(await isHseEnabled())) return null;
   if (!(await checkPermissionServer('hse', 'capacitaciones', 'view'))) return null;
   return getActiveCompanyId();
 }

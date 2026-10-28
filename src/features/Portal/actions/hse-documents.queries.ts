@@ -80,7 +80,7 @@ const STATUS_ORDER = { pending: 0, rejected: 1, accepted: 2 } as const;
 
 /** Documentos vigentes del empleado: pendientes primero, después los más nuevos. Vacío si HSE está apagado. */
 export const getMyHseDocuments = cache(async (employee: PortalEmployee): Promise<PortalHseDocument[]> => {
-  if (!isHseEnabled()) return [];
+  if (!(await isHseEnabled())) return [];
   const rows = await fetchAcks(employee.employeeId);
   return (
     rows
@@ -93,7 +93,7 @@ export const getMyHseDocuments = cache(async (employee: PortalEmployee): Promise
 
 /** Un documento vigente del empleado, o `null` (no existe, no es suyo, ya no le aplica o HSE apagado). */
 export async function getMyHseDocument(employee: PortalEmployee, ackId: string): Promise<PortalHseDocument | null> {
-  if (!isHseEnabled() || !UUID_RE.test(ackId)) return null;
+  if (!(await isHseEnabled()) || !UUID_RE.test(ackId)) return null;
   const row = await prisma.hse_document_acknowledgements.findFirst({
     where: { id: ackId, ...vigentWhere(employee.employeeId) },
     select: ACK_SELECT,

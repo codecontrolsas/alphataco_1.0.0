@@ -15,7 +15,7 @@ export default async function HsePage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  assertHseEnabled();
+  await assertHseEnabled();
   const resolvedSearchParams = await searchParams;
   return <HseComponent searchParams={resolvedSearchParams} />;
 }

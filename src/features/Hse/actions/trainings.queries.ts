@@ -21,7 +21,7 @@ import type { HseTargetInput } from '../schemas/documents';
 const logger = new Logger('features/Hse/trainings-queries');
 
 export const getHseTrainingDetail = cache(async (trainingId: string) => {
-  if (!isHseEnabled() || !UUID_RE.test(trainingId)) return null;
+  if (!(await isHseEnabled()) || !UUID_RE.test(trainingId)) return null;
   if (!(await checkPermissionServer('hse', 'capacitaciones', 'view'))) return null;
   const companyId = await getActiveCompanyId();
 
