@@ -1,7 +1,8 @@
 import 'server-only';
 
 import { Logger } from '@/lib/logger';
-import { loadCompanyLogo, loadReactPdf } from '@/shared/lib/pdf/react-pdf.server';
+import { loadCompanyLogo, loadReactPdf, toPdfDownload } from '@/shared/lib/pdf/react-pdf.server';
+import type { PdfDownload } from '@/shared/lib/pdf/types';
 import { prisma } from '@/shared/lib/prisma';
 import { storageDownload, storageRemove, storageUpload } from '@/shared/lib/storage';
 import { buildStorageDownloadUrl } from '@/shared/lib/storage-url';
@@ -32,7 +33,11 @@ const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest(
 /** Sufijo único por generación: dos descargas simultáneas no se pisan el archivo (la que pierde borra el suyo). */
 const generation = () => randomUUID().slice(0, 8);
 
-export type HsePdfResult = { ok: true; url: string } | { ok: false; error: string };
+/**
+ * `url`: el archivo guardado, por el proxy con perímetro. `file`: un anulado, generado en el momento CON la marca
+ * "ANULADA" (el original guardado no se toca y queda para auditoría; nunca se entrega limpio un documento anulado).
+ */
+export type HsePdfResult = { ok: true; url: string } | { ok: true; file: PdfDownload } | { ok: false; error: string };
 
 const ALTERED = 'El PDF guardado no coincide con su huella: no se entrega. Avisá al área de HSE.';
 const NOT_GENERATED = 'No se pudo generar el PDF. Intentá de nuevo en unos minutos.';
@@ -119,7 +124,19 @@ export async function ensureCertificatePdf(
   const certificate = await findCertificate(certificateId, options.employeeId);
   if (!certificate) return null;
 
-  const needsFile = !certificate.voided_at && !certificate.employee_document_id;
+  if (certificate.voided_at) {
+    try {
+      const bytes = await renderCertificate(certificate);
+      return {
+        ok: true,
+        file: toPdfDownload({ filename: `constancia-anulada-${certificate.id.slice(0, 8)}.pdf`, content: bytes }),
+      };
+    } catch (error) {
+      logger.error('No se pudo generar el PDF de la constancia anulada', { data: { error, certificateId } });
+      return { ok: false, error: NOT_GENERATED };
+    }
+  }
+  const needsFile = !certificate.employee_document_id;
 
   if (certificate.pdf_path) {
     if (!(await verifyStored(certificate.pdf_path, certificate.pdf_sha256))) {
@@ -203,6 +220,22 @@ async function registerInEmployeeFile(
   }
 }
 
+async function renderRecord(record: {
+  company_id: string;
+  content: unknown;
+  content_sha256: string | null;
+  voided_at: Date | null;
+  void_reason: string | null;
+}): Promise<Uint8Array> {
+  const content = recordContentSchema.parse(record.content);
+  const [rp, logo] = await Promise.all([loadReactPdf(), companyLogo(record.company_id)]);
+  const voided =
+    record.voided_at && record.void_reason ? { at: record.voided_at.toISOString(), reason: record.void_reason } : null;
+  return new Uint8Array(
+    await rp.renderToBuffer(RecordPdfDocument(rp, content, { sha256: record.content_sha256 ?? '', voided }, logo))
+  );
+}
+
 /** PDF del acta cerrada o anulada (solo dashboard con permiso de actas). `null` si no se ve o es un borrador. */
 export async function ensureRecordPdf(recordId: string): Promise<HsePdfResult | null> {
   const record = await prisma.hse_training_records.findFirst({
@@ -220,6 +253,19 @@ export async function ensureRecordPdf(recordId: string): Promise<HsePdfResult | 
   });
   if (!record || !record.content || !record.content_sha256) return null;
 
+  if (record.voided_at) {
+    try {
+      const bytes = await renderRecord(record);
+      return {
+        ok: true,
+        file: toPdfDownload({ filename: `acta-anulada-${record.id.slice(0, 8)}.pdf`, content: bytes }),
+      };
+    } catch (error) {
+      logger.error('No se pudo generar el PDF del acta anulada', { data: { error, recordId } });
+      return { ok: false, error: NOT_GENERATED };
+    }
+  }
+
   if (record.pdf_path) {
     if (!(await verifyStored(record.pdf_path, record.pdf_sha256))) {
       logger.error('Huella del PDF del acta distinta a la registrada', { data: { recordId, path: record.pdf_path } });
@@ -230,15 +276,7 @@ export async function ensureRecordPdf(recordId: string): Promise<HsePdfResult | 
 
   let bytes: Uint8Array;
   try {
-    const content = recordContentSchema.parse(record.content);
-    const [rp, logo] = await Promise.all([loadReactPdf(), companyLogo(record.company_id)]);
-    const voided =
-      record.voided_at && record.void_reason
-        ? { at: record.voided_at.toISOString(), reason: record.void_reason }
-        : null;
-    bytes = new Uint8Array(
-      await rp.renderToBuffer(RecordPdfDocument(rp, content, { sha256: record.content_sha256, voided }, logo))
-    );
+    bytes = await renderRecord(record);
   } catch (error) {
     logger.error('No se pudo generar el PDF del acta', { data: { error, recordId } });
     return { ok: false, error: NOT_GENERATED };

@@ -13,6 +13,7 @@ import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { isHseEnabled } from '../lib/feature-gate';
+import type { HsePdfDelivery } from '../lib/pdf-delivery';
 import { ensureCertificatePdf, ensureRecordPdf } from '../pdf/hse-pdf.server';
 import {
   hseInstructorSchema,
@@ -473,7 +474,7 @@ export async function closeHseRecord(recordId: string): Promise<ActionResult<{ p
   });
   logger.info('Acta HSE cerrada', { data: { recordId, pdf: pdf?.ok ?? false } });
   revalidateRecords(recordId);
-  return ok({ pdfUrl: pdf?.ok ? pdf.url : null });
+  return ok({ pdfUrl: pdf?.ok && 'url' in pdf ? pdf.url : null });
 }
 
 export async function voidHseRecord(recordId: string, input: { reason: string }): Promise<ActionResult<null>> {
@@ -519,14 +520,15 @@ export async function deleteHseRecordDraft(recordId: string): Promise<ActionResu
 // ============================================================================
 
 /** URL de descarga del PDF del acta (lo genera si falta) con la huella verificada. */
-export async function getHseRecordPdfUrl(recordId: string): Promise<ActionResult<{ url: string }>> {
+export async function getHseRecordPdfUrl(recordId: string): Promise<ActionResult<HsePdfDelivery>> {
   const auth = await requireAuth('actas', 'view');
   if (!auth.ok) return fail(auth.error);
   if (!UUID_RE.test(recordId)) return fail(NOT_FOUND);
   try {
     const result = await ensureRecordPdf(recordId);
     if (!result) return fail('El acta no existe o todavía es un borrador');
-    return result.ok ? ok({ url: result.url }) : fail(result.error);
+    if (!result.ok) return fail(result.error);
+    return ok('url' in result ? { url: result.url } : { file: result.file });
   } catch (error) {
     logger.error('Error al preparar el PDF del acta', { data: { error, recordId } });
     return fail('No se pudo preparar el PDF del acta');
@@ -534,7 +536,7 @@ export async function getHseRecordPdfUrl(recordId: string): Promise<ActionResult
 }
 
 /** URL de descarga de una constancia (con permiso de capacitaciones o de actas). */
-export async function getHseCertificateUrl(certificateId: string): Promise<ActionResult<{ url: string }>> {
+export async function getHseCertificateUrl(certificateId: string): Promise<ActionResult<HsePdfDelivery>> {
   if (!isHseEnabled()) return fail('El módulo HSE no está disponible');
   const [canTrainings, canRecords] = await Promise.all([
     checkPermissionServer('hse', 'capacitaciones', 'view'),
@@ -545,7 +547,8 @@ export async function getHseCertificateUrl(certificateId: string): Promise<Actio
   try {
     const result = await ensureCertificatePdf(certificateId);
     if (!result) return fail('La constancia no existe');
-    return result.ok ? ok({ url: result.url }) : fail(result.error);
+    if (!result.ok) return fail(result.error);
+    return ok('url' in result ? { url: result.url } : { file: result.file });
   } catch (error) {
     logger.error('Error al preparar la constancia', { data: { error, certificateId } });
     return fail('No se pudo preparar la constancia');

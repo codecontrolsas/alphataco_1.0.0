@@ -7,6 +7,7 @@ import { useMutation } from '@tanstack/react-query';
 import { Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getHseCertificateUrl, getHseRecordPdfUrl } from '../actions/records.server';
+import { deliverHsePdf } from '../lib/pdf-delivery';
 
 const logger = new Logger('Hse/HsePdfDownloadButton');
 
@@ -33,7 +34,7 @@ export function HsePdfDownloadButton({
   const download = useMutation({
     mutationFn: async () =>
       unwrapAction(kind === 'record' ? await getHseRecordPdfUrl(id) : await getHseCertificateUrl(id)),
-    onSuccess: ({ url }) => window.location.assign(url),
+    onSuccess: deliverHsePdf,
     onError: (error) => {
       logger.error('Error al descargar el PDF', { data: { error, kind, id } });
       toast.error(error instanceof Error ? error.message : 'No se pudo descargar el PDF');

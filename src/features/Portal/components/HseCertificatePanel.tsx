@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { PasswordInput } from '@/features/Auth/components/PasswordInput';
+import { deliverHsePdf } from '@/features/Hse/lib/pdf-delivery';
 import { getMyHseCertificateUrl, signHseCertificate } from '@/features/Portal/actions/hse-certificates.server';
 import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -61,7 +62,7 @@ export function HseCertificatePanel({
         setDownloadError(result.error);
         return;
       }
-      window.location.assign(result.data.url);
+      deliverHsePdf(result.data);
     });
 
   const onSign = (values: SignFormValues) =>

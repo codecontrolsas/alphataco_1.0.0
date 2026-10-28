@@ -2,6 +2,7 @@
 
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { isHseEnabled } from '@/features/Hse/lib/feature-gate';
+import type { HsePdfDelivery } from '@/features/Hse/lib/pdf-delivery';
 import { ensureCertificatePdf } from '@/features/Hse/pdf/hse-pdf.server';
 import { hseSignCertificateSchema, type HseSignCertificateValues } from '@/features/Hse/schemas/records';
 import { requirePortalEmployee, type PortalEmployee } from '@/features/Portal/actions/perimeter';
@@ -92,7 +93,7 @@ export async function signHseCertificate(
 }
 
 /** URL de descarga de UNA constancia propia (la RLS no deja ver las ajenas). Verifica la huella del archivo. */
-export async function getMyHseCertificateUrl(input: { certificateId: string }): Promise<ActionResult<{ url: string }>> {
+export async function getMyHseCertificateUrl(input: { certificateId: string }): Promise<ActionResult<HsePdfDelivery>> {
   const auth = await portalEmployee();
   if (!auth.ok) return fail(auth.error);
   if (typeof input?.certificateId !== 'string' || !UUID_RE.test(input.certificateId)) {
@@ -102,7 +103,7 @@ export async function getMyHseCertificateUrl(input: { certificateId: string }): 
     const result = await ensureCertificatePdf(input.certificateId, { employeeId: auth.employee.employeeId });
     if (!result) return fail('La constancia no existe.');
     if (!result.ok) return fail(result.error);
-    return ok({ url: result.url });
+    return ok('url' in result ? { url: result.url } : { file: result.file });
   } catch (error) {
     logger.error('Error al preparar la constancia', { data: { error, certificateId: input.certificateId } });
     return fail('No se pudo preparar la constancia. Intentá de nuevo.');

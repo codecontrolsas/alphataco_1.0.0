@@ -1,14 +1,17 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
 import { Logger } from '@/lib/logger';
-import { ConfirmReasonDialog } from '@/shared/components/common/ConfirmReasonDialog';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import { formatArgentinaDateTime, formatDateAr } from '@/shared/lib/argentina-time';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ban, FileSignature } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { fetchHseEmployeeCertificates, voidHseCertificate } from '../../../actions/records.server';
 import { HsePdfDownloadButton } from '../../../components/HsePdfDownloadButton';
 import { HSE_QUERY_KEYS } from '../../../lib/constants';
@@ -27,11 +30,25 @@ export function EmployeeCertificates({
 }) {
   const queryClient = useQueryClient();
   const [voiding, setVoiding] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
   const queryKey = [...HSE_QUERY_KEYS.trainingCompliance, trainingId, 'certificates', employeeId];
   const certificates = useQuery({
     queryKey,
     queryFn: () => fetchHseEmployeeCertificates(trainingId, employeeId),
     staleTime: 60 * 1000,
+  });
+  const voidMutation = useMutation({
+    mutationFn: async (v: { id: string; reason: string }) =>
+      unwrapAction(await voidHseCertificate(v.id, { reason: v.reason })),
+    onSuccess: () => {
+      toast.success('Constancia anulada');
+      setVoiding(null);
+      void queryClient.invalidateQueries({ queryKey: HSE_QUERY_KEYS.all });
+    },
+    onError: (error) => {
+      logger.error('Error al anular la constancia', { data: { error } });
+      toast.error(error instanceof Error ? error.message : 'No se pudo anular la constancia');
+    },
   });
 
   return (
@@ -76,41 +93,65 @@ export function EmployeeCertificates({
                   size="sm"
                   accessibleLabel={`Descargar la constancia de ${employeeLabel}`}
                 />
-                {certificates.data.canVoid && !c.voidedAt && (
+                {certificates.data.canVoid && !c.voidedAt && voiding !== c.id && (
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     className="min-h-11 sm:min-h-8"
-                    onClick={() => setVoiding(c.id)}
+                    onClick={() => {
+                      setReason('');
+                      setVoiding(c.id);
+                    }}
                   >
                     <Ban aria-hidden="true" className="size-4" /> Anular
                   </Button>
                 )}
               </div>
+              {voiding === c.id && (
+                // En línea, dentro del mismo diálogo: nada de un modal encima de otro.
+                <div className="space-y-2 rounded-md border border-destructive/40 p-3">
+                  <p className="text-sm text-pretty">
+                    La constancia no se borra: queda anulada con el motivo y su documento del legajo pasa a «Ya no
+                    aplica». {employeeLabel} puede volver a firmar su aprobación vigente.
+                  </p>
+                  <Label htmlFor={`void-${c.id}`}>Motivo</Label>
+                  <Textarea
+                    id={`void-${c.id}`}
+                    rows={2}
+                    value={reason}
+                    placeholder="Por qué se anula (queda registrado)"
+                    onChange={(e) => setReason(e.target.value)}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      className="min-h-11 sm:min-h-8"
+                      disabled={reason.trim().length < 5 || voidMutation.isPending}
+                      aria-busy={voidMutation.isPending}
+                      onClick={() => voidMutation.mutate({ id: c.id, reason })}
+                    >
+                      {voidMutation.isPending ? 'Anulando…' : 'Confirmar anulación'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="min-h-11 sm:min-h-8"
+                      disabled={voidMutation.isPending}
+                      onClick={() => setVoiding(null)}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              )}
             </li>
           ))}
         </ul>
       )}
-      <ConfirmReasonDialog
-        open={voiding !== null}
-        onOpenChange={(open) => !open && setVoiding(null)}
-        title="¿Anular la constancia?"
-        description={`La constancia de ${employeeLabel} no se borra: queda anulada con el motivo, y su documento del legajo pasa a "Ya no aplica". El empleado puede volver a firmar su aprobación vigente.`}
-        confirmLabel="Anular"
-        pendingLabel="Anulando…"
-        destructive
-        motive={{ label: 'Motivo', placeholder: 'Por qué se anula (queda registrado)' }}
-        run={(reason) => voidHseCertificate(voiding ?? '', { reason })}
-        onDone={() => void queryClient.invalidateQueries({ queryKey: HSE_QUERY_KEYS.all })}
-        messages={{
-          success: 'Constancia anulada',
-          errorFallback: 'No se pudo anular la constancia',
-          logError: 'Error al anular la constancia',
-        }}
-        logger={logger}
-        resetOnClose
-      />
     </section>
   );
 }
