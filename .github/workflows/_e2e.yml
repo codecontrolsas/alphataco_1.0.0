@@ -168,7 +168,7 @@ jobs:
       - name: Ejecutar E2E
         env:
           CI: 'true'
-          # Mismo host que NEXT_PUBLIC_BASE_URL: Better Auth valida el origen de los POST.
+          # Mismo host que APP_BASE_URL (.env.docker): Better Auth valida el origen de los POST.
           E2E_BASE_URL: http://localhost:3000
           E2E_ADMIN_MODULES_TOKEN: e2e-modules-token
         run: npx playwright test

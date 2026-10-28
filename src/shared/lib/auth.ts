@@ -1,6 +1,8 @@
 import 'server-only';
 
+import { isMobileApiEnabled } from '@/features/MobileApi/lib/config';
 import { Logger } from '@/lib/logger';
+import { appBaseUrl } from '@/shared/lib/app-url';
 import {
   LOGIN_BY_EMAIL,
   LOGIN_BY_IP,
@@ -19,7 +21,6 @@ import { APIError, createAuthMiddleware, getIP } from 'better-auth/api';
 import { nextCookies } from 'better-auth/next-js';
 import { anonymous } from 'better-auth/plugins/anonymous';
 import { bearer } from 'better-auth/plugins/bearer';
-import { isMobileApiEnabled } from '@/features/MobileApi/lib/config';
 import { randomUUID } from 'node:crypto';
 
 /**
@@ -88,7 +89,7 @@ const RATE_LIMITED_PATHS: Record<string, { byEmail: RateLimitRule; byIp: RateLim
 
 export const auth = betterAuth({
   appName: 'alphataco',
-  baseURL: process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000',
+  baseURL: appBaseUrl(),
   secret: process.env.BETTER_AUTH_SECRET,
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
 

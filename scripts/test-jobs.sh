@@ -34,7 +34,7 @@ cd "$(dirname "$0")/.."
 source scripts/lib/integration-env.sh
 # El test fija su propio JOBS_TOKEN; este valor solo evita que quede indefinido al importar.
 export JOBS_TOKEN="${JOBS_TOKEN:-devtoken}"
-export NEXT_PUBLIC_BASE_URL="${NEXT_PUBLIC_BASE_URL:-http://localhost:3000}"
+export APP_BASE_URL="${APP_BASE_URL:-http://localhost:3000}"
 
 echo "==> Aplicando migraciones pendientes..."
 npx prisma migrate deploy

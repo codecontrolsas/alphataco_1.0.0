@@ -44,7 +44,7 @@ jobs:
         run: |
           {
             echo 'build_args<<EOF'
-            for k in NEXT_PUBLIC_PROJECT_URL NEXT_PUBLIC_BASE_URL NEXT_PUBLIC_POSTHOG_KEY NEXT_PUBLIC_POSTHOG_HOST NEXT_PUBLIC_SHOW_LOGS; do
+            for k in NEXT_PUBLIC_POSTHOG_KEY NEXT_PUBLIC_POSTHOG_HOST NEXT_PUBLIC_SHOW_LOGS; do
               v=$(sed -n "s/^${k}=//p" .env.docker.example | head -1)
               echo "${k}=${v}"
             done

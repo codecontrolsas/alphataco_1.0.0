@@ -13,7 +13,7 @@ import { createAuthClient } from 'better-auth/react';
  * No expone ninguna vía para escribir los claims de empresa/legajo: son `input: false` en el
  * servidor (ver `shared/lib/auth.ts`).
  */
+// Sin `baseURL`: Better Auth usa el origen de la página (`/api/auth`), así que la misma imagen sirve para cualquier dominio.
 export const authClient = createAuthClient({
-  baseURL: process.env.NEXT_PUBLIC_BASE_URL || undefined,
   plugins: [anonymousClient()],
 });

@@ -3,29 +3,29 @@
 # Hoy la usan las personas como referencia al dar de alta una instancia; los scripts y workflows que la leen
 # (`scripts/instance/new.sh`, perfiles del compose) son parte del plan: ver docs/arquitectura/RUNBOOK-NUEVA-INSTANCIA.md.
 # Mientras tanto, lo que sí está en uso son las variables de repo equivalentes (REGISTRY_HOST, IMAGE_NAME, CI_RUNNER,
-# NEXT_PUBLIC_BASE_URL, ...). Los secretos NO van acá.
+# APP_BASE_URL, ...). Los secretos NO van acá.
 
-cliente: acme                      # slug: nombre del repo, de la imagen y del proyecto en Dokploy
-base: v1.4.1                       # tag del repo base del que se clonó (para saber qué arreglos le faltan)
-dominio: gestion.acme.com          # NEXT_PUBLIC_BASE_URL = https://<dominio>
-empresa: Acme S.A.                 # SEED_COMPANY_NAME del primer deploy
+cliente: acme # slug: nombre del repo, de la imagen y del proyecto en Dokploy
+base: v1.4.1 # tag del repo base del que se clonó (para saber qué arreglos le faltan)
+dominio: gestion.acme.com # APP_BASE_URL (runtime) = https://<dominio>
+empresa: Acme S.A. # SEED_COMPANY_NAME del primer deploy
 
 registro:
-  host: ghcr.io                    # REGISTRY_HOST
-  imagen: acme/gestion             # IMAGE_NAME
+  host: ghcr.io # REGISTRY_HOST
+  imagen: acme/gestion # IMAGE_NAME
 
 ci:
-  runner: ""                       # CI_RUNNER; vacío = runner de GitHub, "blacksmith-2vcpu-ubuntu-2404" = Blacksmith (requiere su GitHub App)
+  runner: '' # CI_RUNNER; vacío = runner de GitHub, "blacksmith-2vcpu-ubuntu-2404" = Blacksmith (requiere su GitHub App)
 
-modulos:                           # módulos activos de la instancia
+modulos: # módulos activos de la instancia
   - operaciones
   - mantenimiento
   - almacenes
   - documentacion
 
 mobile:
-  enabled: true                    # false: no se levantan api, outbox/push ni sync
-  offline: true                    # false: la app funciona solo online (sin motor de sincronización)
+  enabled: true # false: no se levantan api, outbox/push ni sync
+  offline: true # false: la app funciona solo online (sin motor de sincronización)
   push: true
 
 vps:

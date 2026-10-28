@@ -84,8 +84,6 @@ RUN --mount=type=cache,target=/root/.npm \
 # standalone, la usa el servicio `migrate` del docker-compose local.
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
-ARG NEXT_PUBLIC_PROJECT_URL
-ARG NEXT_PUBLIC_BASE_URL
 ARG NEXT_PUBLIC_POSTHOG_KEY
 ARG NEXT_PUBLIC_POSTHOG_HOST
 ARG NEXT_PUBLIC_PREPARTE_BUCKET
@@ -93,20 +91,15 @@ ARG NEXT_PUBLIC_SHOW_LOGS
 # NODE_OPTIONS: el heap por defecto de Node se calcula segun la memoria visible y
 # se queda corto para `next build` (muere con "heap out of memory"). Solo aplica
 # a este stage, no al runtime.
-ENV NEXT_PUBLIC_PROJECT_URL=$NEXT_PUBLIC_PROJECT_URL \
-    NEXT_PUBLIC_BASE_URL=$NEXT_PUBLIC_BASE_URL \
-    NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY \
+ENV NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY \
     NEXT_PUBLIC_POSTHOG_HOST=$NEXT_PUBLIC_POSTHOG_HOST \
     NEXT_PUBLIC_PREPARTE_BUCKET=$NEXT_PUBLIC_PREPARTE_BUCKET \
     NEXT_PUBLIC_SHOW_LOGS=$NEXT_PUBLIC_SHOW_LOGS \
     DATABASE_URL=postgresql://build:build@localhost:5432/build \
     NEXT_TELEMETRY_DISABLED=1 \
     NODE_OPTIONS=--max-old-space-size=8192
-# Las NEXT_PUBLIC_* se hornean en el bundle. Sin BASE_URL, auth.ts y los mails
-# caen a http://localhost:3000 y el build pasaria igual, dejando localhost en
-# produccion sin ningun aviso. Se corta aca.
-RUN test -n "$NEXT_PUBLIC_BASE_URL" \
-  || { echo "ERROR: falta el build-arg NEXT_PUBLIC_BASE_URL (no se hornea localhost en silencio)"; exit 1; }
+# La URL base de la app (APP_BASE_URL) NO se hornea: se lee en runtime, asi una misma imagen sirve para
+# cualquier dominio. Solo quedan como build-arg las NEXT_PUBLIC_* iguales para todas las instancias.
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npx prisma generate

@@ -2,8 +2,6 @@ name: alphataco
 
 # Build args comunes de la imagen Next (NEXT_PUBLIC_* quedan embebidas en el bundle).
 x-next-build-args: &next-build-args
-  NEXT_PUBLIC_PROJECT_URL: ${NEXT_PUBLIC_PROJECT_URL}
-  NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL}
   NEXT_PUBLIC_POSTHOG_KEY: ${NEXT_PUBLIC_POSTHOG_KEY}
   NEXT_PUBLIC_POSTHOG_HOST: ${NEXT_PUBLIC_POSTHOG_HOST}
   NEXT_PUBLIC_SHOW_LOGS: ${NEXT_PUBLIC_SHOW_LOGS:-false}

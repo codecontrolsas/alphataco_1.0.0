@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Logger } from '@/lib/logger';
+import { useAppOrigin } from '@/shared/hooks/useAppOrigin';
 import { toPng } from 'html-to-image';
 import { Copy, Download, Info, Printer } from 'lucide-react';
 import { useRef } from 'react';
@@ -16,7 +17,7 @@ interface OtherEquipmentQrProps {
 }
 
 export function OtherEquipmentQr({ equipmentId, equipmentLabel }: OtherEquipmentQrProps) {
-  const URLQR = process.env.NEXT_PUBLIC_BASE_URL;
+  const URLQR = useAppOrigin();
   const qrCodeRef = useRef<HTMLDivElement>(null);
   const qrUrl = `${URLQR}/maintenance?equipment=${equipmentId}`;
 

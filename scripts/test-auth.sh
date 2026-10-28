@@ -14,7 +14,7 @@ cd "$(dirname "$0")/.."
 source scripts/lib/integration-env.sh
 # El secreto solo tiene que existir y ser estable dentro de la corrida.
 export BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-test-secret-solo-para-los-tests-de-auth}"
-export NEXT_PUBLIC_BASE_URL="${NEXT_PUBLIC_BASE_URL:-http://localhost:3000}"
+export APP_BASE_URL="${APP_BASE_URL:-http://localhost:3000}"
 
 echo "==> Aplicando migraciones pendientes..."
 npx prisma migrate deploy
