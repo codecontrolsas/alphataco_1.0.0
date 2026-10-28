@@ -3,8 +3,8 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 /**
  * Autenticación máquina a máquina por token de servicio (`Authorization: Bearer <token>`).
  *
- * La usan `/api/jobs/*` (`JOBS_TOKEN`) y `/api/admin/v1/status` (`ADMIN_STATUS_TOKEN`). Es el único lugar
- * donde se compara el token, para que las dos rutas no diverjan.
+ * La usan `/api/jobs/*` (`JOBS_TOKEN`), `/api/admin/v1/status` (`ADMIN_STATUS_TOKEN`) y `/api/admin/v1/modules*`
+ * (`ADMIN_MODULES_TOKEN`, de escritura). Es el único lugar donde se compara el token, para que las rutas no diverjan.
  *
  * **Comparación en tiempo constante.** Con `===` el corte ocurre en el primer byte distinto,
  * y esa diferencia de tiempo permite adivinar el token byte a byte. Se sigue el criterio que

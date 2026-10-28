@@ -28,5 +28,13 @@ if [ "$RUN_SEED" = "true" ]; then
   node scripts/seed-company.ts --name "$SEED_COMPANY_NAME"
 fi
 
+# Instancias que muestran TODO (la demo): ENABLE_ALL_MODULES=true enciende todos los módulos en cada arranque, de forma
+# idempotente (una clave ya encendida no se toca ni se audita de nuevo; también borra los apagados por empresa).
+# Nunca en la instancia de un cliente: ahí lo contratado se enciende por la API de administración. Va después del seed.
+if [ "$ENABLE_ALL_MODULES" = "true" ]; then
+  echo "[entrypoint] ENABLE_ALL_MODULES=true -> encendiendo todos los modulos..."
+  node scripts/enable-all-modules.ts --allow-production
+fi
+
 echo "[entrypoint] arrancando Next standalone en ${HOSTNAME:-0.0.0.0}:${PORT:-3000}..."
 exec node server.js

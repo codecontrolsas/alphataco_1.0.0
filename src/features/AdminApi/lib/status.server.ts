@@ -6,6 +6,7 @@ import { Logger } from '@/lib/logger';
 import { readCompanyLimitStatus } from '@/shared/lib/instance-settings';
 import { prismaSystem } from '@/shared/lib/prisma-system';
 import { listMigrationsOnDisk } from './migrations-on-disk.server';
+import { getModulesStateSummary } from './modules.server';
 
 const logger = new Logger('features/AdminApi/status');
 
@@ -59,7 +60,7 @@ export async function getInstanceStatus() {
   await prismaSystem.$queryRaw`SELECT 1`;
   const latencyMs = Math.round(performance.now() - latencyStart);
 
-  const [migrationRows, onDisk, moduleRows, companyRows, userRows, sessionRows, jobRows, companyLimit] =
+  const [migrationRows, onDisk, moduleRows, companyRows, userRows, sessionRows, jobRows, companyLimit, modulesState] =
     await Promise.all([
       prismaSystem.$queryRaw<MigrationRow[]>`
       SELECT migration_name, finished_at, rolled_back_at
@@ -95,6 +96,11 @@ export async function getInstanceStatus() {
       WHERE started_at > NOW() - interval '30 days'
       GROUP BY job`,
       readCompanyLimitStatus(prismaSystem),
+      // Control de módulos (F3): si la base todavía no tiene la migración, `null` (no rompe el estado).
+      getModulesStateSummary().catch((error: unknown) => {
+        logger.warn('No se pudo leer el estado de los módulos', { data: { error } });
+        return null;
+      }),
     ]);
 
   // Migraciones: aplicadas / fallidas según _prisma_migrations; pendientes = carpetas en disco sin aplicar.
@@ -153,6 +159,7 @@ export async function getInstanceStatus() {
       pending_names: pendingNames,
       failed_names: failedNames,
     },
+    // Bandera de catálogo (`modules.is_active`): se conserva para el panel F2. El encendido real es `modules_state`.
     modules: moduleRows.map((row) => ({
       slug: row.slug,
       name: row.name,
@@ -161,6 +168,9 @@ export async function getInstanceStatus() {
       tabs_active: row.tabs_active,
       tabs_inactive_slugs: row.tabs_inactive_slugs,
     })),
+    // Control de módulos (F3): claves encendidas y apagadas en la instancia, empresas con apagados propios y la versión
+    // del estado. El detalle por empresa está en GET /api/admin/v1/modules.
+    modules_state: modulesState,
     counts: {
       companies_active: companyRows[0]?.companies_active ?? 0,
       companies_inactive: companyRows[0]?.companies_inactive ?? 0,

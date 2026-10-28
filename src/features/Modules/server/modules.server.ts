@@ -69,6 +69,23 @@ export const getEnabledModules = cache(async (): Promise<ReadonlySet<ModuleKey>>
   return getEnabledModulesFor(await activeCompanyIdOrNull());
 });
 
+/**
+ * Pestañas apagadas para la empresa activa (por módulo apagado, con la herencia): las usa el editor de roles para no
+ * ofrecer permisos de módulos apagados. Si la base falla, devuelve vacío (el editor se ve como antes de F3).
+ */
+export const getDisabledTabIds = cache(async (): Promise<ReadonlySet<string>> => {
+  await connection();
+  const companyId = await activeCompanyIdOrNull();
+  try {
+    const rows = await prismaSystem.$queryRaw<{ id: string }[]>`
+      SELECT public.app_disabled_tab_ids(${companyId}::uuid)::text AS id`;
+    return new Set(rows.map((row) => row.id));
+  } catch (error) {
+    logger.error('No se pudieron leer las pestañas apagadas', { data: { error, companyId } });
+    return new Set();
+  }
+});
+
 export async function isModuleEnabled(key: ModuleKey): Promise<boolean> {
   return key === CORE_MODULE || (await getEnabledModules()).has(key);
 }
