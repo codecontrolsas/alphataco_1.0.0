@@ -34,15 +34,16 @@ const logger = new Logger('Hse/InstructorsEditor');
 const formSchema = z
   .object({
     kind: z.enum(['internal', 'external']),
-    employeeId: z.string(),
-    fullName: z.string(),
+    // Opcionales: el campo del otro tipo se desmonta y queda sin valor.
+    employeeId: z.string().optional(),
+    fullName: z.string().optional(),
     roleTitle: z.string().trim().max(120, 'Máximo 120 caracteres'),
     license: z.string().trim().max(60, 'Máximo 60 caracteres'),
   })
   .superRefine((v, ctx) => {
     if (v.kind === 'internal' && !v.employeeId)
       ctx.addIssue({ code: 'custom', path: ['employeeId'], message: 'Elegí el empleado' });
-    if (v.kind === 'external' && v.fullName.trim().length < 3)
+    if (v.kind === 'external' && (v.fullName ?? '').trim().length < 3)
       ctx.addIssue({ code: 'custom', path: ['fullName'], message: 'Escribí el nombre' });
   });
 type FormValues = z.infer<typeof formSchema>;
@@ -122,8 +123,13 @@ export function InstructorsEditor({
   const onSubmit = (values: FormValues) => {
     const parsed = hseInstructorSchema.safeParse(
       values.kind === 'internal'
-        ? { kind: 'internal', employeeId: values.employeeId, roleTitle: values.roleTitle, license: values.license }
-        : { kind: 'external', fullName: values.fullName, roleTitle: values.roleTitle, license: values.license }
+        ? {
+            kind: 'internal',
+            employeeId: values.employeeId ?? '',
+            roleTitle: values.roleTitle,
+            license: values.license,
+          }
+        : { kind: 'external', fullName: values.fullName ?? '', roleTitle: values.roleTitle, license: values.license }
     );
     if (!parsed.success) {
       form.setError('root', { message: parsed.error.issues[0]?.message ?? 'Revisá los datos' });
@@ -225,7 +231,7 @@ export function InstructorsEditor({
                       ) : (
                         <EmployeePicker
                           options={options.data.employees}
-                          value={field.value}
+                          value={field.value ?? ''}
                           onChange={field.onChange}
                           label="Elegir el empleado capacitador"
                           invalid={Boolean(fieldState.error)}
@@ -243,7 +249,12 @@ export function InstructorsEditor({
                     <FormItem>
                       <FormLabel>Apellido y nombre</FormLabel>
                       <FormControl>
-                        <Input {...field} className="min-h-11 sm:min-h-9" autoComplete="off" />
+                        <Input
+                          {...field}
+                          value={field.value ?? ''}
+                          className="min-h-11 sm:min-h-9"
+                          autoComplete="off"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

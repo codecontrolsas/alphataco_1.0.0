@@ -24,7 +24,7 @@ import {
  *    `hse_expiry_notices` (lo ve en el inicio del portal) y le manda UN mail con todos sus avisos nuevos (si hay SMTP
  *    y tiene correo). La clave única `(empleado, ítem, vencimiento, ventana)` hace idempotente al aviso: el mismo
  *    vencimiento avisa una vez "por vencer" y otra "vencido"; una aprobación nueva (otro vencimiento) vuelve a avisar.
- *    Los mails `pending`/`failed` se reintentan en cada corrida. Ventana por umbral (≤ 30 días), no por igualdad: un
+ *    Los mails `pending`/`failed` se reintentan en cada corrida durante 7 días. Ventana por umbral (≤ 30 días), no por igualdad: un
  *    día sin corrida no saltea avisos.
  * 2. **Resumen a HSE** (los lunes): vencidos, por vencer y pendientes de la empresa, con `notify` (roles con el aviso
  *    `hse.expiry_weekly` activo y permiso de cumplimiento HSE). El empleado no tiene rol: por eso sus avisos van por la
@@ -190,7 +190,13 @@ export async function runHseExpiryJob(deps: HseExpiryJobDeps = {}): Promise<JobS
 
       // 2. Mails pendientes o fallidos (los nuevos y los de corridas anteriores), uno por empleado.
       const toSend = await prismaSystem.hse_expiry_notices.findMany({
-        where: { company_id: company.id, email_status: { in: ['pending', 'failed'] }, email_to: { not: null } },
+        where: {
+          company_id: company.id,
+          email_status: { in: ['pending', 'failed'] },
+          email_to: { not: null },
+          // Un mail que falla se reintenta una semana (SMTP caído); después queda solo el aviso del portal.
+          created_at: { gte: moment(date, 'YYYY-MM-DD').subtract(7, 'days').toDate() },
+        },
         orderBy: [{ employee_id: 'asc' }, { due_on: 'asc' }],
         select: {
           id: true,
@@ -322,7 +328,7 @@ export async function runHseExpiryJob(deps: HseExpiryJobDeps = {}): Promise<JobS
         data: { companyId: company.id, created, emailsSent, emailsFailed, summary },
       });
       return {
-        reason: `${created} aviso(s) nuevo(s), ${emailsSent} correo(s) a empleados${emailsFailed ? `, ${emailsFailed} con error` : ''}; resumen: ${summary}`,
+        reason: `${created} aviso(s) nuevo(s), ${emailsSent} correo(s) a empleados${emailsFailed ? `, ${emailsFailed} sin enviar (SMTP sin configurar o error)` : ''}; resumen: ${summary}`,
         recipients: emailsSent,
         emailSent: emailsSent > 0 || summaryEmailSent,
         metadata: { candidates: candidates.length, created, emailsSent, emailsFailed, summary },
