@@ -178,9 +178,15 @@ async function requireSessionProfile(): Promise<{ credentialId: string; profileI
   return { credentialId, profileId: profile.id };
 }
 
-/** true si otra empresa (distinta de `excludeId`) ya usa ese CUIT (único global: `company_compay_cuit_key`). */
+/**
+ * true si otra empresa (distinta de `excludeId`) ya usa ese CUIT (único global: `company_compay_cuit_key`).
+ *
+ * Cliente de sistema, acotado: la unicidad es de TODA la instancia y la RLS solo deja ver las empresas propias, así
+ * que con el cliente contextual el CUIT de una empresa ajena pasaba el control y el alta moría en la base con un
+ * error crudo. Solo se pide el id, la usan acciones que ya validaron la sesión y al llamador le llega un booleano.
+ */
 async function isCuitTaken(cuit: string, excludeId?: string): Promise<boolean> {
-  const existing = await prisma.company.findUnique({ where: { company_cuit: cuit }, select: { id: true } });
+  const existing = await prismaSystem.company.findUnique({ where: { company_cuit: cuit }, select: { id: true } });
   return existing !== null && existing.id !== excludeId;
 }
 
