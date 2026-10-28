@@ -17,4 +17,6 @@ export const JOB_SCHEDULE: Record<JobName, { cron: string; maxAgeHours: number }
   'processed-commands-purge': { cron: '15 3 * * *', maxAgeHours: 26 },
   // Cada hora: 2 h de margen.
   'hse-expired-attempts': { cron: '7 * * * *', maxAgeHours: 2 },
+  // Diario 07:20: avisos de vencimiento al empleado; el resumen a HSE sale solo los lunes.
+  'hse-expiry': { cron: '20 7 * * *', maxAgeHours: 26 },
 };

@@ -7,6 +7,7 @@ export const JOB_NAMES = [
   'documents-status',
   'processed-commands-purge',
   'hse-expired-attempts',
+  'hse-expiry',
 ] as const;
 
 export type JobName = (typeof JOB_NAMES)[number];
