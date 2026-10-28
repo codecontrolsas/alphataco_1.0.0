@@ -131,7 +131,65 @@ export const UNGATED_TABLES: ReadonlySet<string> = new Set([
   'customer_services',
   'document_types',
   'daily_indicators',
+  // Plantillas globales de checklists (sin `company_id` ni RLS): no hay política de empresa sobre la que apoyar la compuerta.
+  'checklist_items',
+  'checklist_sections',
+  // Arrendamiento técnico entre procesos (clave + dueño + vencimiento): sin `company_id` ni RLS.
+  'arca_locks',
 ]);
+
+/**
+ * Módulos cuyas tablas NO llevan la compuerta de RLS (decisión 4 del blueprint): el núcleo y las tres maestras
+ * (empleados, equipos, clientes) de las que casi todo depende en forma dura, más la API móvil (sin tablas propias).
+ * Su apagado lo cubren los permisos (capa 1) y las rutas y guardas (capa 2).
+ */
+export const RLS_UNGATED_MODULES: ReadonlySet<ModuleKey> = new Set<ModuleKey>([
+  'nucleo',
+  'empleados',
+  'equipos',
+  'clientes',
+  'movil',
+]);
+
+/**
+ * Tablas compartidas por dos módulos: ven las filas si está encendido ALGUNO. Mantenimiento arma sus solicitudes con
+ * los desvíos de checklist (una «carga manual» escribe una respuesta y desvíos propios) y Checklists no requiere
+ * Mantenimiento, así que con la compuerta solo por dueño (`checklists`) apagar Checklists rompería el alta de pedidos.
+ */
+export const TABLE_GATE_ANY: Readonly<Record<string, readonly ModuleKey[]>> = {
+  checklist_answers: ['checklists', 'mantenimiento'],
+  checklist_deviations: ['checklists', 'mantenimiento'],
+};
+
+/** Compuerta de RLS de una tabla: TODAS las claves de `all` y, si `any` no es vacío, AL MENOS UNA de `any`. */
+export interface ModuleGate {
+  table: string;
+  owner: ModuleKey;
+  all: readonly ModuleKey[];
+  any: readonly ModuleKey[];
+}
+
+/**
+ * Compuerta de RLS por módulo (F3.4) de una tabla, o `null` si no lleva (módulo sin compuerta o tabla en
+ * `UNGATED_TABLES`). Por defecto exige el dueño; `TABLE_ALSO_REQUIRES` suma claves (una pivote entre dos módulos se
+ * oculta con cualquiera de los dos apagado, así no queda visible la pivote con el padre oculto) y `TABLE_GATE_ANY`
+ * reemplaza el dueño por una alternativa.
+ */
+export function moduleGateFor(table: string): ModuleGate | null {
+  const owner = moduleForTable(table);
+  if (!owner || RLS_UNGATED_MODULES.has(owner) || UNGATED_TABLES.has(table)) return null;
+  const any = TABLE_GATE_ANY[table] ?? [];
+  const all = any.length > 0 ? [] : [owner];
+  const also = TABLE_ALSO_REQUIRES[table] ?? [];
+  return { table, owner, all: [...new Set([...all, ...also])], any };
+}
+
+/** Todas las tablas con compuerta, agrupadas por la clave dueña (es el reparto de los lotes de la migración). */
+export function gatedTables(): ModuleGate[] {
+  return MODULE_KEYS.flatMap((key) => MODULE_CATALOG[key].tables)
+    .map((table) => moduleGateFor(table))
+    .filter((gate): gate is ModuleGate => gate !== null);
+}
 
 /** Rutas públicas que sirven a varias claves: alcanza con que esté encendida ALGUNA. */
 export const SHARED_ROUTES: readonly { prefix: string; anyOf: readonly ModuleKey[] }[] = [
