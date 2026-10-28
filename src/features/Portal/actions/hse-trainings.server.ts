@@ -14,6 +14,7 @@ import { isPortalEnabled } from '@/features/Portal/lib/feature-gate';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
 /**
@@ -91,27 +92,42 @@ export async function markHseMaterialRead(input: {
   }
 }
 
-/** Empieza (o retoma) el examen. Devuelve el intento abierto. */
-export async function startHseAttempt(input: { trainingId: string }): Promise<ActionResult<{ attemptId: string }>> {
+/**
+ * Empieza (o retoma) el examen y lleva al examen con un `redirect()` de la propia acción.
+ *
+ * Antes la acción devolvía el intento y el cliente hacía `router.push(...)`: la revalidación de la acción re-renderizaba
+ * la página actual (que ya mostraba "Retomar el examen") y esa actualización podía pisar la navegación, así que a veces
+ * la pantalla quedaba en el detalle en vez de entrar al examen. Con el `redirect()` del servidor la navegación y la
+ * revalidación viajan en la MISMA respuesta: no hay carrera. Solo devuelve algo cuando no se puede empezar.
+ */
+export async function startHseAttempt(input: { trainingId: string }): Promise<ActionResult<null>> {
   const auth = await portalEmployee();
   if (!auth.ok) return fail(auth.error);
   const parsed = hseStartAttemptSchema.safeParse(input);
   if (!parsed.success) return fail(UNAVAILABLE);
+  let attemptId: string;
   try {
     const rows = await prisma.$transaction(
       (tx) => tx.$queryRaw<{ r: unknown }[]>`SELECT public.hse_start_attempt(${parsed.data.trainingId}::uuid) AS r`
     );
     const result = startResultSchema.parse(rows[0]?.r);
     if (!result.ok) return fail(START_MESSAGES[result.reason]);
+    attemptId = result.attemptId;
     logger.info('Examen HSE iniciado', {
-      data: { employeeId: auth.employee.employeeId, trainingId: parsed.data.trainingId, resumed: result.resumed },
+      data: {
+        employeeId: auth.employee.employeeId,
+        trainingId: parsed.data.trainingId,
+        attemptId,
+        resumed: result.resumed,
+      },
     });
-    revalidateTraining(parsed.data.trainingId);
-    return ok({ attemptId: result.attemptId });
   } catch (error) {
     logger.error('Error al iniciar el examen', { data: { error, trainingId: parsed.data.trainingId } });
     return fail('No se pudo iniciar el examen. Intentá de nuevo.');
   }
+  // Fuera del try: `redirect()` lanza NEXT_REDIRECT y el catch lo convertiría en un error.
+  revalidateTraining(parsed.data.trainingId);
+  redirect(`/portal/trainings/${parsed.data.trainingId}/attempt`);
 }
 
 /**

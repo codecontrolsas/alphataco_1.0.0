@@ -356,7 +356,9 @@ La instancia que corre hoy es la **demo** (`SEED_COMPANY_NAME=Empresa Demo`, `DE
   Application.
 - **Schedules de la app (hora argentina):** documentos por vencer (lun 08:00), lotes por vencer de almacenes (lun 08:05), desvíos de partes diarios
   (07:00), indicadores diarios (00:30), estado documental (00:10), purga de comandos procesados (03:15), cierre de exámenes HSE vencidos (`hse-expired-attempts`,
-  cada hora, minuto 7: `7 * * * *`; alta pendiente en Dokploy) y el reset de la demo (00:05). Los jobs llaman a
+  cada hora, minuto 7: `7 * * * *`; alta pendiente en Dokploy), avisos de vencimiento HSE (`hse-expiry`, todos los días 07:20: `20 7 * * *`;
+  al empleado en el portal y por mail, y los lunes el resumen a HSE con el aviso `hse.expiry_weekly`; alta pendiente en Dokploy) y el reset de la
+  demo (00:05). Los jobs llaman a
   `http://localhost:3000/api/jobs/<job>` con `JOBS_TOKEN`. **Un job nuevo en `JOB_NAMES` hay que darlo de alta también en Dokploy**: hasta el 2026-10-21 faltaban
   el estado documental y los lotes por vencer y nunca habían corrido en esta instancia.
 - **Respaldos:** destino `alphataco-backups (RustFS local)` (bucket `backups`) y respaldo de `alphataco-db` todos los días 03:30, conservando 14. **El

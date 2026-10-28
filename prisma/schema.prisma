@@ -1113,6 +1113,7 @@ model document_types {
   documents_employees     documents_employees[]
   documents_equipment     documents_equipment[]
   documents_pre_employees documents_pre_employees[]
+  hse_training            hse_training_document_types?
 
   @@index([equipment_type], map: "idx_document_types_equipment_type")
   @@schema("public")
@@ -1175,6 +1176,7 @@ model documents_employees {
   document_types           document_types?            @relation(fields: [id_document_types], references: [id], onDelete: Cascade)
   profile                  profile?                   @relation(fields: [user_id], references: [id], onDelete: Cascade)
   documents_employees_logs documents_employees_logs[]
+  hse_certificates         hse_training_certificates[]
 
   company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([applies, id_document_types], map: "idx_documents_employees_applies_type")
@@ -1342,6 +1344,11 @@ model employees {
   hse_training_attempts    hse_training_attempts[]
   hse_training_answers     hse_training_answers[]
   hse_training_reads       hse_training_material_reads[]
+  hse_training_instructors        hse_training_instructors[]
+  hse_record_instructors          hse_training_record_instructors[]
+  hse_record_attendances          hse_training_record_attendees[]
+  hse_training_certificates       hse_training_certificates[]
+  hse_expiry_notices              hse_expiry_notices[]
 
   @@index([type_of_contract], map: "idx_employees_type_of_contract")
   @@index([company_id, is_active, lastname, firstname, id], map: "idx_employees_company_active_name")
@@ -6759,6 +6766,10 @@ model hse_trainings {
   assignments        hse_training_assignments[]
   attempts           hse_training_attempts[]
   reads              hse_training_material_reads[]
+  instructors        hse_training_instructors[]
+  records            hse_training_records[]
+  certificates       hse_training_certificates[]
+  document_type      hse_training_document_types?
 
   @@index([company_id, status], map: "idx_hse_trainings_company_status")
   @@schema("public")
@@ -6918,6 +6929,7 @@ model hse_training_attempts {
   employee       employees                  @relation(fields: [employee_id], references: [id], onDelete: Cascade)
   passed_of      hse_training_assignments?  @relation("hse_assignment_passed_attempt")
   answers        hse_training_answers[]
+  certificates   hse_training_certificates[]
 
   @@unique([training_id, employee_id, attempt_number], map: "hse_training_attempts_number_key")
   @@index([employee_id], map: "idx_hse_training_attempts_employee")
@@ -6960,5 +6972,214 @@ model hse_training_material_reads {
   @@unique([material_id, employee_id], map: "hse_training_material_reads_material_employee_key")
   @@index([employee_id, training_id], map: "idx_hse_training_material_reads_employee")
   @@index([company_id], map: "idx_hse_training_material_reads_company_id")
+  @@schema("public")
+}
+
+// ── HSE: acta, constancia firmada y avisos de vencimiento (ticket 804, fase 4) ──────────────────────────────────
+
+enum hse_record_status {
+  draft
+  closed
+  voided
+
+  @@schema("public")
+}
+
+enum hse_record_modality {
+  in_person
+  virtual
+  mixed
+  online
+
+  @@schema("public")
+}
+
+enum hse_instructor_kind {
+  internal
+  external
+
+  @@schema("public")
+}
+
+enum hse_notice_item {
+  training
+  document
+
+  @@schema("public")
+}
+
+enum hse_notice_window {
+  upcoming
+  expired
+
+  @@schema("public")
+}
+
+/// Capacitadores habituales de una capacitación (internos: un legajo; externos: nombre y matrícula). El acta los copia
+/// al crearse y la constancia los congela al firmarse.
+model hse_training_instructors {
+  id          String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id  String              @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  training_id String              @db.Uuid
+  kind        hse_instructor_kind
+  employee_id String?             @db.Uuid
+  full_name   String
+  license     String?
+  role_title  String?
+  position    Int                 @default(0)
+  created_at  DateTime            @default(now()) @db.Timestamptz(6)
+  training    hse_trainings       @relation(fields: [training_id], references: [id], onDelete: Cascade)
+  employee    employees?          @relation(fields: [employee_id], references: [id], onDelete: SetNull)
+
+  @@index([training_id], map: "idx_hse_training_instructors_training")
+  @@index([company_id], map: "idx_hse_training_instructors_company_id")
+  @@schema("public")
+}
+
+/// Acta de un dictado de una capacitación. Borrador editable → cerrada (inmutable, con el contenido congelado y su
+/// huella SHA-256) → anulada (con motivo; nunca se borra).
+model hse_training_records {
+  id               String                            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id       String                            @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  training_id      String                            @db.Uuid
+  number           Int
+  held_on          DateTime                          @db.Date
+  modality         hse_record_modality               @default(in_person)
+  location         String?
+  duration_minutes Int?
+  topics           String
+  observations     String?
+  status           hse_record_status                 @default(draft)
+  created_by       String                            @db.Uuid
+  closed_at        DateTime?                         @db.Timestamptz(6)
+  closed_by        String?                           @db.Uuid
+  /// Contenido congelado al cerrar (fuente de verdad del PDF) y su huella.
+  content          Json?
+  content_sha256   String?
+  pdf_path         String?                           @unique(map: "hse_training_records_pdf_path_key")
+  pdf_sha256       String?
+  voided_at        DateTime?                         @db.Timestamptz(6)
+  voided_by        String?                           @db.Uuid
+  void_reason      String?
+  created_at       DateTime                          @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime                          @default(now()) @db.Timestamptz(6)
+  training         hse_trainings                     @relation(fields: [training_id], references: [id], onDelete: Cascade)
+  instructors      hse_training_record_instructors[]
+  attendees        hse_training_record_attendees[]
+
+  @@unique([company_id, number], map: "hse_training_records_number_key")
+  @@index([training_id], map: "idx_hse_training_records_training")
+  @@index([company_id, status], map: "idx_hse_training_records_company_status")
+  @@schema("public")
+}
+
+model hse_training_record_instructors {
+  id          String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id  String               @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  record_id   String               @db.Uuid
+  kind        hse_instructor_kind
+  employee_id String?              @db.Uuid
+  full_name   String
+  license     String?
+  role_title  String?
+  position    Int                  @default(0)
+  record      hse_training_records @relation(fields: [record_id], references: [id], onDelete: Cascade)
+  employee    employees?           @relation(fields: [employee_id], references: [id], onDelete: SetNull)
+
+  @@index([record_id], map: "idx_hse_training_record_instructors_record")
+  @@index([company_id], map: "idx_hse_training_record_instructors_company_id")
+  @@schema("public")
+}
+
+model hse_training_record_attendees {
+  id          String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id  String               @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  record_id   String               @db.Uuid
+  employee_id String               @db.Uuid
+  attended    Boolean              @default(true)
+  created_at  DateTime             @default(now()) @db.Timestamptz(6)
+  record      hse_training_records @relation(fields: [record_id], references: [id], onDelete: Cascade)
+  employee    employees            @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@unique([record_id, employee_id], map: "hse_training_record_attendees_record_employee_key")
+  @@index([employee_id], map: "idx_hse_training_record_attendees_employee")
+  @@index([company_id], map: "idx_hse_training_record_attendees_company_id")
+  @@schema("public")
+}
+
+/// Constancia de aprobación FIRMADA por el empleado (una por intento aprobado). Inmutable: contenido congelado al
+/// firmar (datos del momento, firma, IP, navegador, hora del servidor) con su huella; solo se anula (con motivo).
+model hse_training_certificates {
+  id                   String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id           String                   @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  training_id          String                   @db.Uuid
+  employee_id          String                   @db.Uuid
+  /// Un intento aprobado tiene a lo sumo UNA constancia vigente (índice único parcial `WHERE voided_at IS NULL`, en SQL).
+  attempt_id           String                   @db.Uuid
+  score_percent        Decimal                  @db.Decimal(5, 2)
+  passed_at            DateTime                 @db.Timestamptz(6)
+  valid_until          DateTime?                @db.Date
+  content              Json
+  content_sha256       String
+  signer_name          String
+  signer_position      String?
+  signer_file          String?
+  signer_company       String
+  ip                   String?
+  user_agent           String?
+  signed_at            DateTime                 @db.Timestamptz(6)
+  pdf_path             String?                  @unique(map: "hse_training_certificates_pdf_path_key")
+  pdf_sha256           String?
+  employee_document_id String?                  @db.Uuid
+  voided_at            DateTime?                @db.Timestamptz(6)
+  voided_by            String?                  @db.Uuid
+  void_reason          String?
+  created_at           DateTime                 @default(now()) @db.Timestamptz(6)
+  training             hse_trainings            @relation(fields: [training_id], references: [id], onDelete: Cascade)
+  employee             employees                @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  attempt              hse_training_attempts    @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
+  employee_document    documents_employees?     @relation(fields: [employee_document_id], references: [id], onDelete: SetNull)
+
+  @@index([attempt_id], map: "idx_hse_training_certificates_attempt")
+  @@index([employee_id, training_id], map: "idx_hse_training_certificates_employee")
+  @@index([training_id], map: "idx_hse_training_certificates_training")
+  @@index([company_id], map: "idx_hse_training_certificates_company_id")
+  @@schema("public")
+}
+
+/// Tipo de documento del legajo que recibe las constancias de una capacitación (uno por capacitación, no obligatorio).
+model hse_training_document_types {
+  training_id      String         @id @db.Uuid
+  company_id       String         @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  document_type_id String         @unique(map: "hse_training_document_types_type_key") @db.Uuid
+  created_at       DateTime       @default(now()) @db.Timestamptz(6)
+  training         hse_trainings  @relation(fields: [training_id], references: [id], onDelete: Cascade)
+  document_type    document_types @relation(fields: [document_type_id], references: [id], onDelete: Cascade)
+
+  @@index([company_id], map: "idx_hse_training_document_types_company_id")
+  @@schema("public")
+}
+
+/// Aviso de vencimiento al empleado (portal + mail). Una fila por empleado, ítem, fecha de vencimiento y ventana:
+/// la clave única hace idempotente al job.
+model hse_expiry_notices {
+  id           String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id   String            @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  employee_id  String            @db.Uuid
+  item_kind    hse_notice_item
+  item_id      String            @db.Uuid
+  item_title   String
+  due_on       DateTime          @db.Date
+  window       hse_notice_window
+  email_to     String?
+  /// none (sin correo) | pending | sent | failed
+  email_status String            @default("none")
+  emailed_at   DateTime?         @db.Timestamptz(6)
+  created_at   DateTime          @default(now()) @db.Timestamptz(6)
+  employee     employees         @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@unique([employee_id, item_kind, item_id, due_on, window], map: "hse_expiry_notices_key")
+  @@index([company_id, email_status], map: "idx_hse_expiry_notices_company_email")
+  @@index([employee_id, created_at], map: "idx_hse_expiry_notices_employee")
   @@schema("public")
 }

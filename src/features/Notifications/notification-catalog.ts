@@ -112,6 +112,20 @@ export const NOTIFICATION_EVENTS = {
     requiresLabel: 'Ver órdenes de compra',
     defaultChannels: ['in_app', 'email'],
   },
+  'hse.expiry_weekly': {
+    module: 'hse',
+    moduleLabel: 'HSE',
+    label: 'Resumen semanal de vencimientos HSE',
+    description:
+      'Los lunes: capacitaciones y documentos HSE vencidos o por vencer, y pendientes de aceptar, aprobar o firmar.',
+    audience: 'role',
+    requires: [
+      { module: 'hse', tab: 'cumplimiento', action: 'view' },
+      { module: 'hse', tab: 'capacitaciones', action: 'view' },
+    ],
+    requiresLabel: 'Ver el cumplimiento o las capacitaciones de HSE',
+    defaultChannels: ['in_app'],
+  },
 } as const satisfies Record<string, NotificationEventDef>;
 
 export type NotificationEventKey = keyof typeof NOTIFICATION_EVENTS;

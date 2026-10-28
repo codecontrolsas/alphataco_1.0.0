@@ -11,6 +11,7 @@ import Link from 'next/link';
 function nextStep(t: PortalHseTraining): string {
   switch (t.status) {
     case 'passed':
+      if (t.certificatePending) return 'Aprobada · falta firmar tu constancia';
       return t.validUntil
         ? `Aprobada · vigente hasta el ${moment(t.validUntil, 'YYYY-MM-DD').format('DD/MM/YYYY')}`
         : `Aprobada${t.passedAt ? ` el ${formatArgentinaDay(t.passedAt)}` : ''}`;

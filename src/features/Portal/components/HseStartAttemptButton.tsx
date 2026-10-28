@@ -38,16 +38,16 @@ export function HseStartAttemptButton({
   const [confirming, setConfirming] = useState(false);
   const [isPending, startTransition] = useTransition();
 
+  // Si puede empezar, la acción redirige al examen desde el servidor (sin `router.push`: ver `startHseAttempt`). Solo
+  // vuelve con un resultado cuando no se pudo.
   const start = () =>
     startTransition(async () => {
       const result = await startHseAttempt({ trainingId });
-      if (!result.ok) {
+      if (result && !result.ok) {
         toast.error(result.error);
         setConfirming(false);
         router.refresh();
-        return;
       }
-      router.push(`/portal/trainings/${trainingId}/attempt`);
     });
 
   if (resume) {

@@ -1,5 +1,17 @@
 import { TONE_TO_BADGE, type StatusUi } from '@/features/Mantenimiento/lib/status-presentation';
-import { Archive, CalendarX2, CheckCircle2, Clock, FilePen, Hourglass, Send, TimerOff, XCircle } from 'lucide-react';
+import {
+  Archive,
+  Ban,
+  CalendarX2,
+  CheckCircle2,
+  Clock,
+  FilePen,
+  Hourglass,
+  Lock,
+  Send,
+  TimerOff,
+  XCircle,
+} from 'lucide-react';
 import {
   HSE_ACK_STATUS_LABELS,
   HSE_ASSIGNMENT_STATUS_LABELS,
@@ -12,6 +24,7 @@ import {
   type HseDocumentStatus,
   type HseTrainingStatus,
 } from './constants';
+import { HSE_RECORD_STATUS_LABELS, type HseRecordStatus } from './pdf-content';
 
 /** Presentación de los estados de HSE (etiqueta, tono e ícono). Nunca solo color. Módulo sin directiva. */
 
@@ -48,4 +61,10 @@ export const HSE_ATTEMPT_STATUS_UI: Record<HseAttemptStatus, StatusUi> = {
   in_progress: { label: HSE_ATTEMPT_STATUS_LABELS.in_progress, tone: 'info', icon: Hourglass },
   submitted: { label: HSE_ATTEMPT_STATUS_LABELS.submitted, tone: 'neutral', icon: Send },
   expired: { label: HSE_ATTEMPT_STATUS_LABELS.expired, tone: 'warn', icon: TimerOff },
+};
+
+export const HSE_RECORD_STATUS_UI: Record<HseRecordStatus, StatusUi> = {
+  draft: { label: HSE_RECORD_STATUS_LABELS.draft, tone: 'neutral', icon: FilePen },
+  closed: { label: HSE_RECORD_STATUS_LABELS.closed, tone: 'ok', icon: Lock },
+  voided: { label: HSE_RECORD_STATUS_LABELS.voided, tone: 'danger', icon: Ban },
 };

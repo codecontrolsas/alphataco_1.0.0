@@ -13,6 +13,7 @@ import { HseStatusBadge } from '../../../components/HseStatusBadge';
 import { HSE_QUERY_KEYS } from '../../../lib/constants';
 import { HSE_ATTEMPT_STATUS_UI } from '../../../lib/status-presentation';
 import { formatPercent } from '../../../lib/training-status';
+import { EmployeeCertificates } from './EmployeeCertificates';
 
 const RESULT_UI = {
   correct: { label: 'Correcta', icon: CheckCircle2, className: 'text-ok-subtle-foreground' },
@@ -124,6 +125,9 @@ export function EmployeeAttemptsButton({
                 </li>
               ))}
             </ol>
+          )}
+          {open && (
+            <EmployeeCertificates trainingId={trainingId} employeeId={employeeId} employeeLabel={employeeLabel} />
           )}
         </DialogContent>
       </Dialog>

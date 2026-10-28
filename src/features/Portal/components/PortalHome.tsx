@@ -1,9 +1,10 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getMyHseDocuments } from '@/features/Portal/actions/hse-documents.queries';
+import { getMyHseNotices } from '@/features/Portal/actions/hse-notices.queries';
 import { getMyHseTrainings } from '@/features/Portal/actions/hse-trainings.queries';
 import { getPortalEmployeeForPage } from '@/features/Portal/actions/perimeter';
-import { formatArgentinaDay } from '@/shared/lib/argentina-time';
-import { ChevronRight, ShieldCheck } from 'lucide-react';
+import { formatArgentinaDay, formatDateAr } from '@/shared/lib/argentina-time';
+import { BellRing, ChevronRight, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { DocumentsEmptyState } from './DocumentsEmptyState';
 import { HseDocumentCard } from './HseDocumentCard';
@@ -19,9 +20,15 @@ const METHOD_LABELS = {
 /** Inicio del portal: quién sos (legajo, puesto, sector), estado del acceso y lo que tenés pendiente. */
 export async function PortalHome() {
   const employee = await getPortalEmployeeForPage();
-  const [documents, trainings] = await Promise.all([getMyHseDocuments(employee), getMyHseTrainings(employee)]);
+  const [documents, trainings, notices] = await Promise.all([
+    getMyHseDocuments(employee),
+    getMyHseTrainings(employee),
+    getMyHseNotices(employee),
+  ]);
   const pending = documents.filter((d) => d.status === 'pending');
-  const pendingTrainings = trainings.filter((t) => t.status !== 'passed');
+  const pendingTrainings = trainings.filter((t) => t.status !== 'passed' || t.certificatePending);
+  const toSign = trainings.filter((t) => t.certificatePending).length;
+  const toTake = pendingTrainings.length - toSign;
   const fullName = `${employee.lastname} ${employee.firstname}`.trim();
   const initials = `${employee.firstname[0] ?? ''}${employee.lastname[0] ?? ''}`.toUpperCase();
   const role = [employee.position, employee.sector].filter(Boolean).join(' · ');
@@ -72,6 +79,40 @@ export async function PortalHome() {
           </p>
         </div>
       </section>
+
+      {notices.length > 0 && (
+        <section aria-labelledby="home-notices" className="space-y-3">
+          <h2 id="home-notices" className="flex items-center gap-2 font-semibold">
+            <BellRing aria-hidden="true" className="size-5" /> Avisos de vencimiento
+          </h2>
+          <ul className="space-y-2">
+            {notices.map((n) => (
+              <li key={n.id}>
+                <Link
+                  href={n.href}
+                  className="bg-card focus-visible:ring-ring hover:bg-muted/50 flex min-h-11 items-center justify-between gap-3 rounded-xl border p-3 outline-none focus-visible:ring-2"
+                >
+                  <span className="min-w-0 space-y-0.5">
+                    <span className="block font-medium break-words">{n.title}</span>
+                    <span
+                      className={
+                        n.window === 'expired'
+                          ? 'text-danger-subtle-foreground block text-sm'
+                          : 'text-warn-subtle-foreground block text-sm'
+                      }
+                    >
+                      {n.kind === 'training' ? 'Capacitación' : 'Documento HSE'} ·{' '}
+                      {n.window === 'expired' ? 'venció el' : 'vence el'}{' '}
+                      <span className="tabular-nums">{formatDateAr(n.dueOn)}</span>
+                    </span>
+                  </span>
+                  <ChevronRight aria-hidden="true" className="text-muted-foreground size-4 shrink-0" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section aria-labelledby="home-pending" className="space-y-3">
         <div className="flex items-center justify-between gap-3">
@@ -130,9 +171,16 @@ export async function PortalHome() {
         ) : (
           <>
             <p className="text-muted-foreground text-sm">
-              {pendingTrainings.length === 1
-                ? 'Tenés 1 capacitación para hacer.'
-                : `Tenés ${pendingTrainings.length} capacitaciones para hacer.`}
+              {[
+                toTake === 0
+                  ? null
+                  : toTake === 1
+                    ? 'Tenés 1 capacitación para hacer.'
+                    : `Tenés ${toTake} capacitaciones para hacer.`,
+                toSign === 0 ? null : toSign === 1 ? '1 constancia para firmar.' : `${toSign} constancias para firmar.`,
+              ]
+                .filter(Boolean)
+                .join(' ')}
             </p>
             <ul className="space-y-3">
               {pendingTrainings.slice(0, 3).map((t) => (

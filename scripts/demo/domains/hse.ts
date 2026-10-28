@@ -9,6 +9,9 @@
  *   - Trabajo en altura: borrador (no lo ve nadie).
  * Capacitaciones (fase 3): matafuegos (a todos, con límite de tiempo), manejo en ruta (choferes) y un borrador, con
  * intentos aprobados, desaprobados y sin intentos rendidos con las funciones reales del examen.
+ * Actas y constancias (fase 4): capacitadores habituales, un acta CERRADA de matafuegos (con firmas antes y después
+ * del cierre) y un acta en borrador de manejo en ruta, todo con las funciones reales (firma y cierre). Los PDF y el
+ * registro en el legajo se generan en la primera descarga, como en producción.
  * Ids deterministas: los links a un documento sobreviven al reset.
  */
 import { createHash } from 'node:crypto';
@@ -211,6 +214,7 @@ export async function seedHse(ctx: Ctx, employees: DemoEmployee[]): Promise<void
   const acks = await tx.hse_document_acknowledgements.count({ where: { company_id: company.id } });
   ctx.log(`HSE: ${DOCS.length} documentos, ${acks} aceptaciones`);
   await seedHseTrainings(ctx);
+  await seedHseRecords(ctx);
 }
 
 // ── Capacitaciones (fase 3) ──────────────────────────────────────────────────────────────────
@@ -560,4 +564,148 @@ async function seedHseTrainings(ctx: Ctx): Promise<void> {
 
   const assigned = await tx.hse_training_assignments.count({ where: { company_id: company.id } });
   ctx.log(`HSE: ${TRAININGS.length} capacitaciones, ${assigned} asignaciones, ${attempts} intentos rendidos`);
+}
+
+const INSTRUCTORS: Record<string, { kind: 'external'; fullName: string; license: string | null; roleTitle: string }[]> =
+  {
+    matafuegos: [
+      { kind: 'external', fullName: 'Méndez Carlos', license: 'BV-1187', roleTitle: 'Oficial de Bomberos Voluntarios' },
+    ],
+    'manejo-ruta': [
+      { kind: 'external', fullName: 'Torres Ana', license: 'Mat. 4521', roleTitle: 'Lic. en Higiene y Seguridad' },
+    ],
+  };
+
+/** Contexto de la transacción como en la app: empleado del portal o usuario del dashboard. */
+async function asEmployee(ctx: Ctx, employeeId: string) {
+  await ctx.tx
+    .$executeRaw`SELECT set_config('app.company_id', ${ctx.company.id}, true), set_config('app.employee_id', ${employeeId}, true), set_config('app.actor_kind', 'employee', true), set_config('app.user_id', '', true)`;
+}
+async function asAdmin(ctx: Ctx) {
+  await ctx.tx
+    .$executeRaw`SELECT set_config('app.company_id', ${ctx.company.id}, true), set_config('app.employee_id', '', true), set_config('app.actor_kind', 'user', true), set_config('app.user_id', ${ctx.actorId}, true)`;
+}
+
+async function signCertificate(ctx: Ctx, employeeId: string, attemptId: string, n: number) {
+  await asEmployee(ctx, employeeId);
+  await ctx.tx
+    .$queryRaw`SELECT public.hse_sign_certificate(${attemptId}::uuid, ${`10.0.0.${10 + n}`}, ${'Mozilla/5.0 (Linux; Android 14) Portal demo'}) AS r`;
+}
+
+async function seedHseRecords(ctx: Ctx): Promise<void> {
+  const { tx, company } = ctx;
+  for (const [key, list] of Object.entries(INSTRUCTORS)) {
+    await tx.hse_training_instructors.createMany({
+      data: list.map((i, position) => ({
+        id: demoId('hse-instructor', `${key}:${position}`),
+        company_id: company.id,
+        training_id: demoId('hse-training', key),
+        kind: i.kind,
+        full_name: i.fullName,
+        license: i.license,
+        role_title: i.roleTitle,
+        position,
+      })),
+    });
+  }
+
+  // Acta 1 (cerrada): dictado de matafuegos hace 20 días, con los que aprobaron y un par que no.
+  const trainingId = demoId('hse-training', 'matafuegos');
+  const assignments = await tx.hse_training_assignments.findMany({
+    where: { training_id: trainingId, archived_at: null },
+    orderBy: { employee_id: 'asc' },
+    select: { employee_id: true, status: true, passed_attempt_id: true },
+  });
+  const passed = assignments.filter((a) => a.status === 'passed' && a.passed_attempt_id).slice(0, 12);
+  const others = assignments.filter((a) => a.status !== 'passed').slice(0, 3);
+  const recordId = demoId('hse-record', 'matafuegos-1');
+  await tx.hse_training_records.create({
+    data: {
+      id: recordId,
+      company_id: company.id,
+      training_id: trainingId,
+      number: 1,
+      held_on: new Date(`${ctx.cal.at(-20, 12).toISOString().slice(0, 10)}T00:00:00Z`),
+      modality: 'in_person',
+      location: 'Base Neuquén — playón de maniobras',
+      duration_minutes: 90,
+      topics: 'Clases de fuego y agentes extintores\nPartes del matafuego y control de carga\nPráctica con fuego real',
+      observations: 'Práctica con matafuegos ABC de 5 kg. Se repasó la vía de escape antes de cada práctica.',
+      created_by: ctx.actorId,
+    },
+    select: { id: true },
+  });
+  await tx.hse_training_record_instructors.createMany({
+    data: INSTRUCTORS.matafuegos.map((i, position) => ({
+      company_id: company.id,
+      record_id: recordId,
+      kind: i.kind,
+      full_name: i.fullName,
+      license: i.license,
+      role_title: i.roleTitle,
+      position,
+    })),
+  });
+  await tx.hse_training_record_attendees.createMany({
+    data: [...passed, ...others].map((a, index) => ({
+      company_id: company.id,
+      record_id: recordId,
+      employee_id: a.employee_id,
+      attended: index !== passed.length, // uno de los que no aprobó faltó
+    })),
+  });
+  // Firmas antes del cierre (constan en el acta) …
+  let signed = 0;
+  for (const a of passed.slice(0, 5))
+    await signCertificate(ctx, a.employee_id, a.passed_attempt_id as string, signed++);
+  await asAdmin(ctx);
+  const closed = await tx.$queryRaw<{ r: { ok: boolean; reason?: string } }[]>`
+    SELECT public.hse_close_training_record(${recordId}::uuid, ${ctx.actorId}::uuid) AS r`;
+  if (!closed[0]?.r.ok) throw new Error(`No se pudo cerrar el acta demo: ${closed[0]?.r.reason ?? 'sin respuesta'}`);
+  // … y después (las ve el detalle del acta, no el acta congelada; su constancia cita el acta cerrada).
+  for (const a of passed.slice(5, 9))
+    await signCertificate(ctx, a.employee_id, a.passed_attempt_id as string, signed++);
+
+  // Acta 2 (borrador): manejo en ruta, para mostrar la edición.
+  const routeId = demoId('hse-training', 'manejo-ruta');
+  const draftId = demoId('hse-record', 'manejo-ruta-1');
+  await asAdmin(ctx);
+  await tx.hse_training_records.create({
+    data: {
+      id: draftId,
+      company_id: company.id,
+      training_id: routeId,
+      number: 2,
+      held_on: new Date(`${ctx.cal.at(-2, 12).toISOString().slice(0, 10)}T00:00:00Z`),
+      modality: 'mixed',
+      location: 'Sala de capacitación y ruta 22',
+      duration_minutes: 120,
+      topics: 'Velocidades máximas y descansos\nUso del celular\nFauna en ruta',
+      created_by: ctx.actorId,
+    },
+    select: { id: true },
+  });
+  await tx.hse_training_record_instructors.createMany({
+    data: INSTRUCTORS['manejo-ruta'].map((i, position) => ({
+      company_id: company.id,
+      record_id: draftId,
+      kind: i.kind,
+      full_name: i.fullName,
+      license: i.license,
+      role_title: i.roleTitle,
+      position,
+    })),
+  });
+  const routeAssignments = await tx.hse_training_assignments.findMany({
+    where: { training_id: routeId, archived_at: null },
+    orderBy: { employee_id: 'asc' },
+    take: 8,
+    select: { employee_id: true },
+  });
+  await tx.hse_training_record_attendees.createMany({
+    data: routeAssignments.map((a) => ({ company_id: company.id, record_id: draftId, employee_id: a.employee_id })),
+  });
+  await tx.$executeRaw`SELECT set_config('app.company_id', ${company.id}, true), set_config('app.employee_id', '', true), set_config('app.actor_kind', '', true), set_config('app.user_id', '', true)`;
+
+  ctx.log(`HSE: 2 actas (1 cerrada con ${passed.length + others.length} asistentes), ${signed} constancias firmadas`);
 }

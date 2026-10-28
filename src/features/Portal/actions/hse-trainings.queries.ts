@@ -36,6 +36,7 @@ export const getMyHseTrainings = cache(async (employee: PortalEmployee) => {
       passed_at: true,
       valid_until: true,
       created_at: true,
+      passed_attempt_id: true,
       training: {
         select: {
           id: true,
@@ -50,13 +51,23 @@ export const getMyHseTrainings = cache(async (employee: PortalEmployee) => {
     },
   });
   const requiredIds = rows.flatMap((r) => r.training.materials.map((m) => m.id));
-  const reads = requiredIds.length
-    ? await prisma.hse_training_material_reads.findMany({
-        where: { employee_id: employee.employeeId, material_id: { in: requiredIds } },
-        select: { material_id: true },
-      })
-    : [];
+  const passedAttemptIds = rows.flatMap((r) => (r.passed_attempt_id ? [r.passed_attempt_id] : []));
+  const [reads, signed] = await Promise.all([
+    requiredIds.length
+      ? prisma.hse_training_material_reads.findMany({
+          where: { employee_id: employee.employeeId, material_id: { in: requiredIds } },
+          select: { material_id: true },
+        })
+      : Promise.resolve([]),
+    passedAttemptIds.length
+      ? prisma.hse_training_certificates.findMany({
+          where: { employee_id: employee.employeeId, attempt_id: { in: passedAttemptIds }, voided_at: null },
+          select: { attempt_id: true },
+        })
+      : Promise.resolve([]),
+  ]);
   const readSet = new Set(reads.map((r) => r.material_id));
+  const signedSet = new Set(signed.map((c) => c.attempt_id));
 
   return rows
     .map((r) => {
@@ -77,6 +88,8 @@ export const getMyHseTrainings = cache(async (employee: PortalEmployee) => {
         passedAt: r.passed_at,
         validUntil: dayOf(r.valid_until),
         assignedAt: r.created_at,
+        /** Aprobada y vigente, con la constancia todavía sin firmar. */
+        certificatePending: status === 'passed' && !!r.passed_attempt_id && !signedSet.has(r.passed_attempt_id),
       };
     })
     .sort((a, b) => ATTENTION_ORDER[a.status] - ATTENTION_ORDER[b.status]);
@@ -100,6 +113,7 @@ export async function getMyHseTraining(employee: PortalEmployee, trainingId: str
       passed_at: true,
       valid_until: true,
       last_score_percent: true,
+      passed_attempt_id: true,
       training: {
         select: {
           id: true,
@@ -129,7 +143,7 @@ export async function getMyHseTraining(employee: PortalEmployee, trainingId: str
   });
   if (!assignment) return null;
 
-  const [reads, attempts] = await Promise.all([
+  const [reads, attempts, certificate] = await Promise.all([
     prisma.hse_training_material_reads.findMany({
       where: { employee_id: employee.employeeId, training_id: trainingId },
       select: { material_id: true, read_at: true },
@@ -148,6 +162,13 @@ export async function getMyHseTraining(employee: PortalEmployee, trainingId: str
         passed: true,
       },
     }),
+    // Constancia vigente (firmada y no anulada) de la aprobación vigente.
+    assignment.passed_attempt_id
+      ? prisma.hse_training_certificates.findFirst({
+          where: { employee_id: employee.employeeId, attempt_id: assignment.passed_attempt_id, voided_at: null },
+          select: { id: true, signed_at: true, content_sha256: true },
+        })
+      : Promise.resolve(null),
   ]);
   const readAt = new Map(reads.map((r) => [r.material_id, r.read_at]));
   const t = assignment.training;
@@ -188,6 +209,16 @@ export async function getMyHseTraining(employee: PortalEmployee, trainingId: str
     materials,
     pendingMaterials,
     openAttemptId: openAttempt?.id ?? null,
+    /** Aprobación vigente que se puede firmar (o ya firmada): null si no aprobó o la aprobación venció. */
+    certificate:
+      status === 'passed' && assignment.passed_attempt_id
+        ? {
+            attemptId: assignment.passed_attempt_id,
+            certificateId: certificate?.id ?? null,
+            signedAt: certificate?.signed_at ?? null,
+            sha256: certificate?.content_sha256 ?? null,
+          }
+        : null,
     attempts: attempts.map((a) => ({
       id: a.id,
       number: a.attempt_number,

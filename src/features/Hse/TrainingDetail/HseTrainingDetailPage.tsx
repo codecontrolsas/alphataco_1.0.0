@@ -4,15 +4,18 @@ import { RecordHeader } from '@/shared/components/common/RecordHeader';
 import { SectionCard } from '@/shared/components/common/SectionCard';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import { TableSkeleton } from '@/shared/components/skeletons/TableSkeleton';
-import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
+import { formatArgentinaDateTime, formatDateAr } from '@/shared/lib/argentina-time';
 import { ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
+import { NewHseRecordButton } from '../Records/components/NewHseRecordButton';
+import { getHseTrainingInstructorsAndRecords } from '../actions/records.queries';
 import { getHseTrainingDetail, type HseTrainingDetail } from '../actions/trainings.queries';
 import { HseStatusBadge } from '../components/HseStatusBadge';
+import { InstructorsEditor } from '../components/InstructorsEditor';
 import { HSE_ASSIGNMENT_STATUS_LABELS, HSE_EXAM_LIMITS, HSE_TRAINING_KIND_LABELS } from '../lib/constants';
-import { HSE_TRAINING_STATUS_UI } from '../lib/status-presentation';
+import { HSE_RECORD_STATUS_UI, HSE_TRAINING_STATUS_UI } from '../lib/status-presentation';
 import { TrainingComplianceList } from './ComplianceList/TrainingComplianceList';
 import { MaterialsSection } from './components/MaterialsSection';
 import { QuestionsEditor } from './components/QuestionsEditor';
@@ -36,12 +39,14 @@ function publishBlocker(training: HseTrainingDetail): string | null {
 
 /** Detalle de una capacitación: datos, examen, material, destinatarios, cumplimiento y acciones por permiso. */
 export async function HseTrainingDetailPage({ id, searchParams }: { id: string; searchParams: DataTableSearchParams }) {
-  const [training, canView, canUpdate, canApprove, canDelete] = await Promise.all([
+  const [training, canView, canUpdate, canApprove, canDelete, people, canCreateRecord] = await Promise.all([
     getHseTrainingDetail(id),
     checkPermissionServer('hse', 'capacitaciones', 'view'),
     checkPermissionServer('hse', 'capacitaciones', 'update'),
     checkPermissionServer('hse', 'capacitaciones', 'approve'),
     checkPermissionServer('hse', 'capacitaciones', 'delete'),
+    getHseTrainingInstructorsAndRecords(id),
+    checkPermissionServer('hse', 'actas', 'create'),
   ]);
   if (!canView) return <StateBlock variant="noperm" title="No tenés permiso para ver esta información" />;
   if (!training) notFound();
@@ -190,6 +195,58 @@ export async function HseTrainingDetailPage({ id, searchParams }: { id: string; 
           editable={editable}
         />
       </SectionCard>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <SectionCard
+          title="Capacitadores habituales"
+          description="Se copian a cada acta nueva y aparecen en la constancia si no hay acta del dictado."
+        >
+          <InstructorsEditor
+            target={{ kind: 'training', id: training.id }}
+            instructors={people.instructors}
+            editable={canUpdate && training.status !== 'archived'}
+            emptyText="Sin capacitadores cargados."
+          />
+        </SectionCard>
+        {people.canViewRecords && (
+          <SectionCard
+            title="Actas de dictado"
+            action={
+              !isDraft && canCreateRecord ? (
+                <NewHseRecordButton
+                  trainings={[{ id: training.id, name: training.title }]}
+                  trainingId={training.id}
+                  label="Nueva acta"
+                />
+              ) : undefined
+            }
+          >
+            {isDraft ? (
+              <p className="text-sm text-muted-foreground">Se labra un acta cuando la capacitación está publicada.</p>
+            ) : people.records.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Todavía no hay actas de esta capacitación.</p>
+            ) : (
+              <ul className="divide-y rounded-lg border">
+                {people.records.map((r) => (
+                  <li key={r.id}>
+                    <Link
+                      href={`/dashboard/hse/records/${r.id}?tab=actas`}
+                      className="flex min-h-11 flex-wrap items-center justify-between gap-2 p-3 outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span className="font-medium tabular-nums">
+                        Acta {r.number} · {formatDateAr(r.heldOn)}
+                      </span>
+                      <span className="flex items-center gap-2 text-sm text-muted-foreground tabular-nums">
+                        {r.present} presentes <HseStatusBadge ui={HSE_RECORD_STATUS_UI[r.status]} />
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </SectionCard>
+        )}
+      </div>
 
       {!isDraft && (
         <section aria-labelledby="hse-training-compliance" className="space-y-3">
