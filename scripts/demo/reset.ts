@@ -16,6 +16,7 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../src/generated/prisma/client.ts';
 import { prismaPgConfig } from '../../src/shared/lib/prisma-pg-config.ts';
+import { enableAllModulesTx, syncModuleCatalogTx } from '../lib/module-control.ts';
 import { createS3 } from '../lib/s3-client.ts';
 import { COMPANY_PROFILE } from './data/catalog.ts';
 import { seedBankReconciliation } from './domains/bank-reconciliation.ts';
@@ -146,6 +147,14 @@ async function main(): Promise<void> {
           await seedUsers(ctx, employees);
           await seedHse(ctx, employees);
           await seedIndicators(ctx);
+          // La demo muestra TODOS los módulos (F3): se encienden cada noche, incluidos HSE y el portal, que la
+          // migración de línea de base deja apagados. Dentro de la misma transacción: si algo falla, queda la de ayer.
+          await syncModuleCatalogTx(tx);
+          await enableAllModulesTx(tx, {
+            actor: 'script:demo-reset',
+            reason: 'Reset diario de la demo: todos los módulos',
+          });
+          log('módulos: todos encendidos');
 
           files = ctx.files;
           if (dry) throw new DryRunRollback();

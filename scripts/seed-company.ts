@@ -15,7 +15,8 @@
  * tarea — no son datos de negocio reales, son necesarios solo para que la fila
  * exista en el entorno local.
  *
- * Uso: node scripts/seed-company.ts --name "Empresa Demo" [--id <uuid>]
+ * Uso: node scripts/seed-company.ts --name "Empresa Demo" [--id <uuid>] [--modules=all]
+ * Al final sincroniza la pertenencia pestaña → módulo (F3); con `--modules=all` además enciende todos los módulos.
  * Requiere DATABASE_URL=postgresql://... en el entorno.
  */
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -25,6 +26,7 @@ import { ACTIONS, PERMISSIONS } from '../src/features/Permissions/permissions-ma
 import { DEFAULT_MEASUREMENT_UNITS } from '../src/features/Warehouses/lib/default-units.ts';
 import { PrismaClient } from '../src/generated/prisma/client.ts';
 import { prismaPgConfig } from '../src/shared/lib/prisma-pg-config.ts';
+import { enableAllModules, syncModuleCatalog } from './lib/module-control.ts';
 import { uuidV5 } from './lib/uuid-v5.ts';
 import { SYSTEM_ROLE_SLUGS, buildPermissionRows } from './seed/permission-rows.ts';
 
@@ -55,11 +57,14 @@ function slugify(value: string): string {
   return slug || 'empresa';
 }
 
-function parseArgs(argv: string[]): { name: string; id?: string } {
+function parseArgs(argv: string[]): { name: string; id?: string; allModules: boolean } {
   let name: string | undefined;
   let id: string | undefined;
+  let allModules = false;
   for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] === '--name') {
+    if (argv[i] === '--modules=all') {
+      allModules = true;
+    } else if (argv[i] === '--name') {
       name = argv[i + 1];
       i += 1;
     } else if (argv[i] === '--id') {
@@ -70,11 +75,11 @@ function parseArgs(argv: string[]): { name: string; id?: string } {
   if (!name) {
     throw new Error('Falta --name "<nombre de la empresa>" (obligatorio)');
   }
-  return { name, id };
+  return { name, id, allModules };
 }
 
 async function main(): Promise<void> {
-  const { name, id: idArg } = parseArgs(process.argv.slice(2));
+  const { name, id: idArg, allModules } = parseArgs(process.argv.slice(2));
   const companyId = idArg ?? uuidV5(name, SEED_NAMESPACE);
   const slug = slugify(name);
 
@@ -272,6 +277,17 @@ async function main(): Promise<void> {
       const created = await prisma.role_notifications.createMany({ data: rows, skipDuplicates: true });
       roleNotificationCount += created.count;
     }
+
+    // 4. Control de módulos (F3): la pertenencia pestaña → clave sale del mapa que se acaba de upsertear. El seed NO
+    // enciende módulos (una instancia nueva nace apagada y lo contratado se enciende por la API de administración),
+    // salvo `--modules=all`, para dev y tests.
+    const sync = await syncModuleCatalog(prisma);
+    const enabled = allModules
+      ? await enableAllModules(prisma, { actor: 'script:seed-company', reason: 'seed-company --modules=all' })
+      : null;
+    console.log(
+      `Módulos: ${sync.tabsOwned} pestañas con dueño${enabled ? ` | encendidos todos (${enabled.changed} claves)` : ' | sin encender (usar --modules=all en dev)'}`
+    );
 
     console.log(
       `Seed OK - company: ${company.company_name} (${company.id}) | modules: ${modules.length} | tabs: ${tabs.length} | actions: ${actions.length} | roles: ${roleIdBySlug.size + 1} | role_permissions: ${rolePermissionCount} | role_notifications: ${roleNotificationCount}`

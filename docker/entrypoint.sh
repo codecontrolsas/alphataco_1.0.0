@@ -7,6 +7,11 @@ PRISMA="node ./node_modules/prisma/build/index.js"
 echo "[entrypoint] prisma migrate deploy..."
 $PRISMA migrate deploy
 
+# Control de módulos (F3): pertenencia pestaña → módulo desde el catálogo del código. Si falla, se corta el arranque
+# (`set -e`): una pertenencia vieja dejaría pestañas de módulos apagados a la vista (o al revés).
+echo "[entrypoint] sincronizando el catálogo de módulos..."
+node scripts/sync-module-catalog.ts
+
 # Crea los buckets de RustFS que falten (idempotente). Un bucket agregado en una version nueva se
 # crea solo al desplegar. Si falla NO se corta el arranque: la web y el resto de la app siguen
 # funcionando y /api/health informa `storage: error`, que deja rojo el workflow de deploy.

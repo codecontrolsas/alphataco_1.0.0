@@ -13,8 +13,8 @@
  * Módulo PURO, sin `server-only` ni imports de servidor: lo importan el seed y los scripts (Node ejecuta el TypeScript tal
  * cual, por eso los imports de tipos van con `import type`), la app, la API de administración y los tests.
  */
-import type { StorageBucket } from '../../shared/lib/storage-buckets';
-import type { JobName } from '../Jobs/lib/types';
+import type { StorageBucket } from '../../shared/lib/storage-buckets.ts';
+import type { JobName } from '../Jobs/lib/types.ts';
 
 export const MODULE_KEYS = [
   'nucleo',

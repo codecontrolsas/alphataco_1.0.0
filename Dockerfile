@@ -142,6 +142,12 @@ COPY --from=build --chown=nextjs:nodejs /app/src/features/Warehouses/lib/default
 COPY --from=build --chown=nextjs:nodejs /app/src/features/Notifications/notification-catalog.ts ./src/features/Notifications/notification-catalog.ts
 COPY --from=build --chown=nextjs:nodejs /app/src/features/Permissions/permission-catalog.ts ./src/features/Permissions/permission-catalog.ts
 COPY --from=build --chown=nextjs:nodejs /app/src/shared/lib/prisma-pg-config.ts ./src/shared/lib/prisma-pg-config.ts
+# Control de módulos (F3): sync en cada arranque (entrypoint), enable-all a mano (dev/CI) y lo que importan.
+COPY --from=build --chown=nextjs:nodejs /app/scripts/sync-module-catalog.ts ./scripts/sync-module-catalog.ts
+COPY --from=build --chown=nextjs:nodejs /app/scripts/enable-all-modules.ts ./scripts/enable-all-modules.ts
+COPY --from=build --chown=nextjs:nodejs /app/scripts/lib/module-control.ts ./scripts/lib/module-control.ts
+COPY --from=build --chown=nextjs:nodejs /app/src/features/Modules/catalog.ts ./src/features/Modules/catalog.ts
+COPY --from=build --chown=nextjs:nodejs /app/src/features/Modules/tab-owners.ts ./src/features/Modules/tab-owners.ts
 # Alta del primer admin de una instancia nueva (se corre a mano, ver docs/deploy/runbook.md).
 COPY --from=build --chown=nextjs:nodejs /app/scripts/bootstrap-admin.ts ./scripts/bootstrap-admin.ts
 # Creacion idempotente de los buckets de RustFS en cada arranque (ver docker/entrypoint.sh).

@@ -41,6 +41,12 @@ const KEEP = new Set([
   'external_api_access_logs',
   'support_ticket_views',
   'user_table_preferences',
+  // control de módulos (F3): estado por instancia y empresa, su auditoría y la pertenencia de pestañas. Si se vaciaran,
+  // la demo amanecería con todo apagado («sin fila = apagado»). `company_modules` apunta a `company`, que se conserva.
+  'instance_modules',
+  'company_modules',
+  'module_change_log',
+  'module_tab_owners',
 ]);
 
 interface FkRow {
@@ -88,7 +94,9 @@ export async function wipeBusinessData(tx: Tx, log: (m: string) => void): Promis
     if (fk.is_nullable !== 'YES') {
       throw new Error(`${fk.table_name}.${fk.column_name} (NOT NULL) apunta a ${fk.ref_table}, que se vacia`);
     }
-    await tx.$executeRawUnsafe(`UPDATE "${fk.table_name}" SET "${fk.column_name}" = NULL WHERE "${fk.column_name}" IS NOT NULL`);
+    await tx.$executeRawUnsafe(
+      `UPDATE "${fk.table_name}" SET "${fk.column_name}" = NULL WHERE "${fk.column_name}" IS NOT NULL`
+    );
   }
 
   await withoutTriggers(tx, async () => {

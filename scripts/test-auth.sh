@@ -18,6 +18,7 @@ export NEXT_PUBLIC_BASE_URL="${NEXT_PUBLIC_BASE_URL:-http://localhost:3000}"
 
 echo "==> Aplicando migraciones pendientes..."
 npx prisma migrate deploy
+enable_all_modules
 
 echo "==> Corriendo los tests de integracion de auth..."
 npx vitest run \

@@ -21,3 +21,11 @@ echo "==> Levantando postgres..."
 
 export DATABASE_URL="postgresql://alphataco:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_PORT:-5432}/alphataco"
 export DIRECT_URL="${DATABASE_URL}"
+
+# Control de módulos (F3): «sin fila = apagado», así que una base de tests recién migrada nace con todo apagado.
+# Cada script lo llama DESPUÉS de `prisma migrate deploy` (antes las tablas no existen). Las suites que prueban el
+# apagado apagan y vuelven a encender dentro de la propia suite.
+enable_all_modules() {
+  echo "==> Encendiendo todos los módulos..."
+  node scripts/enable-all-modules.ts
+}
