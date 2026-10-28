@@ -14,7 +14,7 @@
  *   node scripts/bootstrap-admin.ts --email admin@dominio.com --reissue-link   # otro enlace para un usuario que ya existe
  *
  * --company: nombre de la empresa del seed (por defecto, `SEED_COMPANY_NAME`).
- * Requiere DATABASE_URL. Con NEXT_PUBLIC_BASE_URL imprime el enlace completo.
+ * Requiere DATABASE_URL. Con APP_BASE_URL imprime el enlace completo.
  */
 import { PrismaPg } from '@prisma/adapter-pg';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -50,12 +50,17 @@ function parseArgs(argv: string[]): Args {
   const name = values.get('--name')?.trim() || null;
   if (!name && !reissueLink) throw new Error('Falta --name "Nombre Apellido" (obligatorio para un usuario nuevo)');
 
-  return { email, name, company: values.get('--company')?.trim() || process.env.SEED_COMPANY_NAME?.trim() || null, reissueLink };
+  return {
+    email,
+    name,
+    company: values.get('--company')?.trim() || process.env.SEED_COMPANY_NAME?.trim() || null,
+    reissueLink,
+  };
 }
 
 function setupUrl(token: string): string {
   const path = `/api/auth/reset-password/${token}?callbackURL=${encodeURIComponent(CALLBACK_PATH)}`;
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/+$/, '');
+  const baseUrl = (process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL)?.trim().replace(/\/+$/, '');
   return baseUrl ? `${baseUrl}${path}` : path;
 }
 

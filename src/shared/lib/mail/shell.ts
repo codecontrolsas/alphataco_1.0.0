@@ -1,3 +1,5 @@
+import { appBaseUrl } from '@/shared/lib/app-url';
+
 /**
  * Layout y primitivas compartidas de los correos HTML.
  *
@@ -109,7 +111,7 @@ export function escapeHtml(value: string | null | undefined): string {
 
 /** Base pública de la app, para los enlaces de los correos. */
 export function appUrl(): string {
-  return (process.env.NEXT_PUBLIC_BASE_URL?.trim() || 'http://localhost:3000').replace(/\/+$/, '');
+  return appBaseUrl();
 }
 
 /** Píldora de color usada en todas las tablas de los correos. */

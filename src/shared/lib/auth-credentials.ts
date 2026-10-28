@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { Prisma } from '@/generated/prisma/client';
+import { appBaseUrl } from '@/shared/lib/app-url';
 import { auth } from '@/shared/lib/auth';
 import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
 import { setTenantContext } from '@/shared/lib/tenant-context';
@@ -183,8 +184,7 @@ export async function createPasswordSetupLink(
     },
   });
 
-  const baseURL = (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
-  return `${baseURL}/api/auth/reset-password/${token}?callbackURL=${encodeURIComponent(callbackPath)}`;
+  return `${appBaseUrl()}/api/auth/reset-password/${token}?callbackURL=${encodeURIComponent(callbackPath)}`;
 }
 
 /**

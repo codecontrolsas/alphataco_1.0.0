@@ -86,14 +86,11 @@ jobs:
       registry_username: ${{ vars.REGISTRY_USERNAME }}
       sha: ${{ github.sha }}
       # Las NEXT_PUBLIC_* se hornean en el bundle: cambiar una de estas
-      # variables exige una imagen nueva, no un redeploy.
+      # variables exige una imagen nueva, no un redeploy. La URL base (APP_BASE_URL) es de runtime: va en el entorno del servicio.
       build_args: |
-        NEXT_PUBLIC_BASE_URL=${{ vars.NEXT_PUBLIC_BASE_URL }}
-        NEXT_PUBLIC_PROJECT_URL=${{ vars.NEXT_PUBLIC_PROJECT_URL }}
         NEXT_PUBLIC_POSTHOG_KEY=${{ vars.NEXT_PUBLIC_POSTHOG_KEY }}
         NEXT_PUBLIC_POSTHOG_HOST=${{ vars.NEXT_PUBLIC_POSTHOG_HOST }}
         NEXT_PUBLIC_SHOW_LOGS=${{ vars.NEXT_PUBLIC_SHOW_LOGS || 'false' }}
-      required_build_args: NEXT_PUBLIC_BASE_URL NEXT_PUBLIC_PROJECT_URL
       skip_if_exists: true
       # Variable de repo; vacia = runner de GitHub. Con un label `blacksmith-*`
       # el build usa su builder persistente. El deploy no cambia de runner.
