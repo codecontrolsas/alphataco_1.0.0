@@ -23,11 +23,30 @@ export interface TenantContext {
   employeeId?: string | null;
 }
 
+/**
+ * Sesión autenticada SIN empresa activa (primer ingreso: el proxy la manda a crear su empresa, o tiene membresías y
+ * todavía no eligió ninguna). Solo fija el usuario: con `app.company_id` vacío, la RLS le muestra su propio perfil,
+ * sus membresías y las empresas a las que pertenece, y ninguna fila de negocio (todas exigen empresa activa).
+ */
+export interface ActorOnlyContext {
+  companyId: null;
+  userId: string;
+  kind: 'user';
+}
+
+/** Lo que puede fijarse en una transacción: el contexto completo de empresa o solo el actor de la sesión. */
+export type TransactionContext = TenantContext | ActorOnlyContext;
+
 export type TenantTx = Prisma.TransactionClient;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function assertContext(ctx: TenantContext): void {
+function assertContext(ctx: TransactionContext): void {
+  if (ctx.companyId === null) {
+    // Sin empresa el usuario es lo único que identifica el contexto: tiene que estar y ser un uuid.
+    if (ctx.userId === null || !UUID_RE.test(ctx.userId)) throw new Error('userId debe ser un uuid');
+    return;
+  }
   if (!UUID_RE.test(ctx.companyId)) throw new Error('companyId debe ser un uuid');
   if (ctx.userId !== null && !UUID_RE.test(ctx.userId)) throw new Error('userId debe ser un uuid');
   if (ctx.employeeId != null && !UUID_RE.test(ctx.employeeId)) throw new Error('employeeId debe ser un uuid');
@@ -37,8 +56,14 @@ function assertContext(ctx: TenantContext): void {
  * Fija el contexto con `set_config(..., true)`: vive solo hasta el final de la transacción en curso.
  * Nunca un `SET` de sesión: con un pool se filtraría a la próxima persona que use la conexión.
  */
-export function setTenantContext(tx: Pick<TenantTx, '$executeRaw'>, ctx: TenantContext) {
+export function setTenantContext(tx: Pick<TenantTx, '$executeRaw'>, ctx: TransactionContext) {
   assertContext(ctx);
+  // Solo actor: la empresa va vacía a propósito (`app_current_company_id()` la lee como NULL).
+  if (ctx.companyId === null) {
+    return tx.$executeRaw`SELECT set_config('app.company_id', '', true),
+      set_config('app.user_id', ${ctx.userId}, true),
+      set_config('app.actor_kind', ${ctx.kind}, true)`;
+  }
   // El legajo va solo cuando hay: cada contexto se fija al principio de su propia transacción, así que sin el
   // `set_config` el valor queda NULL (no hereda nada de otra persona) y las demás sesiones no pagan un parámetro más.
   if (ctx.employeeId) {
@@ -65,7 +90,7 @@ export interface TenantTransactionOptions {
  */
 export function runWithTenantContext<T>(
   base: Pick<PrismaClient, '$transaction'>,
-  ctx: TenantContext,
+  ctx: TransactionContext,
   fn: (tx: TenantTx) => Promise<T>,
   options?: TenantTransactionOptions
 ): Promise<T> {
@@ -150,8 +175,11 @@ export function getCompanyScopeContext(): TenantContext | null {
   return companyScope.getStore() ?? null;
 }
 
-/** Resuelve el contexto del request actual, o null si no hay (login, jobs, tests, cache sin request). */
-export type TenantContextResolver = () => Promise<TenantContext | null>;
+/**
+ * Resuelve el contexto del request actual, o null si no hay (login, jobs, tests, cache sin request). Con sesión pero
+ * sin empresa activa resuelve solo el actor (`ActorOnlyContext`).
+ */
+export type TenantContextResolver = () => Promise<TransactionContext | null>;
 
 /**
  * Cliente "global" que resuelve solo el contexto de empresa: las features siguen importando `prisma` y cada operación

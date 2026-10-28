@@ -8,6 +8,7 @@
 # - las preferencias de tabla que nunca se guardaban (la política no coincidía con la clave);
 # - el tipo «Diagnóstico» oculto que bloqueaba crear uno propio con ese nombre;
 # - el alta de usuario que escribía `auth_*` con el rol de la app (cerradas a ese rol) y no veía perfiles de otra empresa.
+# - el usuario sin empresa activa (primer ingreso) que no veía ni su propio perfil y no podía crear su primera empresa.
 # Los jobs bajo RLS se prueban en `test-jobs.sh` (misma preparación de roles).
 #
 # Usa la base de trabajo `alphataco`; cada suite crea y borra sus propias empresas de prueba.
@@ -35,4 +36,5 @@ npx vitest run --no-file-parallelism \
   src/features/Employees/EmpleadoID/PortalAccess/portal-access.rls.integration.test.ts \
   src/features/Dashboard/Boards/dashboard-presets.rls.integration.test.ts \
   src/shared/lib/instance-settings.rls.integration.test.ts \
+  src/features/Empresa/General/first-company.rls.integration.test.ts \
   src/features/MobileApi/employees/mobile-employees.rls.integration.test.ts
