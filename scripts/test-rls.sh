@@ -28,4 +28,5 @@ echo "==> Corriendo los tests de integracion bajo RLS..."
 npx vitest run --no-file-parallelism \
   src/shared/lib/cached-lists.rls.integration.test.ts \
   src/shared/lib/user-flows.rls.integration.test.ts \
-  src/features/Auth/actions/register-user.rls.integration.test.ts
+  src/features/Auth/actions/register-user.rls.integration.test.ts \
+  src/features/Hse/hse-documents.rls.integration.test.ts
