@@ -2,6 +2,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AuthShell } from '@/features/Auth/components/AuthShell';
 import { AuthSkeleton } from '@/features/Auth/components/AuthSkeleton';
 import { UpdateUserPasswordForm } from '@/features/Auth/components/UpdateUserPasswordForm';
+import { assertPortalEnabled } from '@/features/Portal/lib/feature-gate';
 import { CircleAlert } from 'lucide-react';
 import { Suspense } from 'react';
 
@@ -17,6 +18,8 @@ interface PortalActivatePageProps {
  */
 async function PortalActivateContent({ searchParams }: PortalActivatePageProps) {
   const { token, error } = await searchParams;
+  // Antes de saber la empresa, el portal se corta por la instancia (F3.3), igual que el login.
+  await assertPortalEnabled(null);
   const valid = Boolean(token) && !error;
 
   return (

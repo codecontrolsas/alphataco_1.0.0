@@ -1,4 +1,6 @@
 import { isHseEnabled } from '@/features/Hse/lib/feature-gate';
+import { CORE_MODULE, moduleForBucket } from '@/features/Modules/catalog';
+import { isModuleEnabledForCompany } from '@/features/Modules/server/modules.server';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { s3Client } from '@/shared/lib/s3';
@@ -26,6 +28,8 @@ import { NextResponse } from 'next/server';
  *    `canUseAsActiveCompany()`, el mismo que `getActiveCompanyId()`, así que también pasan
  *    el operario de indumentaria y el del QR de mantenimiento, que no son miembros del
  *    dashboard.
+ *
+ * 5. El módulo dueño del bucket (`moduleForBucket`) tiene que estar encendido para la empresa dueña del archivo.
  *
  * Todo lo que no se puede probar responde 404, nunca 403: un 403 confirmaría que el archivo
  * existe. Y nada responde 500: un id con forma rara es un 404, no un error del servidor.
@@ -100,6 +104,18 @@ export async function GET(
 
     if (!(await isOwnerReachable(owner))) {
       logger.warn('Intento de leer un archivo ajeno', { data: { bucket, key, owner } });
+      return notFound();
+    }
+
+    // Módulo dueño del bucket (F3.3), apagado para la empresa DUEÑA del archivo (no la activa: el operario del QR o de
+    // indumentaria no tiene una). Los archivos se conservan en el bucket y no se sirven.
+    const bucketModule = moduleForBucket(bucket);
+    if (
+      owner.kind === 'company' &&
+      bucketModule &&
+      bucketModule !== CORE_MODULE &&
+      !(await isModuleEnabledForCompany(bucketModule, owner.companyId))
+    ) {
       return notFound();
     }
 

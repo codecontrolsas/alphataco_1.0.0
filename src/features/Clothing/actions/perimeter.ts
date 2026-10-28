@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { ModuleDisabledError, isModuleEnabledForCompany } from '@/features/Modules/server/modules.server';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId, isSessionAnonymous } from '@/shared/lib/session';
 import { cache } from 'react';
@@ -50,7 +51,6 @@ export const getClothingOperator = cache(async (): Promise<ClothingOperator | nu
   // el panel de otra persona.
   if (await isSessionAnonymous()) return null;
 
-
   const profile = await prisma.profile.findUnique({
     where: { credential_id: credentialId },
     select: { id: true, employee_id: true },
@@ -77,6 +77,9 @@ export const getClothingOperator = cache(async (): Promise<ClothingOperator | nu
 export async function requireClothingOperator(): Promise<ClothingOperator> {
   const operator = await getClothingOperator();
   if (!operator) throw new Error('No hay una sesión de ropa de trabajo con un empleado vinculado');
+  // Módulo `indumentaria` apagado para la empresa del operario (F3.3): el panel no opera (este perímetro no pasa por permisos).
+  if (!(await isModuleEnabledForCompany('indumentaria', operator.companyId)))
+    throw new ModuleDisabledError('indumentaria');
   return operator;
 }
 

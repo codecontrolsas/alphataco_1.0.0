@@ -8,8 +8,12 @@ const MAX = 30;
 
 /** Vehículos activos de la empresa para asignar a una línea; busca por dominio o número interno. */
 export const GET = mobileRoute({
+  module: 'operaciones',
   run: async ({ req, ctx }) => {
-    if (!(await hasDailyReportPermission(ctx, 'assign_resources')) && !(await hasDailyReportPermission(ctx, 'update'))) {
+    if (
+      !(await hasDailyReportPermission(ctx, 'assign_resources')) &&
+      !(await hasDailyReportPermission(ctx, 'update'))
+    ) {
       return mobileError(403, 'FORBIDDEN', 'No tenés permiso para asignar recursos.');
     }
     const q = (new URL(req.url).searchParams.get('q') ?? '').trim().slice(0, 60);
@@ -18,13 +22,26 @@ export const GET = mobileRoute({
         where: {
           company_id: ctx.companyId,
           is_active: true,
-          ...(q ? { OR: [{ domain: { contains: q, mode: 'insensitive' } }, { intern_number: { contains: q, mode: 'insensitive' } }] } : {}),
+          ...(q
+            ? {
+                OR: [
+                  { domain: { contains: q, mode: 'insensitive' } },
+                  { intern_number: { contains: q, mode: 'insensitive' } },
+                ],
+              }
+            : {}),
         },
         orderBy: { domain: 'asc' },
         take: MAX,
         select: { id: true, domain: true, intern_number: true },
       })
     );
-    return mobileJson({ equipment: vehicles.map((v) => ({ id: v.id, kind: 'vehicle' as const, label: v.domain ?? v.intern_number ?? v.id })) });
+    return mobileJson({
+      equipment: vehicles.map((v) => ({
+        id: v.id,
+        kind: 'vehicle' as const,
+        label: v.domain ?? v.intern_number ?? v.id,
+      })),
+    });
   },
 });

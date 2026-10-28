@@ -29,6 +29,7 @@ export function employeeSectionRoute<T>(config: {
   load: (ctx: TenantContext, employeeId: string, access: EmployeeAccess) => Promise<T>;
 }) {
   return mobileRoute<{ employeeId: string }>({
+    module: 'empleados',
     run: async ({ req, ctx, params }) => {
       if (!employeeIdSchema.safeParse(params.employeeId).success) {
         return mobileError(422, 'INVALID_INPUT', 'employeeId inválido.');

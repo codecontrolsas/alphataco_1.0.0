@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { ModuleDisabledError } from '@/features/Modules/server/modules.server';
+import { isPortalEnabled } from '@/features/Portal/lib/feature-gate';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionNeedsPasswordChange, getSessionUserId, isSessionAnonymous } from '@/shared/lib/session';
 import { getTenantContextOrNull } from '@/shared/lib/tenant-db';
@@ -122,6 +124,8 @@ export const getPortalSession = cache(async (): Promise<PortalSessionResult> => 
 export async function requirePortalEmployee(): Promise<PortalEmployee> {
   const session = await getPortalSession();
   if (!session.ok) throw new Error('No hay una sesión del portal habilitada');
+  // Módulo `portal` apagado para la empresa del legajo (F3.3): ninguna action del portal corre, aunque la sesión siga abierta.
+  if (!(await isPortalEnabled(session.employee.companyId))) throw new ModuleDisabledError('portal');
   if (session.employee.needsPasswordChange) throw new Error('Tenés que cambiar la contraseña temporal antes de seguir');
   return session.employee;
 }

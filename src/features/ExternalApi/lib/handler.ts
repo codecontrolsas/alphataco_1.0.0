@@ -1,3 +1,5 @@
+import { CORE_MODULE, moduleForExternalResource } from '@/features/Modules/catalog';
+import { isModuleEnabledForCompany } from '@/features/Modules/server/modules.server';
 import { Logger } from '@/lib/logger';
 import type { NextRequest } from 'next/server';
 import { logExternalApiAccess } from './access-log';
@@ -19,6 +21,9 @@ const logger = new Logger('features/ExternalApi/handler');
  * "Server Actions, no API routes": los consume software de terceros por HTTP, no la app.
  * No tienen consumidores dentro del repo justamente por eso; borrarlos romperia
  * integraciones externas que no se ven desde el codigo.
+ *
+ * El módulo dueño del recurso sale del catálogo (`externalResources`); si está apagado para la empresa del cliente, el
+ * endpoint responde 404 `MODULE_DISABLED`.
  *
  * Los cinco recursos comparten exactamente el mismo ciclo —autenticar,
  * validar parametros, consultar, registrar el acceso— y solo se diferencian en
@@ -48,6 +53,22 @@ export function createExternalListHandler<TRow, TPublic>(options: {
         responseTimeMs: Date.now() - startedAt,
       });
       return errorResponse(auth.status, auth.code, auth.message);
+    }
+
+    // Módulo dueño del recurso (F3.3), apagado para la empresa del cliente: 404 como si el recurso no existiera. El estado
+    // se lee en cada request (sin cache) y la empresa sale de la credencial, nunca de la petición.
+    const owner = moduleForExternalResource(endpoint);
+    if (owner && owner !== CORE_MODULE && !(await isModuleEnabledForCompany(owner, auth.client.companyId))) {
+      await logExternalApiAccess({
+        endpoint,
+        statusCode: 404,
+        request,
+        clientId: auth.client.id,
+        attemptedClientId: auth.attemptedClientId,
+        errorMessage: 'MODULE_DISABLED',
+        responseTimeMs: Date.now() - startedAt,
+      });
+      return errorResponse(404, 'MODULE_DISABLED', 'El recurso no está habilitado.');
     }
 
     const parsedQuery = externalListQuerySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));

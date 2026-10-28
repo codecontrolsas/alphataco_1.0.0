@@ -1,6 +1,7 @@
 import { ClothingLayoutProvider } from '@/app/clothing/clothing-layout-provider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { clothingLogout, getClothingOperatorContext } from '@/features/Clothing/actions/session.server';
+import { requireCompanyRoute } from '@/features/Modules/server/public-routes.server';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import { ClothingPanelHeader } from './ClothingPanelHeader';
@@ -35,6 +36,9 @@ async function ClothingPanelContent({ children }: { children: React.ReactNode })
   if (!context) {
     redirect('/clothing/login');
   }
+
+  // La empresa del operario decide (F3.3): sin `indumentaria` en su empresa el panel no existe.
+  await requireCompanyRoute('/clothing', context.companyId);
 
   return (
     <ClothingLayoutProvider context={context}>

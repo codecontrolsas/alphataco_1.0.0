@@ -1,3 +1,4 @@
+import { requireCompanyRoute } from '@/features/Modules/server/public-routes.server';
 import { getOperatorContext } from '@/features/OperatorPanel/actions/session.server';
 import { OperatorHeader } from '@/features/OperatorPanel/components/OperatorHeader';
 import { OperatorLayoutProvider } from '@/features/OperatorPanel/components/operator-layout-provider';
@@ -13,6 +14,9 @@ export default async function OperatorPanelLayout({ children }: { children: Reac
   if (!context) {
     redirect('/operator/login');
   }
+
+  // La empresa del operario es la que decide (F3.3): sin `mantenimiento` en su empresa el panel no existe.
+  await requireCompanyRoute('/operator', context.companyId);
 
   return (
     <OperatorLayoutProvider context={context}>

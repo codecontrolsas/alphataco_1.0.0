@@ -2,6 +2,7 @@ import { AuthShell } from '@/features/Auth/components/AuthShell';
 import { AuthSkeleton } from '@/features/Auth/components/AuthSkeleton';
 import { CredentialsLoginForm } from '@/features/Auth/components/CredentialsLoginForm';
 import { clothingLogin, getClothingOperatorContext } from '@/features/Clothing/actions/session.server';
+import { requireInstanceRoute } from '@/features/Modules/server/public-routes.server';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 
@@ -10,6 +11,7 @@ export const metadata = {
 };
 
 async function ClothingLoginContent() {
+  await requireInstanceRoute('/clothing');
   const context = await getClothingOperatorContext();
 
   if (context) {

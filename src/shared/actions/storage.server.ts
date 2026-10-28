@@ -1,12 +1,14 @@
 'use server';
 
+import { CORE_MODULE, moduleForBucket } from '@/features/Modules/catalog';
+import { MODULE_DISABLED_MESSAGE, isModuleEnabled } from '@/features/Modules/server/modules.server';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
+import { storageUpload } from '@/shared/lib/storage';
 import { isClientUploadBucket } from '@/shared/lib/storage-buckets';
 import { extensionOf, toFileName } from '@/shared/lib/storage-file-name';
 import { buildStorageFileUrl } from '@/shared/lib/storage-url';
-import { storageUpload } from '@/shared/lib/storage';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 /**
@@ -38,7 +40,10 @@ export type StorageUploadResult = { ok: true; path: string; url: string } | { ok
  *   mano con el id ajeno.
  * - `preparte-img`: `<empresa activa>/<nombre saneado>`.
  */
-async function buildKey(bucket: string, fileName: string): Promise<{ ok: true; key: string } | { ok: false; error: string }> {
+async function buildKey(
+  bucket: string,
+  fileName: string
+): Promise<{ ok: true; key: string } | { ok: false; error: string }> {
   if (bucket === 'avatar') {
     const credentialId = await getSessionUserId();
     if (!credentialId) return { ok: false, error: 'Sesión requerida' };
@@ -71,12 +76,18 @@ export async function uploadToStorage(
     return { ok: false, error: 'No se puede subir a ese destino' };
   }
 
+  // Módulo dueño del bucket apagado para la empresa activa (F3.3): no se sube nada (`avatar` es del núcleo).
+  const owner = moduleForBucket(bucket as Parameters<typeof moduleForBucket>[0]);
+  if (owner && owner !== CORE_MODULE && !(await isModuleEnabled(owner))) {
+    return { ok: false, error: MODULE_DISABLED_MESSAGE };
+  }
+
   const destination = await buildKey(bucket, fileName);
   if (!destination.ok) return destination;
 
   // El avatar siempre se pisa: la key es la del propio perfil, así que reemplazarlo es la
   // operación, no un riesgo. En el resto manda el llamador.
-  const upsert = bucket === 'avatar' ? true : (options.upsert ?? false);
+  const upsert = bucket === 'avatar' ? true : options.upsert ?? false;
 
   const uploaded = await storageUpload(bucket, destination.key, file, { ...options, upsert });
   if (!uploaded.ok) {

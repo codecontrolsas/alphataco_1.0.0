@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 /** Altas y bajas explícitas de recursos de una línea (idempotente por `commandId`, con `baseVersion`). */
 export const POST = mobileRoute<{ rowId: string }, z.output<typeof changeResourcesBodySchema>>({
+  module: 'operaciones',
   body: changeResourcesBodySchema,
   run: async ({ ctx, params, body }) => {
     if (!z.string().uuid().safeParse(params.rowId).success) return mobileError(422, 'INVALID_INPUT', 'rowId inválido.');

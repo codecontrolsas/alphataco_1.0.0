@@ -92,6 +92,7 @@ export async function createOrUpdateMaintenanceRequest(input: {
     // `nuevo_pedido:create` en la empresa activa). Corre también desde el QR.
     const { companyId } = await requireResourceAccess('vehicle', input.equipmentId, {
       dashboardPermissions: [NUEVO_PEDIDO_CREATE],
+      modules: ['mantenimiento'],
     });
     companyIdByEquipment.set(input.equipmentId, companyId);
     // El supervisor elegido llega del cliente: tiene que ser un usuario de la empresa del equipo.
@@ -483,6 +484,7 @@ export async function createManualDeviationsFromChecklist(input: {
     // tiene que pertenecer a ella.
     const { companyId } = await requireResourceAccess('vehicle', input.equipmentId, {
       dashboardPermissions: [NUEVO_PEDIDO_CREATE],
+      modules: ['mantenimiento'],
     });
     // El supervisor elegido llega del cliente: tiene que ser un usuario de la empresa del equipo.
     await assertSupervisorInCompany(input.supervisorId, companyId);

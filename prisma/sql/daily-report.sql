@@ -6,8 +6,8 @@
 -- FUNCTIONS (7)
 -- ============================================================================
 
--- function actualizar_estado_daily_reports (T4: parte 1 usa reconcile_daily_report_rows_status; migracion 20261019100300)
-CREATE OR REPLACE FUNCTION public.actualizar_estado_daily_reports()
+-- function actualizar_estado_daily_reports (T4: parte 1 usa reconcile_daily_report_rows_status; migracion 20261019100300; F3.3: p_company_ids, migracion 20261105100000)
+CREATE OR REPLACE FUNCTION public.actualizar_estado_daily_reports(p_company_ids uuid[] DEFAULT NULL)
  RETURNS void
  LANGUAGE plpgsql
  SET "TimeZone" TO 'America/Argentina/Buenos_Aires'
@@ -24,6 +24,7 @@ BEGIN
         JOIN dailyreport d ON d.id = dr.daily_report_id
         WHERE d.status = 'abierto'
           AND dr.status IN ('pendiente', 'sin_recursos_asignados')
+          AND (p_company_ids IS NULL OR d.company_id = ANY (p_company_ids))
     ));
 
     -- Parte 2: Cierre de reportes con fecha pasada
@@ -32,6 +33,7 @@ BEGIN
         FROM dailyreport
         WHERE date < ( (NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date )
         AND status IN ('abierto', 'cerrado_incompleto')
+        AND (p_company_ids IS NULL OR company_id = ANY (p_company_ids))
     LOOP
         SELECT EXISTS (SELECT 1 FROM dailyreportrows WHERE daily_report_id = report_record.id) INTO tiene_filas;
 
@@ -996,7 +998,7 @@ END;$function$;
 
 -- function marcar_prepartes_vencidos (origen: supabase/migrations/20260202113926_fixing-maintenance-flow.sql)
 -- Task 4: portada desde objects.json (era huerfana: la llamaba el cron de Supabase). Llamador: job P5.
-CREATE OR REPLACE FUNCTION public.marcar_prepartes_vencidos()
+CREATE OR REPLACE FUNCTION public.marcar_prepartes_vencidos(p_company_ids uuid[] DEFAULT NULL)
  RETURNS void
  LANGUAGE plpgsql
 AS $function$BEGIN
@@ -1010,7 +1012,8 @@ AS $function$BEGIN
         "executionDate"::date < CURRENT_DATE
         OR 
         ("executionDate"::date = CURRENT_DATE AND "executionDate" < NOW())
-    );
+    )
+    AND (p_company_ids IS NULL OR company_id = ANY (p_company_ids));
 END;$function$;
 
 -- ============================================================================

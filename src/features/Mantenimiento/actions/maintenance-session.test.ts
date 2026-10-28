@@ -41,11 +41,15 @@ const tenantMock = vi.hoisted(() => ({
 }));
 vi.mock('@/shared/lib/tenant', () => tenantMock);
 
+// Módulos del QR (F3.3): encendidos salvo que el test los apague.
+const routesMock = vi.hoisted(() => ({ isRouteEnabledForCompany: vi.fn(async () => true) }));
+vi.mock('@/features/Modules/server/public-routes.server', () => routesMock);
+vi.mock('@/features/Modules/server/modules.server', () => ({
+  MODULE_DISABLED_MESSAGE: 'Este módulo no está habilitado.',
+}));
+
 import { getSessionUser, isSessionAnonymous } from '@/shared/lib/session';
-import {
-  completeMaintenanceEmployeeAnonymousSession,
-  setActiveCompanyForEquipment,
-} from './maintenance-actions';
+import { completeMaintenanceEmployeeAnonymousSession, setActiveCompanyForEquipment } from './maintenance-actions';
 
 const EQUIPMENT = 'equipment-1';
 const COMPANY_A = 'company-a';
@@ -53,6 +57,7 @@ const COMPANY_A = 'company-a';
 describe('completeMaintenanceEmployeeAnonymousSession', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    routesMock.isRouteEnabledForCompany.mockResolvedValue(true);
     vi.mocked(getSessionUser).mockResolvedValue({ id: 'user-1', email: null });
     vi.mocked(isSessionAnonymous).mockResolvedValue(true);
     prismaMock.employees.findFirst.mockResolvedValue({
@@ -76,6 +81,17 @@ describe('completeMaintenanceEmployeeAnonymousSession', () => {
       companyId: COMPANY_A,
       employeeId: 'emp-1',
     });
+  });
+
+  it('módulos del QR apagados para la empresa del legajo: no completa la sesión ni escribe claims', async () => {
+    routesMock.isRouteEnabledForCompany.mockResolvedValue(false);
+
+    const result = await completeMaintenanceEmployeeAnonymousSession({ cuil: '20-12345678-9', equipmentId: EQUIPMENT });
+
+    expect(result).toEqual({ ok: false, error: 'Este módulo no está habilitado.' });
+    expect(routesMock.isRouteEnabledForCompany).toHaveBeenCalledWith('/maintenance', COMPANY_A);
+    expect(writeMaintenanceClaims).not.toHaveBeenCalled();
+    expect(prismaMock.profile.upsert).not.toHaveBeenCalled();
   });
 
   it('rechaza una sesión de dashboard: no escribe el claim de empresa ni el de empleado', async () => {
@@ -147,6 +163,7 @@ describe('completeMaintenanceEmployeeAnonymousSession', () => {
 describe('setActiveCompanyForEquipment', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    routesMock.isRouteEnabledForCompany.mockResolvedValue(true);
     vi.mocked(getSessionUser).mockResolvedValue({ id: 'user-1', email: null });
     claimsMock.canUserUseCompany.mockResolvedValue(false);
     prismaMock.vehicles.findUnique.mockResolvedValue({ company_id: COMPANY_A });
@@ -180,6 +197,17 @@ describe('setActiveCompanyForEquipment', () => {
     await setActiveCompanyForEquipment(EQUIPMENT);
 
     expect(claimsMock.writeCompanyClaim).toHaveBeenCalledWith('session-token', COMPANY_A);
+  });
+
+  it('módulos del QR apagados para la empresa del equipo: no fija cookie ni claim', async () => {
+    routesMock.isRouteEnabledForCompany.mockResolvedValue(false);
+    claimsMock.canUserUseCompany.mockResolvedValue(true);
+
+    const result = await setActiveCompanyForEquipment(EQUIPMENT);
+
+    expect(result).toEqual({ ok: false, error: 'Este módulo no está habilitado.' });
+    expect(tenantMock.setActiveCompanyCookie).not.toHaveBeenCalled();
+    expect(claimsMock.writeCompanyClaim).not.toHaveBeenCalled();
   });
 
   it('sin sesión no escribe la cookie', async () => {

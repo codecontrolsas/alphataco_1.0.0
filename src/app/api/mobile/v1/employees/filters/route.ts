@@ -6,6 +6,7 @@ import { mobileError, mobileReadJson } from '@/features/MobileApi/lib/http';
 
 /** Opciones de los filtros del listado: estados que el usuario puede ver, sectores, puestos, clientes y estado documental. */
 export const GET = mobileRoute({
+  module: 'empleados',
   run: async ({ req, ctx }) => {
     const access = await loadEmployeeAccess(ctx);
     if (!access.listActive && !access.listInactive)

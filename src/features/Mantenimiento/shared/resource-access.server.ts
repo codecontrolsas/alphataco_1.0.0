@@ -1,11 +1,13 @@
 import 'server-only';
 
+import type { ModuleKey } from '@/features/Modules/catalog';
+import { ModuleDisabledError, getEnabledModulesFor } from '@/features/Modules/server/modules.server';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionEmployeeIdClaim, getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { getResourceCompanyId } from './resource-company';
 import type { MaintenanceResourceKind } from './maintenance-resource';
+import { getResourceCompanyId } from './resource-company';
 
 /**
  * Acceso a un recurso de mantenimiento (vehículo o equipamiento) con DOS caminos.
@@ -24,6 +26,10 @@ import type { MaintenanceResourceKind } from './maintenance-resource';
  *    pertenencia a la empresa activa: lectura sin tab propia).
  *
  * Sin sesión, o con ninguno de los dos caminos, lanza. Módulo server-only (NO es Server Action).
+ *
+ * Módulos (F3.3): `modules` pide que ALGUNA de esas claves esté encendida para la empresa DEL RECURSO. Hace falta aparte
+ * del permiso porque el operario del QR no pasa por permisos (entra por legajo) y la empresa activa de la sesión no es la
+ * del equipo. Se evalúa después del acceso, así que quien no tiene acceso sigue recibiendo el mismo error.
  */
 
 export type ResourceAccessVia = 'field' | 'dashboard';
@@ -32,6 +38,12 @@ export interface ResourcePermission {
   module: string;
   tab: string;
   action: string;
+}
+
+export interface ResourceAccessOptions {
+  dashboardPermissions?: ResourcePermission[];
+  /** Alguna de estas claves del catálogo tiene que estar encendida para la empresa del recurso. */
+  modules?: readonly ModuleKey[];
 }
 
 export interface ResourceAccess {
@@ -76,17 +88,21 @@ async function hasDashboardAccess(companyId: string, permissions: ResourcePermis
  */
 export async function requireCompanyAccessForResource(
   companyId: string,
-  options?: { dashboardPermissions?: ResourcePermission[] }
+  options?: ResourceAccessOptions
 ): Promise<ResourceAccess> {
   if (!(await getSessionUserId())) throw new Error('Usuario no autenticado');
 
-  if (await isFieldEmployeeOfCompany(companyId)) return { companyId, via: 'field' };
+  let via: ResourceAccessVia;
+  if (await isFieldEmployeeOfCompany(companyId)) via = 'field';
+  else if (await hasDashboardAccess(companyId, options?.dashboardPermissions ?? [])) via = 'dashboard';
+  else throw new Error(FORBIDDEN_MESSAGE);
 
-  if (await hasDashboardAccess(companyId, options?.dashboardPermissions ?? [])) {
-    return { companyId, via: 'dashboard' };
+  const modules = options?.modules;
+  if (modules && modules.length > 0) {
+    const enabled = await getEnabledModulesFor(companyId);
+    if (!modules.some((key) => enabled.has(key))) throw new ModuleDisabledError(modules[0]!);
   }
-
-  throw new Error(FORBIDDEN_MESSAGE);
+  return { companyId, via };
 }
 
 /**
@@ -96,7 +112,7 @@ export async function requireCompanyAccessForResource(
 export async function requireResourceAccess(
   kind: MaintenanceResourceKind | undefined,
   resourceId: string,
-  options?: { dashboardPermissions?: ResourcePermission[] }
+  options?: ResourceAccessOptions
 ): Promise<ResourceAccess> {
   const companyId = await getResourceCompanyId(prisma, kind, resourceId);
   return requireCompanyAccessForResource(companyId, options);

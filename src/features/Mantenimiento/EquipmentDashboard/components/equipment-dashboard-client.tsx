@@ -42,6 +42,8 @@ interface EquipmentDashboardClientProps {
   equipmentId: string;
   isGuest: boolean;
   isAnonymous: boolean;
+  /** Opciones que ofrece la pantalla: las de un módulo apagado para la empresa del equipo no se muestran. */
+  options: { request: boolean; checklists: boolean; tireService: boolean };
   employeeName?: string | null;
   employeeCuil?: string | null;
 }
@@ -51,6 +53,7 @@ export default function EquipmentDashboardClient({
   equipmentId,
   isGuest,
   isAnonymous,
+  options,
   employeeName,
   employeeCuil,
 }: EquipmentDashboardClientProps) {
@@ -167,7 +170,7 @@ export default function EquipmentDashboardClient({
           <h2 className="text-lg font-semibold text-foreground px-1">Seleccione una opción</h2>
 
           <div className="space-y-3">
-            {!isGuest && (
+            {!isGuest && options.request && (
               <ActionButton
                 icon={Wrench}
                 label="Solicitar Mantenimiento"
@@ -177,14 +180,16 @@ export default function EquipmentDashboardClient({
               />
             )}
 
-            <ActionButton
-              icon={ClipboardList}
-              label="Completar Checklist"
-              description="Realizar inspección de mantenimiento"
-              onClick={() => router.push(`/maintenance/equipment/${equipmentId}/checklists`)}
-            />
+            {options.checklists && (
+              <ActionButton
+                icon={ClipboardList}
+                label="Completar Checklist"
+                description="Realizar inspección de mantenimiento"
+                onClick={() => router.push(`/maintenance/equipment/${equipmentId}/checklists`)}
+              />
+            )}
 
-            {equipment.tire_template_id && !isAnonymous && (
+            {options.tireService && equipment.tire_template_id && !isAnonymous && (
               <ActionButton
                 icon={CircleDot}
                 label="Operación de Gomería"

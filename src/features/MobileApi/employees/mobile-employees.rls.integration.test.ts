@@ -320,4 +320,46 @@ describe.skipIf(!RUN_RLS)('API móvil de empleados bajo RLS (rol alphataco_app)'
       403
     );
   });
+
+  it('módulos (F3.3): con `empleados` apagado en A responde 404 MODULE_DISABLED solo a A, y `documentacion` apagada oculta el estado documental', async () => {
+    const switchOff = (moduleKey: string) =>
+      owner.company_modules.upsert({
+        where: { company_id_module_key: { company_id: COMPANY_A, module_key: moduleKey } },
+        create: { company_id: COMPANY_A, module_key: moduleKey, enabled: false, changed_by: 'test', reason: 'test' },
+        update: { enabled: false },
+      });
+    try {
+      await switchOff('documentacion');
+      const list = (await (await get('/api/mobile/v1/employees?limit=50', FULL)).json()) as {
+        items: { id: string; docStatus: unknown; photo: { url: string } | null }[];
+      };
+      expect(list.items.length).toBeGreaterThan(0);
+      expect(list.items.every((item) => item.docStatus === null)).toBe(true);
+      const photoUrl = list.items.find((item) => item.id === employeeId(1))?.photo?.url;
+      expect(photoUrl).toBeTruthy();
+      expect((await get(photoUrl!, null)).status).toBe(200);
+      const { GET: getFilters } = await import('@/app/api/mobile/v1/employees/filters/route');
+      const filters = (await (
+        await getFilters(
+          new Request('http://app.test/api/mobile/v1/employees/filters', {
+            headers: { authorization: `Bearer ${FULL}` },
+          }),
+          { params: Promise.resolve({}) }
+        )
+      ).json()) as { docStatuses: unknown[] };
+      expect(filters.docStatuses).toEqual([]);
+
+      await owner.company_modules.deleteMany({ where: { company_id: COMPANY_A } });
+      await switchOff('empleados');
+      const off = await get('/api/mobile/v1/employees', FULL);
+      expect(off.status).toBe(404);
+      await expect(off.json()).resolves.toMatchObject({ error: { code: 'MODULE_DISABLED' } });
+      // La foto firmada de A también se corta (la empresa sale de la firma); la empresa B sigue sirviendo.
+      expect((await get(photoUrl!, null)).status).toBe(404);
+      expect((await get('/api/mobile/v1/employees', FULL_B)).status).toBe(200);
+    } finally {
+      await owner.company_modules.deleteMany({ where: { company_id: COMPANY_A } });
+    }
+    expect((await get('/api/mobile/v1/employees?limit=1', FULL)).status).toBe(200);
+  });
 });

@@ -1,3 +1,5 @@
+import { moduleForMobileEntry } from '../../Modules/catalog.ts';
+
 /**
  * Configuración de la API móvil. Se enciende SOLO en el contenedor `api` (`MOBILE_API_ENABLED=true`, perfil `mobile`
  * del compose): el contenedor `app` no la atiende y su autenticación no cambia. Módulo sin dependencias de Next.
@@ -15,3 +17,14 @@ export const MOBILE_MODULES = [
   'operaciones.resources',
   'empleados.employees',
 ] as const;
+
+/**
+ * Entradas de `MOBILE_MODULES` cuya clave dueña (`catalog.mobile`) está encendida en `enabled`. Es lo que informan
+ * `/capabilities` (instancia) y `/me` (empresa) para que la app no ofrezca lo que está apagado.
+ */
+export function mobileModulesFor(enabled: ReadonlySet<string>): (typeof MOBILE_MODULES)[number][] {
+  return MOBILE_MODULES.filter((entry) => {
+    const owner = moduleForMobileEntry(entry);
+    return owner !== null && enabled.has(owner);
+  });
+}

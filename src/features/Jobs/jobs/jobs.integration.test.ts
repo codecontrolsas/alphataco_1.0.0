@@ -722,4 +722,99 @@ describe.skipIf(!RUN)('jobs de P5 (integración contra el compose)', () => {
       expect(metadata?.emailSent).toBe(true);
     });
   });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Módulo dueño del job apagado para UNA empresa (F3.3)
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('módulo apagado en una empresa', () => {
+    /** Apaga `operaciones` solo en la empresa A (fila de la empresa; la instancia sigue encendida). */
+    async function switchOperationsOff(companyId: string): Promise<void> {
+      await prisma.company_modules.upsert({
+        where: { company_id_module_key: { company_id: companyId, module_key: 'operaciones' } },
+        create: {
+          company_id: companyId,
+          module_key: 'operaciones',
+          enabled: false,
+          changed_by: 'test',
+          reason: 'test',
+        },
+        update: { enabled: false },
+      });
+    }
+    async function switchOperationsBackOn(): Promise<void> {
+      await prisma.company_modules.deleteMany({ where: { company_id: { in: [COMPANY_A, COMPANY_B] } } });
+    }
+
+    it('un job por empresa queda `skipped` en la apagada y `ok` en la otra, con su fila en jobs_runs', async () => {
+      const { runDailyReportDeviationsJob } = await import('./daily-report-deviations');
+      await prisma.jobs_runs.deleteMany({
+        where: { job: 'daily-report-deviations', company_id: { in: [COMPANY_A, COMPANY_B] } },
+      });
+      // Desde #786 el aviso queda registrado y no se reenvía: se limpia el de las pruebas anteriores.
+      await prisma.notification_events.deleteMany({
+        where: { company_id: { in: [COMPANY_A, COMPANY_B] }, event_key: 'operations.daily_report_deviations' },
+      });
+      await switchOperationsOff(COMPANY_A);
+      try {
+        const capture = makeMailCapture();
+        const summary = await runDailyReportDeviationsJob({ date: TEST_DATE, sendMail: capture.sendMail });
+        expect(summary.failed).toBe(0);
+
+        const unitA = summary.units.find((unit) => unit.companyId === COMPANY_A);
+        const unitB = summary.units.find((unit) => unit.companyId === COMPANY_B);
+        expect(unitA?.status).toBe('skipped');
+        expect(unitA?.reason).toBe('módulo operaciones apagado');
+        expect(unitB?.status).toBe('ok');
+
+        // A no recibe nada; B sí.
+        expect(capture.sent.some((message) => message.to.includes(RECIPIENT_A))).toBe(false);
+        expect(capture.sent.some((message) => message.to.includes(RECIPIENT_B))).toBe(true);
+
+        const runA = await prisma.jobs_runs.findUnique({
+          where: { job_run_key: { job: 'daily-report-deviations', run_key: `${COMPANY_A}:${TEST_DATE}` } },
+        });
+        expect(runA?.status).toBe('skipped');
+        expect((runA?.metadata as Record<string, unknown> | null)?.module).toBe('operaciones');
+        const runB = await prisma.jobs_runs.findUnique({
+          where: { job_run_key: { job: 'daily-report-deviations', run_key: `${COMPANY_B}:${TEST_DATE}` } },
+        });
+        expect(runB?.status).toBe('ok');
+      } finally {
+        await switchOperationsBackOn();
+      }
+    }, 120_000);
+
+    it('la corrida `skipped` por módulo apagado se reintenta cuando se vuelve a encender', async () => {
+      const { runDailyReportDeviationsJob } = await import('./daily-report-deviations');
+      const capture = makeMailCapture();
+      const summary = await runDailyReportDeviationsJob({ date: TEST_DATE, sendMail: capture.sendMail });
+      expect(summary.units.find((unit) => unit.companyId === COMPANY_A)?.status).toBe('ok');
+      expect(capture.sent.some((message) => message.to.includes(RECIPIENT_A))).toBe(true);
+      // B ya estaba hecha: no se reenvía.
+      expect(capture.sent.some((message) => message.to.includes(RECIPIENT_B))).toBe(false);
+    }, 120_000);
+
+    it('daily-indicators no cierra los partes de la empresa con `operaciones` apagado', async () => {
+      const { runDailyIndicatorsJob } = await import('./daily-indicators');
+      // Los dos partes son de una fecha pasada: el mantenimiento los cierra salvo que el módulo esté apagado.
+      await prisma.jobs_runs.deleteMany({
+        where: { job: 'daily-indicators', run_key: { in: [`mantenimiento:${TEST_DATE}`, `corrida:${TEST_DATE}`] } },
+      });
+      await prisma.dailyreport.updateMany({ where: { id: { in: [REPORT_A, REPORT_B] } }, data: { status: 'abierto' } });
+      await switchOperationsOff(COMPANY_A);
+      try {
+        const summary = await runDailyIndicatorsJob({ date: TEST_DATE });
+        expect(summary.failed).toBe(0);
+
+        const [reportA, reportB] = await Promise.all([
+          prisma.dailyreport.findUnique({ where: { id: REPORT_A }, select: { status: true } }),
+          prisma.dailyreport.findUnique({ where: { id: REPORT_B }, select: { status: true } }),
+        ]);
+        expect(reportA?.status).toBe('abierto');
+        expect(reportB?.status).not.toBe('abierto');
+      } finally {
+        await switchOperationsBackOn();
+      }
+    }, 180_000);
+  });
 });

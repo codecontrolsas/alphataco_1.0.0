@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 /** Estado, versión (la `baseVersion` de los comandos) y recursos de una línea del parte diario. */
 export const GET = mobileRoute<{ rowId: string }>({
+  module: 'operaciones',
   run: async ({ ctx, params }) => {
     if (!z.string().uuid().safeParse(params.rowId).success) return mobileError(422, 'INVALID_INPUT', 'rowId inválido.');
     const row = await runWithTenantContext(prismaBase, ctx, (tx) =>
@@ -30,9 +31,16 @@ export const GET = mobileRoute<{ rowId: string }>({
       status: row.status,
       reportDate: row.dailyreport ? toReportDateString(row.dailyreport.date) : null,
       resources: {
-        employees: row.dailyreportemployeerelations.map((relation) => ({ id: relation.employee_id, role: relation.role })),
-        equipment: row.dailyreportequipmentrelations.flatMap((relation) => (relation.equipment_id ? [relation.equipment_id] : [])),
-        otherEquipment: row.dailyreportequipmentrelations.flatMap((relation) => (relation.other_equipment_id ? [relation.other_equipment_id] : [])),
+        employees: row.dailyreportemployeerelations.map((relation) => ({
+          id: relation.employee_id,
+          role: relation.role,
+        })),
+        equipment: row.dailyreportequipmentrelations.flatMap((relation) =>
+          relation.equipment_id ? [relation.equipment_id] : []
+        ),
+        otherEquipment: row.dailyreportequipmentrelations.flatMap((relation) =>
+          relation.other_equipment_id ? [relation.other_equipment_id] : []
+        ),
         customerEquipment: row.dailyreport_customer_equipment_relations.flatMap((relation) =>
           relation.customer_equipment_id ? [relation.customer_equipment_id] : []
         ),

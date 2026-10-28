@@ -16,7 +16,7 @@ const logger = new Logger('features/Mantenimiento/EquipmentDashboard/equipment')
  */
 export async function fetchEquipmentForDashboard(equipmentId: string) {
   try {
-    await requireResourceAccess('vehicle', equipmentId);
+    await requireResourceAccess('vehicle', equipmentId, { modules: ['mantenimiento', 'checklists', 'gomeria'] });
 
     const vehicle = await prisma.vehicles.findUnique({
       where: { id: equipmentId },

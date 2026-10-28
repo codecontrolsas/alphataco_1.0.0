@@ -2,6 +2,7 @@ import 'server-only';
 
 import { clothingDeliveryTypeLabels } from '@/features/Clothing/utils/mappers';
 import { loadEmployeeDocumentRows } from '@/features/Documentacion/DocumentosEmpleados/lib/employee-document-rows.server';
+import { isModuleEnabledForCompany } from '@/features/Modules/server/modules.server';
 import type { Prisma } from '@/generated/prisma/client';
 import { argentinaDate } from '@/shared/lib/argentina-time';
 import { prismaBase } from '@/shared/lib/prisma';
@@ -135,7 +136,7 @@ function searchWhere(q: string | undefined): Prisma.employeesWhereInput | null {
   };
 }
 
-function listWhere(companyId: string, query: EmployeeListQuery): Prisma.employeesWhereInput {
+function listWhere(companyId: string, query: EmployeeListQuery, showDocStatus: boolean): Prisma.employeesWhereInput {
   const conditions: Prisma.employeesWhereInput[] = [
     { company_id: companyId },
     { is_active: query.status === 'active' },
@@ -145,14 +146,16 @@ function listWhere(companyId: string, query: EmployeeListQuery): Prisma.employee
   if (query.sectorId) conditions.push({ hierarchical_position: query.sectorId });
   if (query.positionId) conditions.push({ company_position: query.positionId });
   if (query.customerId) conditions.push({ contractor_employee: { some: { contractor_id: query.customerId } } });
-  if (query.docStatus) conditions.push({ status: query.docStatus });
+  // Con `documentacion` apagado el `status` (caché del cumplimiento documental) está congelado: no se filtra por él.
+  if (query.docStatus && showDocStatus) conditions.push({ status: query.docStatus });
   return { AND: conditions };
 }
 
 /** Página del listado con paginación por cursor y respuesta liviana (sin foto: solo sus URLs prefirmadas). */
 export async function listEmployees(ctx: TenantContext, query: EmployeeListQuery) {
   const cursor = decodeCursor(query.cursor, query.sort);
-  const where = listWhere(ctx.companyId, query);
+  const showDocStatus = await isModuleEnabledForCompany('documentacion', ctx.companyId);
+  const where = listWhere(ctx.companyId, query, showDocStatus);
   const pageWhere = cursor ? { AND: [where, afterCursor(cursor)] } : where;
 
   return runWithTenantContext(prismaBase, ctx, async (tx) => {
@@ -203,7 +206,7 @@ export async function listEmployees(ctx: TenantContext, query: EmployeeListQuery
         position: row.company_positions?.name ?? null,
         sector: row.hierarchy?.name ?? null,
         isActive: row.is_active !== false,
-        docStatus: docStatusOf(row.status),
+        docStatus: showDocStatus ? docStatusOf(row.status) : null,
         photo: buildPhotoUrls(ctx.companyId, row.id, versions.get(row.id) ?? null),
       })),
       nextCursor,
@@ -214,6 +217,7 @@ export async function listEmployees(ctx: TenantContext, query: EmployeeListQuery
 
 /** Opciones de los filtros del listado (catálogos de la empresa). */
 export async function getEmployeeFilterOptions(ctx: TenantContext, access: EmployeeAccess) {
+  const showDocStatus = await isModuleEnabledForCompany('documentacion', ctx.companyId);
   return runWithTenantContext(prismaBase, ctx, async (tx) => {
     const [sectors, positions, customers] = await Promise.all([
       tx.hierarchy.findMany({
@@ -240,7 +244,9 @@ export async function getEmployeeFilterOptions(ctx: TenantContext, access: Emplo
       sectors,
       positions: positions.flatMap((position) => (position.name ? [{ id: position.id, name: position.name }] : [])),
       customers,
-      docStatuses: Object.entries(employeeStatusLabels).map(([value, text]) => ({ value, label: text })),
+      docStatuses: showDocStatus
+        ? Object.entries(employeeStatusLabels).map(([value, text]) => ({ value, label: text }))
+        : [],
     };
   });
 }
@@ -249,6 +255,7 @@ export async function getEmployeeFilterOptions(ctx: TenantContext, access: Emplo
 
 /** Legajo de un empleado de la empresa, con los bloques que el usuario puede ver. null = no existe en la empresa. */
 export async function getEmployeeDetail(ctx: TenantContext, employeeId: string, access: EmployeeAccess) {
+  const showDocStatus = await isModuleEnabledForCompany('documentacion', ctx.companyId);
   return runWithTenantContext(prismaBase, ctx, async (tx) => {
     const employee = await tx.employees.findFirst({
       where: { id: employeeId, company_id: ctx.companyId },
@@ -306,7 +313,7 @@ export async function getEmployeeDetail(ctx: TenantContext, employeeId: string, 
       isActive: e.is_active !== false,
       position: e.company_positions?.name ?? null,
       sector: e.hierarchy?.name ?? null,
-      docStatus: docStatusOf(e.status),
+      docStatus: showDocStatus ? docStatusOf(e.status) : null,
       termination:
         e.is_active === false
           ? { date: isoDay(e.termination_date), reason: label(e.reason_for_termination, reasonForTerminationLabels) }

@@ -22,13 +22,25 @@ vi.mock('@/shared/lib/session', () => ({
   isSessionAnonymous: vi.fn(async () => false),
 }));
 
+// Estado de los módulos (F3.3): encendido salvo que el test lo apague.
+const moduleMock = vi.hoisted(() => ({ isModuleEnabledForCompany: vi.fn(async () => true) }));
+vi.mock('@/features/Modules/server/modules.server', () => ({
+  ...moduleMock,
+  ModuleDisabledError: class ModuleDisabledError extends Error {
+    constructor(readonly module: string) {
+      super(`El módulo ${module} no está habilitado.`);
+    }
+  },
+}));
+
+import { getOperatorIdentity, requireOperatorIdentity } from '@/features/OperatorPanel/actions/perimeter';
 import { isSessionAnonymous } from '@/shared/lib/session';
-import { getOperatorIdentity } from '@/features/OperatorPanel/actions/perimeter';
-import { getClothingOperator } from './perimeter';
+import { getClothingOperator, requireClothingOperator } from './perimeter';
 
 describe('perímetros de los paneles de operario', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    moduleMock.isModuleEnabledForCompany.mockResolvedValue(true);
     vi.mocked(isSessionAnonymous).mockResolvedValue(false);
     prismaMock.profile.findUnique.mockResolvedValue({ id: 'prof-1', employee_id: 'emp-1' });
     prismaMock.employees.findUnique.mockResolvedValue({
@@ -64,5 +76,18 @@ describe('perímetros de los paneles de operario', () => {
 
     await expect(getOperatorIdentity()).resolves.toBeNull();
     expect(prismaMock.profile.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('módulos: las actions del panel de ropa y del taller no operan si el módulo de su empresa está apagado', async () => {
+    moduleMock.isModuleEnabledForCompany.mockResolvedValue(false);
+
+    await expect(requireClothingOperator()).rejects.toThrow('indumentaria');
+    await expect(requireOperatorIdentity()).rejects.toThrow('mantenimiento');
+    expect(moduleMock.isModuleEnabledForCompany).toHaveBeenCalledWith('indumentaria', 'company-a');
+    expect(moduleMock.isModuleEnabledForCompany).toHaveBeenCalledWith('mantenimiento', 'company-a');
+
+    moduleMock.isModuleEnabledForCompany.mockResolvedValue(true);
+    await expect(requireClothingOperator()).resolves.toMatchObject({ companyId: 'company-a' });
+    await expect(requireOperatorIdentity()).resolves.toMatchObject({ companyId: 'company-a' });
   });
 });
