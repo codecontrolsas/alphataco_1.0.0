@@ -35,7 +35,12 @@ export function RecordActions({
   const router = useRouter();
   const queryClient = useQueryClient();
   const [dialog, setDialog] = useState<'edit' | 'close' | 'void' | 'delete' | null>(null);
-  const invalidate = () => void queryClient.invalidateQueries({ queryKey: HSE_QUERY_KEYS.all });
+  // El estado del acta (cabecera, insignia, acciones) lo arma el Server Component de la página: además de las listas de
+  // React Query hay que volver a pedirlo, si no queda «Borrador» hasta recargar aunque la base ya la cerró o anuló.
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: HSE_QUERY_KEYS.all });
+    router.refresh();
+  };
 
   return (
     <div className="flex flex-wrap gap-2">
@@ -94,7 +99,7 @@ export function RecordActions({
         confirmLabel="Cerrar el acta"
         pendingLabel="Cerrando…"
         run={() => closeHseRecord(recordId)}
-        onDone={invalidate}
+        onDone={refresh}
         messages={{
           success: 'Acta cerrada. Ya podés descargar su PDF.',
           errorFallback: 'No se pudo cerrar el acta',
@@ -112,7 +117,7 @@ export function RecordActions({
         destructive
         motive={{ label: 'Motivo', placeholder: 'Por qué se anula (queda registrado)' }}
         run={(reason) => voidHseRecord(recordId, { reason })}
-        onDone={invalidate}
+        onDone={refresh}
         messages={{ success: 'Acta anulada', errorFallback: 'No se pudo anular el acta', logError: 'Error al anular' }}
         logger={logger}
         resetOnClose
@@ -130,7 +135,7 @@ export function RecordActions({
           if (result.ok) router.push('/dashboard/hse?tab=actas');
           return result;
         }}
-        onDone={invalidate}
+        onDone={refresh}
         messages={{ success: 'Borrador borrado', errorFallback: 'No se pudo borrar', logError: 'Error al borrar' }}
         logger={logger}
       />
