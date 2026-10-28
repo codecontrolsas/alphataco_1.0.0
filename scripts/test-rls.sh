@@ -39,4 +39,5 @@ npx vitest run --no-file-parallelism \
   src/shared/lib/instance-settings.rls.integration.test.ts \
   src/features/Empresa/General/first-company.rls.integration.test.ts \
   src/features/MobileApi/employees/mobile-employees.rls.integration.test.ts \
-  src/features/Modules/modules.rls.integration.test.ts
+  src/features/Modules/modules.rls.integration.test.ts \
+  src/features/Modules/module-gate.rls.integration.test.ts
