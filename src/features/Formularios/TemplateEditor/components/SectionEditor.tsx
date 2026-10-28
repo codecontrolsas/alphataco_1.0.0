@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
-import { useFieldArray, useFormState, useWatch, type Control } from 'react-hook-form';
+import { useFieldArray, useFormContext, useFormState, useWatch, type Control } from 'react-hook-form';
 import {
   ITEM_KINDS,
   ITEM_KIND_LABELS,
@@ -169,7 +169,10 @@ function ItemRow({
               <FormControl>
                 <Input placeholder="Ej.: Lleno, Medio, Reserva" maxLength={LIMITS.options} {...field} />
               </FormControl>
-              <FormDescription>Separadas por coma. Se agrega sola la opción «No aplica».</FormDescription>
+              <FormDescription>
+                Separadas por coma. Se agrega sola la opción «No aplica».
+                {frozen && ' Con respuestas cargadas se pueden agregar opciones, no quitar ni renombrar.'}
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -226,6 +229,9 @@ type SectionEditorProps = {
 
 export function SectionEditor({ control, index, total, persisted, locked, onMove, onRemove }: SectionEditorProps) {
   const items = useFieldArray({ control, name: `sections.${index}.items`, keyName: 'key' });
+  const { setFocus } = useFormContext<TemplateFormValues>();
+  // Mover o quitar desmonta / deshabilita el botón con foco: se lo devuelve al texto del ítem afectado.
+  const focusItem = (at: number) => requestAnimationFrame(() => setFocus(`sections.${index}.items.${at}.label`));
   const name = useWatch({ control, name: `sections.${index}.name` });
   const { errors } = useFormState({ control, name: `sections.${index}.items` });
   const itemsError = errors.sections?.[index]?.items?.root?.message ?? errors.sections?.[index]?.items?.message;
@@ -275,8 +281,14 @@ export function SectionEditor({ control, index, total, persisted, locked, onMove
               total={items.fields.length}
               persisted={Boolean(item.id)}
               locked={locked}
-              onMove={(to) => items.move(itemIndex, to)}
-              onRemove={() => items.remove(itemIndex)}
+              onMove={(to) => {
+                items.move(itemIndex, to);
+                focusItem(to);
+              }}
+              onRemove={() => {
+                items.remove(itemIndex);
+                focusItem(Math.min(itemIndex, items.fields.length - 2));
+              }}
               canRemoveLast={items.fields.length > 1}
             />
           ))}

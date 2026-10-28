@@ -22,7 +22,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Copy, Info, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useRef, useState, useTransition } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import {
@@ -63,6 +63,10 @@ export function ChecklistTemplateForm({ mode, initialValues, templateId, answers
   });
   // `keyName` propio: el `id` de cada sección es el de la base y no se puede pisar.
   const sections = useFieldArray({ control: form.control, name: 'sections', keyName: 'key' });
+  const addSectionRef = useRef<HTMLButtonElement>(null);
+  // Mover o quitar desmonta / deshabilita el botón con foco: se lo devuelve al nombre de la sección afectada.
+  const focusSection = (at: number) =>
+    requestAnimationFrame(() => (at >= 0 ? form.setFocus(`sections.${at}.name`) : addSectionRef.current?.focus()));
   const sectionsError = form.formState.errors.sections?.root?.message ?? form.formState.errors.sections?.message;
 
   async function onSubmit(values: TemplateFormValues) {
@@ -183,6 +187,7 @@ export function ChecklistTemplateForm({ mode, initialValues, templateId, answers
               </p>
             </div>
             <Button
+              ref={addSectionRef}
               type="button"
               variant="outline"
               size="sm"
@@ -208,8 +213,14 @@ export function ChecklistTemplateForm({ mode, initialValues, templateId, answers
               total={sections.fields.length}
               persisted={Boolean(section.id)}
               locked={locked}
-              onMove={(to) => sections.move(index, to)}
-              onRemove={() => sections.remove(index)}
+              onMove={(to) => {
+                sections.move(index, to);
+                focusSection(to);
+              }}
+              onRemove={() => {
+                sections.remove(index);
+                focusSection(Math.min(index, sections.fields.length - 2));
+              }}
             />
           ))}
 

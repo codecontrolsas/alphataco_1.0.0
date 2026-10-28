@@ -149,6 +149,41 @@ describe('buildTemplatePlan', () => {
     expect(retyped).toMatchObject({ ok: false });
   });
 
+  it('con respuestas: no cambia el doble lado ni quita opciones, pero sí agrega opciones', () => {
+    const answered: ExistingStructure = {
+      sections: [
+        {
+          id: S1,
+          code: 'luces',
+          items: [
+            { id: I1, code: 'freno', input_type: 'select', options: ['B', 'M'], requires_side_validation: true },
+            { id: I2, code: 'nafta', input_type: 'select', options: ['Lleno', 'Reserva'] },
+          ],
+        },
+      ],
+    };
+    const plan = (freno: Partial<Parameters<typeof item>[0]>, nafta: string) =>
+      buildTemplatePlan(
+        {
+          sections: [
+            {
+              id: S1,
+              name: 'Luces',
+              items: [
+                item({ id: I1, label: 'Freno', double_side: true, ...freno }),
+                item({ id: I2, label: 'Nafta', kind: 'options', options: nafta }),
+              ],
+            },
+          ],
+        },
+        answered,
+        true
+      );
+    expect(plan({}, 'Lleno, Reserva, Medio').ok).toBe(true);
+    expect(plan({ double_side: false }, 'Lleno, Reserva').ok).toBe(false);
+    expect(plan({}, 'Lleno, Bajo').ok).toBe(false);
+  });
+
   it('rechaza ids ajenos a la plantilla o un ítem movido de sección', () => {
     expect(buildTemplatePlan({ sections: [{ id: FOREIGN, name: 'X', items: [item()] }] }, existing).ok).toBe(false);
     expect(buildTemplatePlan({ sections: [{ id: S2, name: 'Cabina', items: [item({ id: I1 })] }] }, existing).ok).toBe(

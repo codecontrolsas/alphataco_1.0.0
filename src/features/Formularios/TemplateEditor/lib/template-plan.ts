@@ -13,6 +13,7 @@
 import {
   itemToColumns,
   kindFromColumns,
+  parseOptions,
   slugifyCode,
   uniqueCode,
   type ItemColumns,
@@ -24,7 +25,13 @@ export type ExistingStructure = {
   sections: {
     id: string;
     code: string;
-    items: { id: string; code: string; input_type: string; options: unknown }[];
+    items: {
+      id: string;
+      code: string;
+      input_type: string;
+      options: unknown;
+      requires_side_validation?: boolean | null;
+    }[];
   }[];
 };
 
@@ -48,6 +55,28 @@ export type TemplatePlan = {
 export type PlanResult = { ok: true; plan: TemplatePlan } | { ok: false; error: string };
 
 const EMPTY: ExistingStructure = { sections: [] };
+
+/**
+ * Cambios que dejarían mal leídas las respuestas guardadas de un ítem: el tipo, el doble lado (cambia la forma del
+ * valor: texto o `{ left, right }`) y quitar o renombrar una opción (agregar es seguro). `null` si el cambio es válido.
+ */
+function answeredItemChangeError(
+  stored: ExistingStructure['sections'][number]['items'][number],
+  item: TemplateFormValues['sections'][number]['items'][number]
+): string | null {
+  const before = kindFromColumns(stored);
+  if (before.kind !== item.kind) return 'no se puede cambiar su tipo. Duplicá la plantilla para hacerlo.';
+  if (item.kind === 'bm' && (stored.requires_side_validation === true) !== item.double_side) {
+    return 'no se puede cambiar «Izquierda y derecha». Duplicá la plantilla para hacerlo.';
+  }
+  if (item.kind === 'options') {
+    const next = new Set(parseOptions(item.options));
+    if (parseOptions(before.options).some((o) => !next.has(o))) {
+      return 'se pueden agregar opciones, pero no quitar ni renombrar las que ya existen.';
+    }
+  }
+  return null;
+}
 
 /**
  * Valida el payload contra la estructura guardada y arma el plan.
@@ -87,11 +116,9 @@ export function buildTemplatePlan(
         if (keptItemIds.has(item.id)) return { ok: false, error: `El ítem «${item.label}» está repetido.` };
         keptItemIds.add(item.id);
       }
-      if (storedItem && hasAnswers && kindFromColumns(storedItem).kind !== item.kind) {
-        return {
-          ok: false,
-          error: `El ítem «${item.label}» ya tiene respuestas: no se puede cambiar su tipo. Duplicá la plantilla para hacerlo.`,
-        };
+      if (storedItem && hasAnswers) {
+        const lockError = answeredItemChangeError(storedItem, item);
+        if (lockError) return { ok: false, error: `El ítem «${item.label}» ya tiene respuestas: ${lockError}` };
       }
       items.push({
         ...itemToColumns(item),

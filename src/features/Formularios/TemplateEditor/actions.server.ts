@@ -236,7 +236,9 @@ export async function updateChecklistTemplate(
             select: {
               id: true,
               code: true,
-              checklist_template_items: { select: { id: true, code: true, input_type: true, options: true } },
+              checklist_template_items: {
+                select: { id: true, code: true, input_type: true, options: true, requires_side_validation: true },
+              },
             },
           },
         },
