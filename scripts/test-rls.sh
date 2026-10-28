@@ -31,4 +31,7 @@ npx vitest run --no-file-parallelism \
   src/features/Auth/actions/register-user.rls.integration.test.ts \
   src/features/Hse/hse-documents.rls.integration.test.ts \
   src/features/Hse/hse-trainings.rls.integration.test.ts \
-  src/features/Hse/hse-records.rls.integration.test.ts
+  src/features/Hse/hse-records.rls.integration.test.ts \
+  src/features/Employees/EmpleadoID/PortalAccess/portal-access.rls.integration.test.ts \
+  src/features/Dashboard/Boards/dashboard-presets.rls.integration.test.ts \
+  src/shared/lib/instance-settings.rls.integration.test.ts
