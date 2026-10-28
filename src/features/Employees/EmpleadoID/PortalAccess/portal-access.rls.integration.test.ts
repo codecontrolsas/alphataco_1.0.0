@@ -33,6 +33,10 @@ const state = vi.hoisted(() => ({
   authUserId: null as string | null,
 }));
 
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  connection: async () => undefined,
+}));
 vi.mock('next/cache', () => ({
   cacheTag: () => undefined,
   cacheLife: () => undefined,
@@ -340,17 +344,17 @@ describe.skipIf(!RUN_RLS)('acceso al portal de empleados bajo RLS (rol alphataco
     await owner.share_company_users.deleteMany({ where: { profile_id: credentials.E2! } });
   });
 
-  it('con PORTAL_ENABLED=false no se habilita el portal', async () => {
+  it('con el módulo portal apagado en la instancia no se habilita el portal', async () => {
     const { enableEmployeePortalAccess } = await import('./actions.server');
     asHr();
-    vi.stubEnv('PORTAL_ENABLED', 'false');
+    await owner.instance_modules.update({ where: { module_key: 'portal' }, data: { enabled: false } });
     try {
       await expect(enableEmployeePortalAccess({ employeeId: E1, method: 'invitation', email: '' })).resolves.toEqual({
         success: false,
         error: 'El portal de empleados está apagado en esta instancia.',
       });
     } finally {
-      vi.unstubAllEnvs();
+      await owner.instance_modules.update({ where: { module_key: 'portal' }, data: { enabled: true } });
     }
   });
 });

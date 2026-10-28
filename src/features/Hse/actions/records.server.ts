@@ -1,6 +1,7 @@
 'use server';
 
 import { errorMessage, fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
@@ -12,7 +13,6 @@ import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { isHseEnabled } from '../lib/feature-gate';
 import type { HsePdfDelivery } from '../lib/pdf-delivery';
 import { ensureCertificatePdf, ensureRecordPdf } from '../pdf/hse-pdf.server';
 import {
@@ -48,7 +48,7 @@ async function requireAuth(
   tab: 'actas' | 'capacitaciones',
   action: 'view' | 'create' | 'update' | 'delete' | 'approve'
 ): Promise<({ ok: true } & Auth) | { ok: false; error: string }> {
-  if (!(await isHseEnabled())) return { ok: false, error: 'El módulo HSE no está disponible' };
+  if (!(await isModuleEnabled('hse'))) return { ok: false, error: 'El módulo HSE no está disponible' };
   if (!(await checkPermissionServer('hse', tab, action))) return { ok: false, error: NO_PERMISSION };
   const [profile, companyId] = await Promise.all([getServerAuthProfile(), getActiveCompanyId()]);
   if (!profile) return { ok: false, error: SESSION_EXPIRED };
@@ -105,7 +105,7 @@ async function instructorRow(tx: Prisma.TransactionClient, companyId: string, va
 
 /** Empleados (con legajo en la etiqueta) para elegir un capacitador interno o sumar un asistente. */
 export async function fetchHseRecordFormOptions() {
-  if (!(await isHseEnabled())) throw new Error('El módulo HSE no está disponible');
+  if (!(await isModuleEnabled('hse'))) throw new Error('El módulo HSE no está disponible');
   const perms = await Promise.all([
     checkPermissionServer('hse', 'actas', 'create'),
     checkPermissionServer('hse', 'actas', 'update'),
@@ -537,7 +537,7 @@ export async function getHseRecordPdfUrl(recordId: string): Promise<ActionResult
 
 /** URL de descarga de una constancia (con permiso de capacitaciones o de actas). */
 export async function getHseCertificateUrl(certificateId: string): Promise<ActionResult<HsePdfDelivery>> {
-  if (!(await isHseEnabled())) return fail('El módulo HSE no está disponible');
+  if (!(await isModuleEnabled('hse'))) return fail('El módulo HSE no está disponible');
   const [canTrainings, canRecords] = await Promise.all([
     checkPermissionServer('hse', 'capacitaciones', 'view'),
     checkPermissionServer('hse', 'actas', 'view'),
@@ -586,7 +586,7 @@ export async function voidHseCertificate(
  * `canVoid`: si quien mira puede anularlas (lo decide el servidor, no el navegador).
  */
 export async function fetchHseEmployeeCertificates(trainingId: string, employeeId: string) {
-  if (!(await isHseEnabled())) throw new Error('El módulo HSE no está disponible');
+  if (!(await isModuleEnabled('hse'))) throw new Error('El módulo HSE no está disponible');
   if (!(await checkPermissionServer('hse', 'capacitaciones', 'view'))) throw new Error(NO_PERMISSION);
   if (!UUID_RE.test(trainingId) || !UUID_RE.test(employeeId)) throw new Error('La capacitación no existe');
   const [companyId, canVoid] = await Promise.all([

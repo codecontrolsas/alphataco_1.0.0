@@ -34,6 +34,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
  */
 const state = vi.hoisted(() => ({ ctx: null as TenantContext | null }));
 
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  connection: async () => undefined,
+}));
 vi.mock('next/cache', () => ({
   cacheTag: () => undefined,
   cacheLife: () => undefined,
@@ -44,6 +48,13 @@ vi.mock('next/cache', () => ({
 vi.mock('@/shared/lib/tenant-db', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/shared/lib/tenant-db')>()),
   getTenantContextOrNull: async () => state.ctx,
+}));
+vi.mock('@/shared/lib/tenant', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/shared/lib/tenant')>()),
+  getActiveCompanyId: async () => {
+    if (!state.ctx) throw new Error('sin empresa activa');
+    return state.ctx.companyId;
+  },
 }));
 
 const COMPANY_A = '7e000000-0000-4000-8000-00000000000a';

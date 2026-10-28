@@ -1,5 +1,6 @@
 'use server';
 
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import {
   buildTreasuryDateRangeWhere,
@@ -20,7 +21,6 @@ import { prisma } from '@/shared/lib/prisma';
 import type { SingleFacetResult } from '@/shared/lib/table-list-query';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { HSE_DOCUMENT_STATUS_LABELS } from '../../lib/constants';
-import { isHseEnabled } from '../../lib/feature-gate';
 
 const logger = new Logger('features/Hse/Documents/DocumentsList');
 
@@ -45,7 +45,7 @@ const contains = (value: string) => ({ contains: value, mode: 'insensitive' as c
 
 /** Empresa si el usuario puede ver la tabla; `null` = sin acceso → lista vacía. */
 async function resolveCompanyId(): Promise<string | null> {
-  if (!(await isHseEnabled())) return null;
+  if (!(await isModuleEnabled('hse'))) return null;
   if (!(await checkPermissionServer('hse', 'documentos-hse', 'view'))) return null;
   return getActiveCompanyId();
 }

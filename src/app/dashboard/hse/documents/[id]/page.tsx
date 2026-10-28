@@ -1,5 +1,5 @@
 import { HseDocumentDetailPage, getHseDocumentTitle } from '@/features/Hse/DocumentDetail/HseDocumentDetailPage';
-import { assertHseEnabled } from '@/features/Hse/lib/feature-gate';
+import { requireModulePage } from '@/features/Modules/server/modules.server';
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   return { title: await getHseDocumentTitle((await params).id) };
@@ -12,7 +12,7 @@ export default async function HseDocumentRoute({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  await assertHseEnabled();
+  await requireModulePage('hse');
   const [{ id }, resolvedSearchParams] = await Promise.all([params, searchParams]);
   return <HseDocumentDetailPage id={id} searchParams={resolvedSearchParams} />;
 }

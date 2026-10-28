@@ -1,5 +1,6 @@
 'use server';
 
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import {
   buildTreasuryDateRangeWhere,
@@ -21,7 +22,6 @@ import { UUID_RE } from '@/shared/lib/storage-buckets';
 import type { SingleFacetResult } from '@/shared/lib/table-list-query';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { HSE_ASSIGNMENT_STATUS_LABELS, type HseAssignmentStatus } from '../../lib/constants';
-import { isHseEnabled } from '../../lib/feature-gate';
 import { effectiveAssignmentStatus, toPercent } from '../../lib/training-status';
 
 /**
@@ -47,7 +47,7 @@ const EXPORT_LIMIT = 20_000;
 const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
 
 async function resolveCompanyId(): Promise<string | null> {
-  if (!(await isHseEnabled())) return null;
+  if (!(await isModuleEnabled('hse'))) return null;
   if (!(await checkPermissionServer('hse', 'capacitaciones', 'view'))) return null;
   return getActiveCompanyId();
 }

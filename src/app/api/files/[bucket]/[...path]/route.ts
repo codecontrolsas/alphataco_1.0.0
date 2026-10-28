@@ -1,4 +1,3 @@
-import { isHseEnabled } from '@/features/Hse/lib/feature-gate';
 import { CORE_MODULE, moduleForBucket } from '@/features/Modules/catalog';
 import { isModuleEnabledForCompany } from '@/features/Modules/server/modules.server';
 import { Logger } from '@/lib/logger';
@@ -75,8 +74,6 @@ export async function GET(
   const { bucket, path: segments } = await params;
 
   if (!isStorageBucket(bucket)) return notFound();
-  // HSE apagado en la instancia: sus archivos no se sirven.
-  if (bucket === 'hse-files' && !(await isHseEnabled())) return notFound();
 
   // Next ya decodifica cada segmento del catch-all (`getRouteMatcher` hace
   // `match.split('/').map(decode)`), y `buildStorageFileUrl` codifica segmento a segmento

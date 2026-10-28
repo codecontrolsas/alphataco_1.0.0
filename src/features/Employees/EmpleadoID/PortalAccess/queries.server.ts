@@ -1,7 +1,7 @@
 import 'server-only';
 
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
-import { isPortalEnabled } from '@/features/Portal/lib/feature-gate';
 import { findUserProfileByEmployee } from '@/shared/lib/employee-profile';
 import { prisma } from '@/shared/lib/prisma';
 import { prismaSystem } from '@/shared/lib/prisma-system';
@@ -55,7 +55,7 @@ export async function getEmployeePortalAccessOverview(employeeId: string) {
   const actorName = new Map(actors.map((actor) => [actor.id, actor.fullname || actor.email || 'Usuario']));
 
   return {
-    portalEnabled: await isPortalEnabled(),
+    portalEnabled: await isModuleEnabled('portal'),
     canManage,
     employeeEmail: employee.email,
     employeeActive: employee.is_active,

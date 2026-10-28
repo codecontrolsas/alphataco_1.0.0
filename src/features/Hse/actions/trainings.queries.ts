@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { argentinaDate } from '@/shared/lib/argentina-time';
@@ -9,7 +10,6 @@ import { buildStorageDownloadUrl, buildStorageFileUrl } from '@/shared/lib/stora
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { cache } from 'react';
 import { HSE_FILES_BUCKET, HSE_TARGET_KIND_LABELS, type HseTargetKind } from '../lib/constants';
-import { isHseEnabled } from '../lib/feature-gate';
 import type { HseTargetInput } from '../schemas/documents';
 
 /**
@@ -21,7 +21,7 @@ import type { HseTargetInput } from '../schemas/documents';
 const logger = new Logger('features/Hse/trainings-queries');
 
 export const getHseTrainingDetail = cache(async (trainingId: string) => {
-  if (!(await isHseEnabled()) || !UUID_RE.test(trainingId)) return null;
+  if (!(await isModuleEnabled('hse')) || !UUID_RE.test(trainingId)) return null;
   if (!(await checkPermissionServer('hse', 'capacitaciones', 'view'))) return null;
   const companyId = await getActiveCompanyId();
 

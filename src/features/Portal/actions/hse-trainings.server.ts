@@ -1,7 +1,6 @@
 'use server';
 
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { isHseEnabled } from '@/features/Hse/lib/feature-gate';
 import {
   hseAttemptIdSchema,
   hseMarkMaterialReadSchema,
@@ -9,8 +8,8 @@ import {
   hseStartAttemptSchema,
   type HseSaveAnswerInput,
 } from '@/features/Hse/schemas/trainings';
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import { requirePortalEmployee, type PortalEmployee } from '@/features/Portal/actions/perimeter';
-import { isPortalEnabled } from '@/features/Portal/lib/feature-gate';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { revalidatePath } from 'next/cache';
@@ -29,7 +28,7 @@ const logger = new Logger('features/Portal/hse-trainings');
 const UNAVAILABLE = 'Esta capacitación ya no está disponible. Recargá la página.';
 
 async function portalEmployee(): Promise<{ ok: true; employee: PortalEmployee } | { ok: false; error: string }> {
-  if (!(await isPortalEnabled()) || !(await isHseEnabled()))
+  if (!(await isModuleEnabled('portal')) || !(await isModuleEnabled('hse')))
     return { ok: false, error: 'El portal no está disponible.' };
   try {
     return { ok: true, employee: await requirePortalEmployee() };

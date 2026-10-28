@@ -8,7 +8,6 @@ const resolveOwner = vi.fn();
 const isModuleEnabledForCompany = vi.fn();
 const send = vi.fn();
 
-vi.mock('@/features/Hse/lib/feature-gate', () => ({ isHseEnabled: async () => true }));
 vi.mock('@/features/Modules/server/modules.server', () => ({ isModuleEnabledForCompany }));
 vi.mock('@/shared/lib/prisma', () => ({ prisma: {} }));
 vi.mock('@/shared/lib/s3', () => ({ s3Client: () => ({ send }) }));

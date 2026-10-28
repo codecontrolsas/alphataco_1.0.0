@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { isHseEnabled } from '@/features/Hse/lib/feature-gate';
+import { isModuleEnabledForCompany } from '@/features/Modules/server/modules.server';
 import { argentinaDate } from '@/shared/lib/argentina-time';
 import { callScalar } from '@/shared/lib/sql';
 import { z } from 'zod';
@@ -40,7 +40,7 @@ export async function runHseExpiredAttemptsJob(deps: { now?: Date } = {}): Promi
     job: JOB,
     date: slot,
     work: async (company) => {
-      if (!(await isHseEnabled(company.id)))
+      if (!(await isModuleEnabledForCompany('hse', company.id)))
         return { skipped: true, reason: 'HSE apagado en la instancia o en la empresa' };
       const closed = await callScalar('hse_close_expired_attempts', [{ uuid: company.id }], closedSchema);
       return { reason: `${closed} examen(es) vencido(s) cerrado(s)`, metadata: { closed } };

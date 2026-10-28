@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { isHseEnabled } from '@/features/Hse/lib/feature-gate';
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import type { PortalEmployee } from '@/features/Portal/actions/perimeter';
 import { prisma } from '@/shared/lib/prisma';
 import { cache } from 'react';
@@ -11,7 +11,7 @@ import { cache } from 'react';
  * Se muestran los de los últimos 60 días, el más nuevo primero.
  */
 export const getMyHseNotices = cache(async (employee: PortalEmployee) => {
-  if (!(await isHseEnabled())) return [];
+  if (!(await isModuleEnabled('hse'))) return [];
   const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
   const rows = await prisma.hse_expiry_notices.findMany({
     where: { employee_id: employee.employeeId, created_at: { gte: since } },

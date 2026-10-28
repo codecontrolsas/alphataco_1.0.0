@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { argentinaDate } from '@/shared/lib/argentina-time';
@@ -7,7 +8,6 @@ import { prisma } from '@/shared/lib/prisma';
 import { UUID_RE } from '@/shared/lib/storage-buckets';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { cache } from 'react';
-import { isHseEnabled } from '../lib/feature-gate';
 import { recordContentSchema } from '../lib/pdf-content';
 import { effectiveAssignmentStatus, toPercent } from '../lib/training-status';
 
@@ -22,7 +22,7 @@ const dayOf = (value: Date | null) => (value ? value.toISOString().slice(0, 10) 
 
 /** Capacitaciones a las que se les puede labrar un acta (publicadas o retiradas), para el alta. */
 export async function getPublishedTrainingOptions() {
-  if (!(await isHseEnabled())) return [];
+  if (!(await isModuleEnabled('hse'))) return [];
   const companyId = await getActiveCompanyId();
   const rows = await prisma.hse_trainings.findMany({
     where: { company_id: companyId, status: { in: ['published', 'archived'] } },
@@ -35,7 +35,7 @@ export type HseTrainingOption = Awaited<ReturnType<typeof getPublishedTrainingOp
 
 /** Detalle del acta: datos, capacitadores, asistentes con su resultado y firma ACTUALES, y el contenido congelado. */
 export const getHseRecordDetail = cache(async (recordId: string) => {
-  if (!(await isHseEnabled()) || !UUID_RE.test(recordId)) return null;
+  if (!(await isModuleEnabled('hse')) || !UUID_RE.test(recordId)) return null;
   if (!(await checkPermissionServer('hse', 'actas', 'view'))) return null;
   const companyId = await getActiveCompanyId();
   const today = argentinaDate();
@@ -166,7 +166,7 @@ export type HseRecordDetail = NonNullable<Awaited<ReturnType<typeof getHseRecord
 
 /** Capacitadores habituales y actas de una capacitación (para su detalle). */
 export async function getHseTrainingInstructorsAndRecords(trainingId: string) {
-  if (!(await isHseEnabled()) || !UUID_RE.test(trainingId))
+  if (!(await isModuleEnabled('hse')) || !UUID_RE.test(trainingId))
     return { instructors: [], records: [], canViewRecords: false };
   const companyId = await getActiveCompanyId();
   const canViewRecords = await checkPermissionServer('hse', 'actas', 'view');

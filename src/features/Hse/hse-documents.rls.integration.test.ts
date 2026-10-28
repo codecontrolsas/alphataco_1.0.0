@@ -29,6 +29,10 @@ const state = vi.hoisted(() => ({
   userId: null as string | null,
 }));
 
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  connection: async () => undefined,
+}));
 vi.mock('next/cache', () => ({
   cacheTag: () => undefined,
   cacheLife: () => undefined,

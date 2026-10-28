@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { argentinaDate } from '@/shared/lib/argentina-time';
@@ -9,7 +10,6 @@ import { buildStorageDownloadUrl, buildStorageFileUrl } from '@/shared/lib/stora
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { cache } from 'react';
 import { HSE_FILES_BUCKET, HSE_TARGET_KIND_LABELS, type HseTargetKind } from '../lib/constants';
-import { isHseEnabled } from '../lib/feature-gate';
 import type { HseTargetInput } from '../schemas/documents';
 
 /**
@@ -56,7 +56,7 @@ export type HseDocumentFormOptions = Awaited<ReturnType<typeof getHseDocumentFor
 
 /** Detalle de un documento: datos, versiones, destinatarios y cumplimiento de la versión vigente. */
 export const getHseDocumentDetail = cache(async (documentId: string) => {
-  if (!(await isHseEnabled()) || !UUID_RE.test(documentId)) return null;
+  if (!(await isModuleEnabled('hse')) || !UUID_RE.test(documentId)) return null;
   if (!(await checkPermissionServer('hse', 'documentos-hse', 'view'))) return null;
   const companyId = await getActiveCompanyId();
 
