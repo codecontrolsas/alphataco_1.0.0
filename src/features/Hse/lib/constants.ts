@@ -81,4 +81,5 @@ export const HSE_QUERY_KEYS = {
   types: ['hse', 'types'] as const,
   trainings: ['hse', 'trainings'] as const,
   trainingCompliance: ['hse', 'training-compliance'] as const,
+  records: ['hse', 'records'] as const,
 };

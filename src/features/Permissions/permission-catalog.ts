@@ -282,6 +282,16 @@ export const ACTION_OVERRIDES: Partial<Record<PermissionOverrideKey, ActionOverr
     name: 'Retirar',
     description: 'Retirar capacitaciones publicadas (quedan archivadas con sus resultados) o borrar borradores',
   },
+  'hse:actas:create': { description: 'Armar actas de dictado en borrador (capacitadores y asistentes)' },
+  'hse:actas:update': { description: 'Editar actas en borrador' },
+  'hse:actas:approve': {
+    name: 'Cerrar',
+    description: 'Cierre formal del acta: congela datos, asistentes y resultados con su huella',
+  },
+  'hse:actas:delete': {
+    name: 'Anular',
+    description: 'Anular actas cerradas y constancias firmadas (con motivo; no se borran) o borrar borradores',
+  },
 
   // Comercial
   'comercial:facturacion:create': { description: 'Armar borradores de factura y notas de crédito o débito' },

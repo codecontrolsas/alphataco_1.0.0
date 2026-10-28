@@ -3,9 +3,10 @@ import { SectionManagerServer } from '@/features/TabsManager/SectionManagerServe
 import { sectionTab } from '@/features/TabsManager/section-tab';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { SectionTableSkeleton } from '@/shared/components/skeletons/SectionTableSkeleton';
-import { FileText, GraduationCap, ListChecks, Settings } from 'lucide-react';
+import { FileSignature, FileText, GraduationCap, ListChecks, Settings } from 'lucide-react';
 import ComplianceTabContent from './Compliance/ComplianceTabContent';
 import DocumentsTabContent from './Documents/DocumentsTabContent';
+import RecordsTabContent from './Records/RecordsTabContent';
 import SettingsTabContent from './Settings/SettingsTabContent';
 import { HseSettingsSkeleton } from './Settings/fallback/HseSettingsSkeleton';
 import TrainingsTabContent from './Trainings/TrainingsTabContent';
@@ -47,6 +48,14 @@ export default async function HseComponent({ searchParams }: { searchParams: Dat
           text: 'Cumplimiento',
           fallback: <SectionTableSkeleton filterCount={3} />,
           children: <ComplianceTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
+          moduleSlug: 'hse',
+          tabSlug: 'actas',
+          icon: FileSignature,
+          text: 'Actas',
+          fallback: <SectionTableSkeleton filterCount={3} />,
+          children: <RecordsTabContent searchParams={searchParams} permissions={permissions} />,
         }),
         sectionTab({
           moduleSlug: 'hse',
