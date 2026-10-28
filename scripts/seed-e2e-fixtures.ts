@@ -6,6 +6,8 @@
  *  - Mantenimiento → Taller: una orden `in_workshop` del equipo P4QR01.
  *  - Mantenimiento → Aprobaciones: una orden `pending_workshop_validation` del mismo equipo.
  *  - Compras → Pagos → Vencimientos: un proveedor y una factura aprobada, vencida y sin pagar.
+ *  - HSE → Documentos y Capacitaciones: un documento y una capacitación PUBLICADOS para todo el personal (con sus
+ *    aceptaciones y asignaciones conciliadas por las funciones de la base, como al publicar desde el dashboard).
  * Configuración → Usuarios no necesita nada: ya está el admin (owner y miembro).
  *
  * Con la app bajo RLS (`e2e-rls`), una lista que consulta sin la empresa en el contexto devuelve cero filas: es lo que
@@ -26,6 +28,11 @@ const WORKSHOP_ORDER = '00000000-0000-4000-8000-0000000e2e01';
 const VALIDATION_ORDER = '00000000-0000-4000-8000-0000000e2e02';
 const SUPPLIER = '00000000-0000-4000-8000-0000000e2e03';
 const INVOICE = '00000000-0000-4000-8000-0000000e2e04';
+const HSE_DOCUMENT = '00000000-0000-4000-8000-0000000e2e05';
+const HSE_VERSION = '00000000-0000-4000-8000-0000000e2e06';
+const HSE_TRAINING = '00000000-0000-4000-8000-0000000e2e07';
+const HSE_QUESTION = '00000000-0000-4000-8000-0000000e2e08';
+const HSE_OPTIONS = ['00000000-0000-4000-8000-0000000e2e09', '00000000-0000-4000-8000-0000000e2e0a'];
 
 const vehicle = await prisma.vehicles.findFirstOrThrow({
   where: { company_id: COMPANY, domain: 'P4QR01' },
@@ -93,6 +100,62 @@ await prisma.supplier_invoices.createMany({
   ],
   skipDuplicates: true,
 });
+
+// HSE: el contenido se carga en borrador (los triggers guarda no dejan tocarlo publicado) y después se publica. Si ya
+// existe (segunda corrida), no se toca.
+if (!(await prisma.hse_documents.findUnique({ where: { id: HSE_DOCUMENT }, select: { id: true } }))) {
+  await prisma.hse_documents.create({
+    data: { id: HSE_DOCUMENT, company_id: COMPANY, title: 'Documento HSE E2E', created_by: admin.id },
+  });
+  await prisma.hse_document_versions.create({
+    data: {
+      id: HSE_VERSION,
+      company_id: COMPANY,
+      document_id: HSE_DOCUMENT,
+      version: 1,
+      file_path: `${COMPANY}/documents/${HSE_DOCUMENT}/${HSE_VERSION}.pdf`,
+      file_name: 'documento-e2e.pdf',
+      file_size: 1,
+      file_sha256: '0'.repeat(64),
+      published_at: today,
+      published_by: admin.id,
+      created_by: admin.id,
+    },
+  });
+  await prisma.hse_document_targets.create({ data: { company_id: COMPANY, document_id: HSE_DOCUMENT, kind: 'all' } });
+  await prisma.hse_documents.update({
+    where: { id: HSE_DOCUMENT },
+    data: { status: 'published', current_version_id: HSE_VERSION },
+  });
+  await prisma.$executeRaw`SELECT public.hse_sync_acknowledgements(${COMPANY}::uuid, ${HSE_DOCUMENT}::uuid, NULL::uuid)`;
+}
+if (!(await prisma.hse_trainings.findUnique({ where: { id: HSE_TRAINING }, select: { id: true } }))) {
+  await prisma.hse_trainings.create({
+    data: { id: HSE_TRAINING, company_id: COMPANY, title: 'Capacitación E2E', created_by: admin.id },
+  });
+  await prisma.hse_training_targets.create({ data: { company_id: COMPANY, training_id: HSE_TRAINING, kind: 'all' } });
+  await prisma.hse_training_questions.create({
+    data: { id: HSE_QUESTION, company_id: COMPANY, training_id: HSE_TRAINING, prompt: 'Pregunta del e2e', points: 1 },
+  });
+  await prisma.hse_training_options.createMany({
+    data: HSE_OPTIONS.map((id, position) => ({
+      id,
+      company_id: COMPANY,
+      training_id: HSE_TRAINING,
+      question_id: HSE_QUESTION,
+      label: position === 0 ? 'Correcta' : 'Incorrecta',
+      position,
+    })),
+  });
+  await prisma.hse_training_answer_keys.create({
+    data: { question_id: HSE_QUESTION, company_id: COMPANY, training_id: HSE_TRAINING, option_id: HSE_OPTIONS[0]! },
+  });
+  await prisma.hse_trainings.update({
+    where: { id: HSE_TRAINING },
+    data: { status: 'published', published_at: today, published_by: admin.id },
+  });
+  await prisma.$executeRaw`SELECT public.hse_sync_training_assignments(${COMPANY}::uuid, ${HSE_TRAINING}::uuid, NULL::uuid)`;
+}
 
 console.log('Fixtures del e2e OK');
 await prisma.$disconnect();

@@ -87,6 +87,9 @@ const SCREENS: { name: string; path: string; row: string; sortBy: string | null 
     row: 'E2E-VALIDAR-1',
     sortBy: null,
   },
+  // HSE (ticket 804): las tablas leen con la RLS de lectura acotada (permiso del dashboard o compuerta del empleado).
+  { name: 'HSE → Documentos', path: '/dashboard/hse?tab=documentos-hse', row: 'Documento HSE E2E', sortBy: null },
+  { name: 'HSE → Capacitaciones', path: '/dashboard/hse?tab=capacitaciones', row: 'Capacitación E2E', sortBy: null },
 ];
 
 /** La tabla visible que muestra la fila (no el resto de la página: el correo del admin también está en el menú). */
@@ -122,6 +125,21 @@ test.describe('listados clave con datos', () => {
         await page.waitForLoadState('networkidle').catch(() => undefined);
       });
     }
+
+    expect(problems.pageErrors, 'excepciones en el navegador').toEqual([]);
+    expect(problems.consoleErrors, 'errores de consola').toEqual([]);
+    expect(problems.serverErrors, 'respuestas 5xx').toEqual([]);
+  });
+});
+
+test.describe('portal de empleados', () => {
+  test('el ingreso al portal se muestra sin errores de página, de consola ni 5xx', async ({ page }) => {
+    const problems = watchProblems(page);
+    await page.goto('/portal/login');
+    await expect(page.getByRole('heading', { name: 'Ingresá a tu portal' })).toBeVisible();
+    await expect(page.getByLabel('Correo electrónico')).toBeVisible();
+    await expect(page.getByLabel('Contraseña', { exact: true })).toBeVisible();
+    await page.waitForLoadState('networkidle').catch(() => undefined);
 
     expect(problems.pageErrors, 'excepciones en el navegador').toEqual([]);
     expect(problems.consoleErrors, 'errores de consola').toEqual([]);
