@@ -20,7 +20,7 @@ const logger = new Logger('features/Mantenimiento/Gomeria/Ordenes/tire-service-q
 export async function fetchTireServiceContextForEquipment(equipmentId: string) {
   try {
     // Mismo criterio que el resto de las acciones del QR: operario de la empresa del equipo o permiso del dashboard.
-    await requireResourceAccess('vehicle', equipmentId);
+    await requireResourceAccess('vehicle', equipmentId, { modules: ['gomeria'] });
     const vehicle = await prisma.vehicles.findUnique({
       where: { id: equipmentId },
       select: {

@@ -119,6 +119,7 @@ async function getCachedChecklistTemplatesForEquipmentQuery(equipmentId: string,
 export async function getChecklistTemplatesForEquipment(equipmentId: string) {
   const { companyId } = await requireResourceAccess('vehicle', equipmentId, {
     dashboardPermissions: [NUEVO_PEDIDO_VIEW, NUEVO_PEDIDO_CREATE],
+    modules: ['mantenimiento'],
   });
   return getCachedChecklistTemplatesForEquipment(equipmentId, companyId);
 }

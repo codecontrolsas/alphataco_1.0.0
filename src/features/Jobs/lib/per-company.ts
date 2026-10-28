@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { CORE_MODULE, moduleForJob, type ModuleKey } from '@/features/Modules/catalog';
+import { readEnabledModules } from '@/features/Modules/server/modules.server';
 import type { NotifyResult } from '@/features/Notifications/lib/dispatch.server';
 import { Logger } from '@/lib/logger';
 import { prismaSystem } from '@/shared/lib/prisma-system';
@@ -23,6 +25,11 @@ export interface CompanyWorkResult {
   recipients?: number;
   emailSent?: boolean;
   metadata?: Record<string, unknown>;
+}
+
+/** Motivo que queda en la corrida salteada y en la respuesta del endpoint. */
+export function moduleOffReason(key: ModuleKey): string {
+  return `módulo ${key} apagado`;
 }
 
 export interface CompanyRef {
@@ -106,6 +113,41 @@ export async function runForEachCompany(params: {
         reason: 'ya procesada hoy',
       });
       continue;
+    }
+
+    // Módulo dueño del job (F3.3), apagado para esta empresa: no se hace nada. La corrida se cierra `skipped` (queda en
+    // `jobs_runs` y la clave sigue reclamable por si el módulo se enciende el mismo día). Si no se puede leer el estado
+    // es un ERROR de la empresa, no «módulo apagado»: un fallo de base no debe pasar por apagado.
+    const owner = moduleForJob(params.job);
+    if (owner && owner !== CORE_MODULE) {
+      let enabled: boolean;
+      try {
+        enabled = (await readEnabledModules(company.id)).has(owner);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Error desconocido';
+        logger.error('No se pudo leer el estado de los módulos para un job', {
+          data: { job: params.job, companyId: company.id, error },
+        });
+        await finishQuietly({ id: claim.id, status: 'error', error: message, metadata: { attempt: claim.attempts } });
+        outcomes.push({ companyId: company.id, companyName: company.company_name, status: 'error', error: message });
+        continue;
+      }
+      if (!enabled) {
+        const reason = moduleOffReason(owner);
+        const recorded = await finishQuietly({
+          id: claim.id,
+          status: 'skipped',
+          metadata: { reason, module: owner, attempt: claim.attempts },
+        });
+        outcomes.push({
+          companyId: company.id,
+          companyName: company.company_name,
+          status: recorded ? 'skipped' : 'error',
+          reason,
+          error: recorded ? undefined : 'no se pudo cerrar la fila de jobs_runs',
+        });
+        continue;
+      }
     }
 
     let result: CompanyWorkResult;

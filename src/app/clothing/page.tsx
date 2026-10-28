@@ -1,5 +1,6 @@
 import { Skeleton } from '@/components/ui/skeleton';
 import { getClothingOperatorContext } from '@/features/Clothing/actions/session.server';
+import { requireInstanceRoute } from '@/features/Modules/server/public-routes.server';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 
@@ -15,6 +16,7 @@ function RedirectSkeleton() {
 }
 
 async function ClothingRootContent() {
+  await requireInstanceRoute('/clothing');
   const context = await getClothingOperatorContext();
 
   if (context) {

@@ -9,6 +9,7 @@ import {
 import { getEmployeePicture } from '@/features/MobileApi/employees/queries.server';
 import { mobileRoute } from '@/features/MobileApi/lib/handler';
 import { mobileError } from '@/features/MobileApi/lib/http';
+import { isModuleEnabledForCompany } from '@/features/Modules/server/modules.server';
 import { z } from 'zod';
 
 const querySchema = z.object({
@@ -24,6 +25,7 @@ const querySchema = z.object({
  * portador: la firma ata empresa, empleado, variante y vencimiento. `ETag` + `If-None-Match` evitan reenviar bytes.
  */
 export const GET = mobileRoute<{ employeeId: string }>({
+  module: 'empleados',
   auth: false,
   run: async ({ req, params }) => {
     const parsed = querySchema.safeParse(Object.fromEntries(new URL(req.url).searchParams));
@@ -33,6 +35,10 @@ export const GET = mobileRoute<{ employeeId: string }>({
     const { c: companyId, variant, exp, sig } = parsed.data;
     if (!verifyPhotoSignature({ companyId, employeeId: params.employeeId, variant, expires: exp, sig })) {
       return mobileError(403, 'FORBIDDEN', 'La URL de la foto venció o no es válida.');
+    }
+    // Sin token: la empresa sale de la firma ya verificada, así que el módulo se mira para ESA empresa.
+    if (!(await isModuleEnabledForCompany('empleados', companyId))) {
+      return mobileError(404, 'MODULE_DISABLED', 'Esta función no está habilitada.');
     }
 
     const picture = await getEmployeePicture(companyId, params.employeeId);

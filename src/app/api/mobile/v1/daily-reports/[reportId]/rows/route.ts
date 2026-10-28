@@ -9,9 +9,12 @@ type EquipmentRef = { id: string; kind: 'vehicle' | 'other'; label: string };
 
 /** Líneas de un parte diario con lo que la app muestra en la lista: servicio, estado, versión y recursos asignados. */
 export const GET = mobileRoute<{ reportId: string }>({
+  module: 'operaciones',
   run: async ({ ctx, params }) => {
-    if (!z.string().uuid().safeParse(params.reportId).success) return mobileError(422, 'INVALID_INPUT', 'reportId inválido.');
-    if (!(await hasDailyReportPermission(ctx, 'view'))) return mobileError(403, 'FORBIDDEN', 'No tenés permiso para ver los partes diarios.');
+    if (!z.string().uuid().safeParse(params.reportId).success)
+      return mobileError(422, 'INVALID_INPUT', 'reportId inválido.');
+    if (!(await hasDailyReportPermission(ctx, 'view')))
+      return mobileError(403, 'FORBIDDEN', 'No tenés permiso para ver los partes diarios.');
 
     const rows = await runWithTenantContext(prismaBase, ctx, (tx) =>
       tx.dailyreportrows.findMany({
@@ -30,9 +33,14 @@ export const GET = mobileRoute<{ reportId: string }>({
           customers: { select: { name: true } },
           customer_services: { select: { service_name: true } },
           service_items: { select: { item_name: true } },
-          dailyreportemployeerelations: { select: { role: true, employees: { select: { id: true, file: true, firstname: true, lastname: true } } } },
+          dailyreportemployeerelations: {
+            select: { role: true, employees: { select: { id: true, file: true, firstname: true, lastname: true } } },
+          },
           dailyreportequipmentrelations: {
-            select: { vehicles: { select: { id: true, domain: true, intern_number: true } }, other_equipment: { select: { id: true, intern_number: true, type: { select: { name: true } } } } },
+            select: {
+              vehicles: { select: { id: true, domain: true, intern_number: true } },
+              other_equipment: { select: { id: true, intern_number: true, type: { select: { name: true } } } },
+            },
           },
         },
       })
@@ -53,13 +61,37 @@ export const GET = mobileRoute<{ reportId: string }>({
         service: row.customer_services?.service_name ?? null,
         item: row.service_items?.item_name ?? null,
         employees: row.dailyreportemployeerelations.flatMap((relation) =>
-          relation.employees ? [{ id: relation.employees.id, file: relation.employees.file, name: `${relation.employees.lastname} ${relation.employees.firstname}`, role: relation.role }] : []
+          relation.employees
+            ? [
+                {
+                  id: relation.employees.id,
+                  file: relation.employees.file,
+                  name: `${relation.employees.lastname} ${relation.employees.firstname}`,
+                  role: relation.role,
+                },
+              ]
+            : []
         ),
         equipment: row.dailyreportequipmentrelations.flatMap((relation): EquipmentRef[] =>
           relation.vehicles
-            ? [{ id: relation.vehicles.id, kind: 'vehicle' as const, label: relation.vehicles.domain ?? relation.vehicles.intern_number ?? relation.vehicles.id }]
+            ? [
+                {
+                  id: relation.vehicles.id,
+                  kind: 'vehicle' as const,
+                  label: relation.vehicles.domain ?? relation.vehicles.intern_number ?? relation.vehicles.id,
+                },
+              ]
             : relation.other_equipment
-              ? [{ id: relation.other_equipment.id, kind: 'other' as const, label: relation.other_equipment.intern_number ?? relation.other_equipment.type?.name ?? relation.other_equipment.id }]
+              ? [
+                  {
+                    id: relation.other_equipment.id,
+                    kind: 'other' as const,
+                    label:
+                      relation.other_equipment.intern_number ??
+                      relation.other_equipment.type?.name ??
+                      relation.other_equipment.id,
+                  },
+                ]
               : []
         ),
       })),

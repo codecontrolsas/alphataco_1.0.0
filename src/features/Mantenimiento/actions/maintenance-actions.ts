@@ -1,6 +1,8 @@
 'use server';
 
 import { requireResourceAccess } from '@/features/Mantenimiento/shared/resource-access.server';
+import { MODULE_DISABLED_MESSAGE } from '@/features/Modules/server/modules.server';
+import { isRouteEnabledForCompany } from '@/features/Modules/server/public-routes.server';
 import { Logger } from '@/lib/logger';
 import { auth } from '@/shared/lib/auth';
 import { prisma } from '@/shared/lib/prisma';
@@ -109,6 +111,11 @@ export async function setActiveCompanyForEquipment(equipmentId: string): Promise
 
   if (!vehicle?.company_id) {
     return { ok: false, error: 'No se pudo obtener la empresa del equipo seleccionado.' };
+  }
+
+  // El QR de mantenimiento sirve a tres claves (F3.3): alcanza con que alguna esté encendida para la empresa del equipo.
+  if (!(await isRouteEnabledForCompany('/maintenance', vehicle.company_id))) {
+    return { ok: false, error: MODULE_DISABLED_MESSAGE };
   }
 
   try {
@@ -229,6 +236,11 @@ export async function completeMaintenanceEmployeeAnonymousSession(params: {
   const companyId = employee.company_id;
   if (!companyId) {
     return { ok: false, error: 'El empleado no tiene empresa asignada. Contacta al administrador.' };
+  }
+
+  // Módulos del QR (F3.3): la empresa del legajo tiene que tener encendida alguna de las claves del QR.
+  if (!(await isRouteEnabledForCompany('/maintenance', companyId))) {
+    return { ok: false, error: MODULE_DISABLED_MESSAGE };
   }
 
   const employeeId = employee.id;

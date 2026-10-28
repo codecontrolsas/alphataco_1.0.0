@@ -99,6 +99,7 @@ const sanitize = (value: unknown): Prisma.InputJsonValue | null => {
  */
 async function getVehicleCompanyId(equipmentId: string, mode: 'read' | 'write' = 'read'): Promise<string> {
   const { companyId } = await requireResourceAccess('vehicle', equipmentId, {
+    modules: ['checklists', 'formularios'],
     dashboardPermissions:
       mode === 'write'
         ? [FORMULARIOS_CREATE, NUEVO_PEDIDO_CREATE]
@@ -486,6 +487,7 @@ export async function fetchSupervisorsForResource(kind: 'vehicle' | 'other_equip
   try {
     if (kind === 'other_equipment') {
       const { companyId } = await requireResourceAccess('other_equipment', resourceId, {
+        modules: ['checklists', 'formularios'],
         dashboardPermissions: [NUEVO_PEDIDO_VIEW, NUEVO_PEDIDO_CREATE],
       });
       return await getSupervisorsForCompany(companyId);

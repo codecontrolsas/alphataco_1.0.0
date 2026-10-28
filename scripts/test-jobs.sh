@@ -16,9 +16,9 @@
 # suite crea y borra sus propios datos (empresas, clientes, empleados, partes, documentos).
 #
 # ATENCION, un efecto que SI toca datos ajenos al test: el job de indicadores corre
-# `actualizar_estado_daily_reports()` y `marcar_prepartes_vencidos()`, que son GLOBALES (no
-# reciben company_id). En una base de desarrollo con datos propios eso cierra partes diarios
-# con fecha pasada y marca prepartes pendientes como vencidos, aunque no sean del test. Es el
+# `actualizar_estado_daily_reports(uuid[])` y `marcar_prepartes_vencidos(uuid[])` sobre las empresas que tienen
+# `operaciones` encendido (TODAS las de la base, las del test y las tuyas). En una base de desarrollo con datos propios eso
+# cierra partes diarios con fecha pasada y marca prepartes pendientes como vencidos, aunque no sean del test. Es el
 # mismo efecto que tendria el job corriendo de verdad a las 00:30, y ambas operaciones son
 # idempotentes, pero conviene saberlo antes de correrlo sobre una base que estas usando para
 # probar otra cosa. En CI la base arranca vacia, asi que no aplica.

@@ -8,6 +8,7 @@ import { MOBILE_API_VERSION } from './config';
 /** Códigos de error propios de la API (los de los casos de uso viajan tal cual). */
 export type MobileApiErrorCode =
   | 'MOBILE_API_DISABLED'
+  | 'MODULE_DISABLED'
   | 'UNAUTHENTICATED'
   | 'FORBIDDEN'
   | 'NO_ACTIVE_COMPANY'

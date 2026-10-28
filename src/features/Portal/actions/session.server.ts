@@ -37,6 +37,13 @@ export async function portalLogin(email: string, password: string): Promise<{ er
   if ('error' in login) return { error: login.error };
   const { employee, userId } = login;
 
+  // La empresa del legajo es la que manda (F3.3): el chequeo de arriba solo conoció la instancia o la empresa de una
+  // sesión previa. Con el portal apagado para ESA empresa no se abre sesión (todo o nada, como el resto del login).
+  if (!(await isPortalEnabled(employee.company_id))) {
+    await login.rejectSession();
+    return { error: 'El portal no está disponible.' };
+  }
+
   // Antes de tener empresa activa no hay contexto RLS: se lee con el cliente de sistema y se filtra a mano.
   const [access, legajo] = await Promise.all([
     prismaSystem.employee_portal_access.findUnique({

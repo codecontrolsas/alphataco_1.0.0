@@ -28,6 +28,7 @@ export async function uploadDiscardPhoto(file: File, vehicleId: string): Promise
   z.string().uuid('Equipo inválido').parse(vehicleId);
 
   const { companyId } = await requireResourceAccess('vehicle', vehicleId, {
+    modules: ['gomeria'],
     dashboardPermissions: [
       { module: 'mantenimiento', tab: 'ordenes_gomeria', action: 'update' },
       { module: 'mantenimiento', tab: 'ordenes_gomeria', action: 'create' },

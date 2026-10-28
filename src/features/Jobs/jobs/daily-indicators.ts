@@ -1,16 +1,23 @@
 import 'server-only';
 
+import { readEnabledModules } from '@/features/Modules/server/modules.server';
 import { argentinaDate } from '@/shared/lib/argentina-time';
 import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
 import { callVoid } from '@/shared/lib/sql';
-import { listCompanies, runForEachCompany, runGlobalStep, runJobWithBitacora } from '../lib/per-company';
+import {
+  listCompanies,
+  moduleOffReason,
+  runForEachCompany,
+  runGlobalStep,
+  runJobWithBitacora,
+} from '../lib/per-company';
 import type { JobSummary, JobUnitOutcome } from '../lib/types';
 
 /**
  * Job diario de las 00:30 (hora argentina) — `GET /api/jobs/daily-indicators`.
  *
  * **Qué hace.**
- * 1. Mantenimiento global (una vez, no por empresa):
+ * 1. Mantenimiento de estados (una vez, no por empresa) SOLO de las empresas con `operaciones` encendido (F3.3):
  *    - `actualizar_estado_daily_reports()` cierra los partes diarios con fecha pasada. Su
  *      llamador vivo (`after_dailyreportrows_update_optimized`) dejó de hacerlo hace tiempo:
  *      el propio comentario del trigger dice «el cierre ahora es responsabilidad exclusiva
@@ -66,20 +73,33 @@ export async function runDailyIndicatorsJob(deps: DailyIndicatorsDeps = {}): Pro
   return runJobWithBitacora(JOB, date, async () => {
     const units: JobUnitOutcome[] = [];
 
+    const companies = await listCompanies();
+
+    // El mantenimiento de partes y prepartes solo toca las empresas con `operaciones` encendido (F3.3). Si no se puede
+    // leer el estado de una empresa, la corrida falla: no se asume «apagado» (dejaría partes sin cerrar en silencio).
+    const operationsCompanyIds: string[] = [];
+    for (const company of companies) {
+      if ((await readEnabledModules(company.id)).has('operaciones')) operationsCompanyIds.push(company.id);
+    }
+
     units.push(
       await runGlobalStep({
         job: JOB,
         runKey: `mantenimiento:${date}`,
         label: 'Mantenimiento de estados (partes y prepartes)',
         work: async () => {
-          await callVoid('actualizar_estado_daily_reports', [], prisma);
-          await callVoid('marcar_prepartes_vencidos', [], prisma);
-          return { reason: 'partes diarios cerrados y prepartes vencidos marcados' };
+          if (operationsCompanyIds.length === 0) {
+            return { skipped: true, reason: moduleOffReason('operaciones') };
+          }
+          const scope = [{ uuidArray: operationsCompanyIds }];
+          await callVoid('actualizar_estado_daily_reports', scope, prisma);
+          await callVoid('marcar_prepartes_vencidos', scope, prisma);
+          return {
+            reason: `partes diarios cerrados y prepartes vencidos marcados (${operationsCompanyIds.length} empresa(s))`,
+          };
         },
       })
     );
-
-    const companies = await listCompanies();
 
     units.push(
       ...(await runForEachCompany({

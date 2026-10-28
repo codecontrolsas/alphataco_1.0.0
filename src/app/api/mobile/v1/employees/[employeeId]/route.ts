@@ -11,6 +11,7 @@ import { mobileError, mobileReadJson } from '@/features/MobileApi/lib/http';
 
 /** Legajo del empleado con los bloques que el usuario puede ver (los demás no viajan). Otra empresa = 404. */
 export const GET = mobileRoute<{ employeeId: string }>({
+  module: 'empleados',
   run: async ({ req, ctx, params }) => {
     if (!employeeIdSchema.safeParse(params.employeeId).success)
       return mobileError(422, 'INVALID_INPUT', 'employeeId inválido.');

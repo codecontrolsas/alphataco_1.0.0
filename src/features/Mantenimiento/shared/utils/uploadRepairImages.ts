@@ -42,6 +42,7 @@ export async function uploadRepairImages(files: File[], equipmentId: string): Pr
 
   const { companyId } = await requireResourceAccess('vehicle', equipmentId, {
     dashboardPermissions: [NUEVO_PEDIDO_CREATE],
+    modules: ['mantenimiento'],
   });
 
   // En paralelo: son pocas fotos por reparación y el flujo por QR se usa desde

@@ -1,5 +1,6 @@
 import { AuthShell } from '@/features/Auth/components/AuthShell';
 import { CredentialsLoginForm } from '@/features/Auth/components/CredentialsLoginForm';
+import { requireInstanceRoute } from '@/features/Modules/server/public-routes.server';
 import { operatorLogin } from '@/features/OperatorPanel/actions/session.server';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
@@ -10,6 +11,7 @@ export const metadata = {
 };
 
 export default async function OperatorLoginPage() {
+  await requireInstanceRoute('/operator');
   // Si ya hay sesión con contexto de operario válido, se salta el login.
   const userId = await getSessionUserId();
 

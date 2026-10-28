@@ -9,6 +9,7 @@ import { mobileError, mobileReadJson } from '@/features/MobileApi/lib/http';
  * cursor. Activos y bajas exigen el `view` de su subpestaña, igual que en la web.
  */
 export const GET = mobileRoute({
+  module: 'empleados',
   run: async ({ req, ctx }) => {
     const parsed = employeeListQuerySchema.safeParse(Object.fromEntries(new URL(req.url).searchParams));
     if (!parsed.success) {

@@ -810,3 +810,13 @@ export function moduleForBucket(bucket: StorageBucket): ModuleKey | null {
 export function moduleForTable(table: string): ModuleKey | null {
   return MODULE_KEYS.find((key) => MODULE_CATALOG[key].tables.includes(table)) ?? null;
 }
+
+/** Clave dueña de un recurso de `/api/external/v1`. */
+export function moduleForExternalResource(resource: string): ModuleKey | null {
+  return MODULE_KEYS.find((key) => MODULE_CATALOG[key].externalResources?.includes(resource)) ?? null;
+}
+
+/** Clave dueña de una entrada de `MOBILE_MODULES` de la API móvil. */
+export function moduleForMobileEntry(entry: string): ModuleKey | null {
+  return MODULE_KEYS.find((key) => MODULE_CATALOG[key].mobile?.includes(entry)) ?? null;
+}

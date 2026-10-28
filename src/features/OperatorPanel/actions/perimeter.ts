@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { ModuleDisabledError, isModuleEnabledForCompany } from '@/features/Modules/server/modules.server';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId, isSessionAnonymous } from '@/shared/lib/session';
 import { cache } from 'react';
@@ -97,7 +98,6 @@ export const getOperatorIdentity = cache(async (): Promise<OperatorIdentity | nu
   // el panel del taller.
   if (await isSessionAnonymous()) return null;
 
-
   const profile = await prisma.profile.findUnique({
     where: { credential_id: credentialId },
     select: { id: true, employee_id: true },
@@ -127,6 +127,9 @@ export const getOperatorIdentity = cache(async (): Promise<OperatorIdentity | nu
 export async function requireOperatorIdentity(): Promise<OperatorIdentity> {
   const operator = await getOperatorIdentity();
   if (!operator) throw new Error('No hay una sesión de operario con sectores de taller asignados');
+  // Módulo `mantenimiento` apagado para la empresa del operario (F3.3): el panel no opera (este perímetro no pasa por permisos).
+  if (!(await isModuleEnabledForCompany('mantenimiento', operator.companyId)))
+    throw new ModuleDisabledError('mantenimiento');
   return operator;
 }
 
