@@ -1,5 +1,6 @@
 'use server';
 
+import { getDisabledTabIds } from '@/features/Modules/server/modules.server';
 import { buildPermissionIndex, permissionKey } from '@/features/UserPermissionsManager/lib/permission-rules';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
@@ -192,7 +193,7 @@ export async function getModulesWithTabsServer() {
   logger.debug('Obteniendo módulos con tabs');
 
   try {
-    const [modules, allTabs, actions] = await Promise.all([
+    const [modules, activeTabs, actions, disabledTabIds] = await Promise.all([
       prisma.modules.findMany({
         where: { is_active: true },
         orderBy: { order_index: 'asc' },
@@ -215,7 +216,11 @@ export async function getModulesWithTabsServer() {
         orderBy: { name: 'asc' },
         select: { id: true, slug: true, name: true, description: true },
       }),
+      getDisabledTabIds(),
     ]);
+    // F3: no se ofrecen permisos de módulos apagados para la empresa activa (los ya otorgados se conservan: la función
+    // de permisos solo los filtra). Como el rol es de la instancia, en otra empresa con el módulo encendido sí se ven.
+    const allTabs = activeTabs.filter((tab) => !disabledTabIds.has(tab.id));
 
     type ActionItem = (typeof actions)[number];
     type TabItem = (typeof allTabs)[number] & { actions: ActionItem[]; subtabs: TabWithActions[] };
@@ -245,10 +250,13 @@ export async function getModulesWithTabsServer() {
         });
     };
 
-    return modules.map((module) => ({
-      ...module,
-      tabs: buildTabHierarchy(null, module.id, module.slug ?? ''),
-    }));
+    const hadTabs = new Set(activeTabs.map((tab) => tab.module_id));
+    return modules
+      .map((module) => ({
+        ...module,
+        tabs: buildTabHierarchy(null, module.id, module.slug ?? ''),
+      }))
+      .filter((module) => module.tabs.length > 0 || !hadTabs.has(module.id));
   } catch (error) {
     logger.error('Error al obtener módulos con tabs', { data: { error } });
     throw error;

@@ -38,7 +38,8 @@ const SIGN_MESSAGES = {
 } as const;
 
 async function portalEmployee(): Promise<{ ok: true; employee: PortalEmployee } | { ok: false; error: string }> {
-  if (!isPortalEnabled() || !isHseEnabled()) return { ok: false, error: 'El portal no está disponible.' };
+  if (!(await isPortalEnabled()) || !(await isHseEnabled()))
+    return { ok: false, error: 'El portal no está disponible.' };
   try {
     return { ok: true, employee: await requirePortalEmployee() };
   } catch (error) {

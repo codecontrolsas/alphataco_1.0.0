@@ -55,7 +55,7 @@ export async function getEmployeePortalAccessOverview(employeeId: string) {
   const actorName = new Map(actors.map((actor) => [actor.id, actor.fullname || actor.email || 'Usuario']));
 
   return {
-    portalEnabled: isPortalEnabled(),
+    portalEnabled: await isPortalEnabled(),
     canManage,
     employeeEmail: employee.email,
     employeeActive: employee.is_active,

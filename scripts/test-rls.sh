@@ -21,6 +21,7 @@ source scripts/lib/integration-env.sh
 
 echo "==> Aplicando migraciones pendientes..."
 npx prisma migrate deploy
+enable_all_modules
 
 # shellcheck source=lib/rls-roles.sh
 source scripts/lib/rls-roles.sh
@@ -37,4 +38,5 @@ npx vitest run --no-file-parallelism \
   src/features/Dashboard/Boards/dashboard-presets.rls.integration.test.ts \
   src/shared/lib/instance-settings.rls.integration.test.ts \
   src/features/Empresa/General/first-company.rls.integration.test.ts \
-  src/features/MobileApi/employees/mobile-employees.rls.integration.test.ts
+  src/features/MobileApi/employees/mobile-employees.rls.integration.test.ts \
+  src/features/Modules/modules.rls.integration.test.ts

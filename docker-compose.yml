@@ -82,6 +82,8 @@ services:
       S3_ENDPOINT: http://storage:9000
       # Token de solo lectura de GET /api/admin/v1/status (sala de control de TaskApp). Distinto de JOBS_TOKEN.
       ADMIN_STATUS_TOKEN: ${ADMIN_STATUS_TOKEN:-}
+      # Token de escritura de /api/admin/v1/modules (control de módulos, F3).
+      ADMIN_MODULES_TOKEN: ${ADMIN_MODULES_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy

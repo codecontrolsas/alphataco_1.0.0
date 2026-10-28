@@ -48,7 +48,7 @@ type TrainingAction = 'create' | 'update' | 'delete' | 'approve';
 type Auth = { companyId: string; profileId: string; credentialId: string };
 
 async function requireTrainings(action: TrainingAction): Promise<({ ok: true } & Auth) | { ok: false; error: string }> {
-  if (!isHseEnabled()) return { ok: false, error: 'El módulo HSE no está disponible' };
+  if (!(await isHseEnabled())) return { ok: false, error: 'El módulo HSE no está disponible' };
   if (!(await checkPermissionServer('hse', 'capacitaciones', action))) return { ok: false, error: NO_PERMISSION };
   const [profile, companyId] = await Promise.all([getServerAuthProfile(), getActiveCompanyId()]);
   if (!profile) return { ok: false, error: SESSION_EXPIRED };
@@ -125,7 +125,7 @@ async function lockTraining(tx: Prisma.TransactionClient, companyId: string, tra
 
 /** Opciones de destinatarios (puestos, sectores y empleados con legajo), pedidas al abrir el formulario. */
 export async function fetchHseTrainingFormOptions() {
-  if (!isHseEnabled()) throw new Error('El módulo HSE no está disponible');
+  if (!(await isHseEnabled())) throw new Error('El módulo HSE no está disponible');
   const [canCreate, canUpdate] = await Promise.all([
     checkPermissionServer('hse', 'capacitaciones', 'create'),
     checkPermissionServer('hse', 'capacitaciones', 'update'),
@@ -570,7 +570,7 @@ export async function deleteHseTrainingQuestion(questionId: string): Promise<Act
  * con permiso: se cruza con la clave en el servidor. Para el diálogo "Resultados" del cumplimiento.
  */
 export async function fetchHseEmployeeTrainingAttempts(trainingId: string, employeeId: string) {
-  if (!isHseEnabled()) throw new Error('El módulo HSE no está disponible');
+  if (!(await isHseEnabled())) throw new Error('El módulo HSE no está disponible');
   if (!(await checkPermissionServer('hse', 'capacitaciones', 'view'))) throw new Error(NO_PERMISSION);
   if (!UUID_RE.test(trainingId) || !UUID_RE.test(employeeId)) throw new Error(NOT_FOUND);
   const companyId = await getActiveCompanyId();

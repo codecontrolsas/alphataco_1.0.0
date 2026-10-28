@@ -1,20 +1,34 @@
 import 'server-only';
 
+import { isModuleEnabledOrLegacy } from '@/features/Modules/server/modules.server';
 import { notFound } from 'next/navigation';
 
 /**
- * Puerta ÚNICA del portal de empleados (clave `portal` del catálogo funcional, F3 de la Sala de Control).
+ * Puerta ÚNICA del portal de empleados (clave `portal` del catálogo funcional, F3 de la sala de control).
  *
- * Hasta que exista F3 la decide una variable de la instancia: `PORTAL_ENABLED=false` apaga el portal entero (las rutas
- * `/portal/**` responden 404 y el legajo deja de ofrecer "Habilitar portal"). Sin la variable el portal está prendido,
- * pero nadie entra hasta que RR.HH. le habilita el acceso a un legajo. Cuando F3 exista, se reemplaza el cuerpo de
- * `isPortalEnabled()` por la lectura del catálogo y nada más cambia.
+ * Desde F3.1 la decide el estado del módulo (instancia y empresa) y, mientras exista, también la variable
+ * `PORTAL_ENABLED`: `PORTAL_ENABLED=false` lo apaga igual que antes. Si el estado no se puede leer, manda la variable.
+ * Apagado: las rutas `/portal/**` responden 404 y el legajo deja de ofrecer «Habilitar portal». En F3.6 se borra la
+ * variable y esto pasa a ser `isModuleEnabled('portal')` / `requireModule('portal')`.
  */
-export function isPortalEnabled(): boolean {
+export function isPortalEnabledByEnv(): boolean {
   return process.env.PORTAL_ENABLED !== 'false';
 }
 
-/** Corta la ruta con 404 si el portal está apagado en esta instancia. */
-export function assertPortalEnabled(): void {
-  if (!isPortalEnabled()) notFound();
+/** `companyId` para quien ya conoce la empresa (el panel del portal); sin él, la empresa activa de la sesión. */
+export async function isPortalEnabled(companyId?: string | null): Promise<boolean> {
+  return isPortalEnabledByEnv() && (await isModuleEnabledOrLegacy('portal', companyId));
+}
+
+/** Corta la ruta con 404 si el portal está apagado. */
+export async function assertPortalEnabled(companyId?: string | null): Promise<void> {
+  if (!(await isPortalEnabled(companyId))) notFound();
+}
+
+/**
+ * Corte SÍNCRONO por la variable, para el layout raíz de `/portal` (síncrono: con `cacheComponents` no puede leer la
+ * base fuera de un Suspense). El estado del módulo lo corta el panel (`PortalPanel`) y el login. Se borra en F3.6.
+ */
+export function assertPortalEnabledByEnv(): void {
+  if (!isPortalEnabledByEnv()) notFound();
 }

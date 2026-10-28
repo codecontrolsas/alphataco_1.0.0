@@ -15,6 +15,7 @@ source scripts/lib/integration-env.sh
 
 echo "==> Aplicando migraciones pendientes..."
 npx prisma migrate deploy
+enable_all_modules
 
 echo "==> Corriendo los tests de integracion de Almacenes..."
 npx vitest run \

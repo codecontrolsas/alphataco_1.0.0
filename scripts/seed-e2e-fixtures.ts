@@ -19,6 +19,7 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client.ts';
 import { prismaPgConfig } from '../src/shared/lib/prisma-pg-config.ts';
+import { enableAllModules, syncModuleCatalog } from './lib/module-control.ts';
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg(prismaPgConfig(process.env.SYSTEM_DATABASE_URL ?? process.env.DATABASE_URL)),
@@ -156,6 +157,14 @@ if (!(await prisma.hse_trainings.findUnique({ where: { id: HSE_TRAINING }, selec
   });
   await prisma.$executeRaw`SELECT public.hse_sync_training_assignments(${COMPANY}::uuid, ${HSE_TRAINING}::uuid, NULL::uuid)`;
 }
+
+// F3: una base nueva nace con todos los módulos apagados; el e2e recorre todos, así que se encienden (y la pertenencia de
+// pestañas se resincroniza por si el seed de otra empresa corrió después del arranque).
+await syncModuleCatalog(prisma);
+await enableAllModules(prisma, {
+  actor: 'script:seed-e2e-fixtures',
+  reason: 'Todos los módulos encendidos para el e2e',
+});
 
 console.log('Fixtures del e2e OK');
 await prisma.$disconnect();

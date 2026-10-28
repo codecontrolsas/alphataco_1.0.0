@@ -38,6 +38,7 @@ export NEXT_PUBLIC_BASE_URL="${NEXT_PUBLIC_BASE_URL:-http://localhost:3000}"
 
 echo "==> Aplicando migraciones pendientes..."
 npx prisma migrate deploy
+enable_all_modules
 
 # Los jobs corren con los roles REALES (app sin BYPASSRLS + sistema), como en la demo: ver `src/test/rls-roles.ts`.
 # shellcheck source=lib/rls-roles.sh

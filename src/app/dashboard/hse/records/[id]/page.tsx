@@ -6,7 +6,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 export default async function HseRecordRoute({ params }: { params: Promise<{ id: string }> }) {
-  assertHseEnabled();
+  await assertHseEnabled();
   const { id } = await params;
   return <HseRecordDetailPage id={id} />;
 }

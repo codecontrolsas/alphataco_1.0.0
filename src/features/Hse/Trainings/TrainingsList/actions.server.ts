@@ -42,7 +42,7 @@ const activeAssignment = { archived_at: null };
 const notPassed = { archived_at: null, status: { not: 'passed' as const } };
 
 async function resolveCompanyId(): Promise<string | null> {
-  if (!isHseEnabled()) return null;
+  if (!(await isHseEnabled())) return null;
   if (!(await checkPermissionServer('hse', 'capacitaciones', 'view'))) return null;
   return getActiveCompanyId();
 }

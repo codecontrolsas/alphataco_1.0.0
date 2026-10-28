@@ -29,7 +29,8 @@ const logger = new Logger('features/Portal/hse-trainings');
 const UNAVAILABLE = 'Esta capacitación ya no está disponible. Recargá la página.';
 
 async function portalEmployee(): Promise<{ ok: true; employee: PortalEmployee } | { ok: false; error: string }> {
-  if (!isPortalEnabled() || !isHseEnabled()) return { ok: false, error: 'El portal no está disponible.' };
+  if (!(await isPortalEnabled()) || !(await isHseEnabled()))
+    return { ok: false, error: 'El portal no está disponible.' };
   try {
     return { ok: true, employee: await requirePortalEmployee() };
   } catch (error) {

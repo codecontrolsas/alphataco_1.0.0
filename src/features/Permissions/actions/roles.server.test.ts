@@ -16,10 +16,14 @@ vi.mock('@/shared/lib/tenant', () => ({ getActiveCompanyId: vi.fn() }));
 vi.mock('@/shared/lib/session', () => ({ getSessionUserId: vi.fn() }));
 vi.mock('./permissions.server', () => ({ checkPermissionServer: vi.fn() }));
 vi.mock('@/shared/lib/sql', () => ({ callFunction: vi.fn(async () => []) }));
+// F3: el editor de roles filtra las pestañas de módulos apagados; acá no hay ninguno.
+vi.mock('@/features/Modules/server/modules.server', () => ({
+  getDisabledTabIds: vi.fn(async () => new Set<string>()),
+}));
 
 import { getSessionUserId } from '@/shared/lib/session';
-import { getRolePermissionsServer, getUserPermissionsForUserServer, getUserRolesServer } from './roles.server';
 import { checkPermissionServer } from './permissions.server';
+import { getRolePermissionsServer, getUserPermissionsForUserServer, getUserRolesServer } from './roles.server';
 
 const sessionUserIdMock = vi.mocked(getSessionUserId);
 const checkPermissionServerMock = vi.mocked(checkPermissionServer);

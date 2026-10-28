@@ -59,7 +59,7 @@ echo "==> Aplicando migraciones contra ${TEST_DB}..."
 npx prisma migrate deploy
 
 echo "==> Seed de datos de prueba..."
-npm run db:seed -- --name Test --id 00000000-0000-0000-0000-000000000001
+npm run db:seed -- --name Test --id 00000000-0000-0000-0000-000000000001 --modules=all
 
 echo "==> Corriendo pgTAP (pg_prove)..."
 # El glob /tests/*.sql debe expandirse DENTRO del contenedor (el host no

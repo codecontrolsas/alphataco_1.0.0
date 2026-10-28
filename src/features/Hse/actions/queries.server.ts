@@ -56,7 +56,7 @@ export type HseDocumentFormOptions = Awaited<ReturnType<typeof getHseDocumentFor
 
 /** Detalle de un documento: datos, versiones, destinatarios y cumplimiento de la versión vigente. */
 export const getHseDocumentDetail = cache(async (documentId: string) => {
-  if (!isHseEnabled() || !UUID_RE.test(documentId)) return null;
+  if (!(await isHseEnabled()) || !UUID_RE.test(documentId)) return null;
   if (!(await checkPermissionServer('hse', 'documentos-hse', 'view'))) return null;
   const companyId = await getActiveCompanyId();
 

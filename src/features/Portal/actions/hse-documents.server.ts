@@ -26,7 +26,7 @@ const NOT_AVAILABLE = 'Este documento ya no está disponible para responder. Rec
 export async function respondHseDocument(
   input: HseAcknowledgeInput
 ): Promise<ActionResult<{ status: 'accepted' | 'rejected' }>> {
-  if (!isPortalEnabled() || !isHseEnabled()) return fail('El portal no está disponible.');
+  if (!(await isPortalEnabled()) || !(await isHseEnabled())) return fail('El portal no está disponible.');
   const parsed = hseAcknowledgeSchema.safeParse(input);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Revisá los datos');
   const data = parsed.data;

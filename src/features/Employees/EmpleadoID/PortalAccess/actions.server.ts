@@ -152,7 +152,8 @@ export async function enableEmployeePortalAccess(values: EnablePortalAccessInput
   const { employeeId, method } = parsed.data;
 
   try {
-    if (!isPortalEnabled()) return { success: false, error: 'El portal de empleados está apagado en esta instancia.' };
+    if (!(await isPortalEnabled()))
+      return { success: false, error: 'El portal de empleados está apagado en esta instancia.' };
     if (!(await checkPermissionServer(PORTAL_TAB.module, PORTAL_TAB.tab, 'portal_access'))) {
       return { success: false, error: 'No tenés permiso para habilitar el portal.' };
     }

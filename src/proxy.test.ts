@@ -97,3 +97,33 @@ describe('proxy: quién entra al dashboard', () => {
     expect(response.headers.get('location')).toBe('http://app.test/login?next=%2Fdashboard%2Fhse%3Ftab%3Dactas');
   });
 });
+
+describe('proxy: módulos apagados (F3)', () => {
+  beforeEach(() => {
+    getSession.mockResolvedValue({
+      user: { id: '22222222-2222-4222-8222-222222222222', isAnonymous: false },
+      session: { company: COMPANY, token: 't' },
+    });
+  });
+
+  it('la página de un módulo apagado responde 404 antes de renderizar', async () => {
+    queryRaw.mockResolvedValueOnce([{ employee_only: false }]).mockResolvedValueOnce([{ enabled: false }]);
+    const response = await run('http://app.test/dashboard/maintenance?tab=gomeria');
+    expect(response.status).toBe(404);
+    expect(response.headers.get('x-middleware-rewrite')).toContain('/_modulo-no-disponible');
+  });
+
+  it('encendido sigue de largo; el núcleo ni consulta', async () => {
+    queryRaw.mockResolvedValueOnce([{ employee_only: false }]).mockResolvedValueOnce([{ enabled: true }]);
+    expect((await run('http://app.test/dashboard/hse')).status).toBe(200);
+    queryRaw.mockClear();
+    queryRaw.mockResolvedValue([{ employee_only: false }]);
+    expect((await run('http://app.test/dashboard/configuration')).status).toBe(200);
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('si la base no responde no se corta (los permisos ya filtran)', async () => {
+    queryRaw.mockResolvedValueOnce([{ employee_only: false }]).mockRejectedValueOnce(new Error('db caída'));
+    expect((await run('http://app.test/dashboard/warehouse')).status).toBe(200);
+  });
+});

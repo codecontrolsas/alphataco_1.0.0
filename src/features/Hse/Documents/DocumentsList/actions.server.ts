@@ -45,7 +45,7 @@ const contains = (value: string) => ({ contains: value, mode: 'insensitive' as c
 
 /** Empresa si el usuario puede ver la tabla; `null` = sin acceso → lista vacía. */
 async function resolveCompanyId(): Promise<string | null> {
-  if (!isHseEnabled()) return null;
+  if (!(await isHseEnabled())) return null;
   if (!(await checkPermissionServer('hse', 'documentos-hse', 'view'))) return null;
   return getActiveCompanyId();
 }

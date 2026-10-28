@@ -20,9 +20,9 @@ import { describe, expect, it } from 'vitest';
 const ROOT = process.cwd();
 
 /** Scripts que el contenedor ejecuta solos en cada arranque (los llama el entrypoint). */
-const ENTRYPOINT_SCRIPTS = ['scripts/seed-company.ts', 'scripts/ensure-buckets.ts'];
+const ENTRYPOINT_SCRIPTS = ['scripts/seed-company.ts', 'scripts/ensure-buckets.ts', 'scripts/sync-module-catalog.ts'];
 /** Además, scripts que se corren a mano dentro del contenedor (runbook). */
-const MANUAL_SCRIPTS = ['scripts/bootstrap-admin.ts'];
+const MANUAL_SCRIPTS = ['scripts/bootstrap-admin.ts', 'scripts/enable-all-modules.ts'];
 const ENTRY_SCRIPTS = [...ENTRYPOINT_SCRIPTS, ...MANUAL_SCRIPTS];
 
 /** Carpetas que el runner copia enteras. */

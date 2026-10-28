@@ -1,4 +1,5 @@
 import { legacyManualRedirectHref } from '@/features/Ayuda/Manual/lib/manual-urls';
+import { routeModules } from '@/features/Modules/catalog';
 import { Logger } from '@/lib/logger';
 import { auth } from '@/shared/lib/auth';
 import { prismaSystem } from '@/shared/lib/prisma-system';
@@ -17,6 +18,8 @@ const logger = new Logger('Proxy');
  * 2. Mandar al operario anónimo (QR) a /maintenance
  * 3. Verificar que el usuario tenga empresa, por el claim de la sesión
  * 4. Redirigir los enlaces viejos `?tab=manual` de cualquier ruta del dashboard a `/manual`
+ * 5. Responder 404 a las páginas de un módulo apagado para la empresa (F3, prefijo de ruta del catálogo), antes de
+ *    renderizar: el módulo «no existe» para esa empresa (sin página de «no contratado», que filtraría el catálogo)
  *
  * Notas:
  * - /maintenance/* NO está protegido (acceso anónimo para empleados con CUIL)
@@ -60,12 +63,14 @@ export async function proxy(req: NextRequest) {
   //    el usuario no tenga ninguna, o que lo hayan sumado a una DESPUÉS de abrir la sesión: se
   //    reintenta resolver contra la base y, si aparece, se estampa. Sin este auto-rescate el
   //    invitado a una empresa quedaría rebotando contra /dashboard/configuration/companies/new hasta relogearse.
-  if (!session.session.company) {
+  let companyId = session.session.company ?? null;
+  if (!companyId) {
     const resolved = await resolveDefaultCompanyId(session.user.id);
 
     if (resolved) {
       try {
         await writeCompanyClaim(session.session.token, resolved);
+        companyId = resolved;
       } catch {
         // La sesión desapareció entre el `getSession()` de arriba y esta escritura: logout en
         // otra pestaña, un ban que borra sesiones, un cambio de contraseña que cierra las
@@ -80,8 +85,35 @@ export async function proxy(req: NextRequest) {
     }
   }
 
-  // 5. Usuario autenticado con compañía - permitir acceso
+  // 5. Módulo apagado (F3): 404 real antes de renderizar. Las rutas del núcleo no consultan nada.
+  const required = routeModules(req.nextUrl.pathname);
+  if (required && !(await anyModuleEnabled(companyId, required))) {
+    logger.debug('Ruta de un módulo apagado, 404', { data: { path: req.nextUrl.pathname, required } });
+    return moduleNotFound(req);
+  }
+
+  // 6. Usuario autenticado con compañía - permitir acceso
   return NextResponse.next();
+}
+
+/**
+ * ¿Alguna de las claves está encendida para la empresa? Una consulta (`app_enabled_modules`, la misma fórmula que los
+ * permisos). Si la base falla no se corta: la página igual filtra por permisos (que ya excluyen el módulo apagado).
+ */
+async function anyModuleEnabled(companyId: string | null, keys: readonly string[]): Promise<boolean> {
+  try {
+    const rows = await prismaSystem.$queryRaw<{ enabled: boolean }[]>`
+      SELECT public.app_enabled_modules(${companyId}::uuid) && ${keys}::text[] AS enabled`;
+    return rows[0]?.enabled === true;
+  } catch (error) {
+    logger.error('No se pudo leer el estado de los módulos en el proxy', { data: { error } });
+    return true;
+  }
+}
+
+/** 404 con la página de «no encontrado» de la app: se reescribe a una ruta que no existe. */
+function moduleNotFound(req: NextRequest): NextResponse {
+  return NextResponse.rewrite(new URL('/_modulo-no-disponible', req.url), { status: 404 });
 }
 
 /** Una consulta: tiene legajo vinculado y ninguna membresia activa ni empresa propia. */

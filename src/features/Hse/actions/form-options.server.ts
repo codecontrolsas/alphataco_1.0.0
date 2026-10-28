@@ -9,7 +9,7 @@ import { getHseDocumentFormOptions } from './queries.server';
  * empleados puede ser larga). Exige poder crear o editar documentos.
  */
 export async function fetchHseDocumentFormOptions() {
-  if (!isHseEnabled()) throw new Error('El módulo HSE no está disponible');
+  if (!(await isHseEnabled())) throw new Error('El módulo HSE no está disponible');
   const [canCreate, canUpdate] = await Promise.all([
     checkPermissionServer('hse', 'documentos-hse', 'create'),
     checkPermissionServer('hse', 'documentos-hse', 'update'),

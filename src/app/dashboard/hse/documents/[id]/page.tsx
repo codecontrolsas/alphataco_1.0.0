@@ -12,7 +12,7 @@ export default async function HseDocumentRoute({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  assertHseEnabled();
+  await assertHseEnabled();
   const [{ id }, resolvedSearchParams] = await Promise.all([params, searchParams]);
   return <HseDocumentDetailPage id={id} searchParams={resolvedSearchParams} />;
 }

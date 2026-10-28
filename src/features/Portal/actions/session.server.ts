@@ -28,7 +28,7 @@ const NO_ACCESS_MESSAGE = 'Tu acceso al portal no está habilitado. Pedíselo a 
  * estampa el alta de sesión podría ser otra empresa si la persona además es miembro de una.
  */
 export async function portalLogin(email: string, password: string): Promise<{ error?: string; success?: boolean }> {
-  if (!isPortalEnabled()) return { error: 'El portal no está disponible.' };
+  if (!(await isPortalEnabled())) return { error: 'El portal no está disponible.' };
 
   const login = await signInLinkedEmployee(email, password, {
     requireCompany: true,

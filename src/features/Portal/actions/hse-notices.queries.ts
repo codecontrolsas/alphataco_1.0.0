@@ -11,7 +11,7 @@ import { cache } from 'react';
  * Se muestran los de los últimos 60 días, el más nuevo primero.
  */
 export const getMyHseNotices = cache(async (employee: PortalEmployee) => {
-  if (!isHseEnabled()) return [];
+  if (!(await isHseEnabled())) return [];
   const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
   const rows = await prisma.hse_expiry_notices.findMany({
     where: { employee_id: employee.employeeId, created_at: { gte: since } },
