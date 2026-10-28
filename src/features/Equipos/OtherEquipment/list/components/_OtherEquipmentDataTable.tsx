@@ -1,6 +1,11 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import {
+  withDocumentStatusColumn,
+  withDocumentStatusDefault,
+  withDocumentStatusFacet,
+} from '@/features/Modules/lib/document-status-visibility';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import {
   condition_enum,
@@ -31,7 +36,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Check, Plus, X } from 'lucide-react';
 import moment from 'moment';
 import Link from 'next/link';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { conditionIcons } from '../../../lib/condition-config';
 import {
   getAllOtherEquipmentForExport,
@@ -50,6 +55,8 @@ interface Props {
   totalRows: number;
   searchParams: DataTableSearchParams;
   tableId: string;
+  /** `documentacion` encendido: si no, se ocultan la columna y el filtro de estado documental (caché congelado). */
+  showDocumentStatus: boolean;
   permissionsMap: Record<string, boolean>;
   initialColumnVisibility: Record<string, boolean>;
   initialFilterVisibility: Record<string, boolean>;
@@ -137,6 +144,7 @@ export function _OtherEquipmentDataTable({
   data,
   totalRows,
   searchParams,
+  showDocumentStatus,
   tableId,
   permissionsMap: _permissionsMap,
   initialColumnVisibility,
@@ -145,12 +153,21 @@ export function _OtherEquipmentDataTable({
   initialSorting,
   initialColumnOrder,
 }: Props) {
+  const visibleColumns = useMemo(() => withDocumentStatusColumn(columns, showDocumentStatus), [showDocumentStatus]);
+  const facetedFilters = useMemo(
+    () => withDocumentStatusFacet(FACETED_FILTERS, showDocumentStatus),
+    [showDocumentStatus]
+  );
+  const defaultVisibleFilters = useMemo(
+    () => withDocumentStatusDefault(DEFAULT_VISIBLE_FILTERS, showDocumentStatus),
+    [showDocumentStatus]
+  );
   const { currentParams, tableProps } = useServerTableView({
     searchParams,
     tableId,
     hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
-    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
-    facetedFilters: FACETED_FILTERS,
+    defaultVisibleFilters,
+    facetedFilters,
     initialColumnVisibility,
     savedFilterVisibility: initialFilterVisibility,
   });
@@ -174,7 +191,7 @@ export function _OtherEquipmentDataTable({
   return (
     <DataTable
       {...tableProps}
-      columns={columns}
+      columns={visibleColumns}
       data={data}
       totalRows={totalRows}
       // Client-side navigation: fetch instantáneo via React Query, sin router.push

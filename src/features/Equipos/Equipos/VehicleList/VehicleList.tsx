@@ -1,4 +1,5 @@
 import { Card, CardContent } from '@/components/ui/card';
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
@@ -29,9 +30,11 @@ export async function VehicleList({ searchParams }: VehicleListProps) {
 
   // Las tarjetas arrancan YA, en paralelo con la tabla (si no, su consulta esperaría a que la tabla resuelva).
   const metrics = getVehicleConditionMetrics();
-  const [{ data, total }, preferences] = await Promise.all([
+  const [{ data, total }, preferences, showDocumentStatus] = await Promise.all([
     getVehiclesPaginated(tableParams),
     getTablePreferences(tableId),
+    // `documentacion` apagado: sin columna ni filtro de estado documental (F3.2).
+    isModuleEnabled('documentacion'),
   ]);
 
   return (
@@ -44,6 +47,7 @@ export async function VehicleList({ searchParams }: VehicleListProps) {
       <Card>
         <CardContent className="pt-6">
           <_VehicleDataTable
+            showDocumentStatus={showDocumentStatus}
             data={data}
             totalRows={total}
             searchParams={tableParams}

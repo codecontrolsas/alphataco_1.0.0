@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { isModuleEnabledForCompany } from '@/features/Modules/server/modules.server';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { toStatusType } from '../status';
@@ -49,6 +50,11 @@ async function companiesOf(db: DocumentStatusDb, kind: ComplianceApplies, ids: s
  * documental: carga el dataset, lo evalúa con el motor y escribe en UNA sentencia set-based,
  * sólo las filas cuyo valor cambia. Pasar el `tx` del escritor para que el refresh quede en su
  * misma transacción y se ejecute DESPUÉS de su última escritura sobre documentos o recursos.
+ *
+ * Con el módulo `documentacion` apagado para la empresa NO se recalcula: la RLS por módulo (F3.4) haría leer 0 documentos
+ * y escribiría estados falsos en todo el padrón. El caché queda congelado y se reconcilia al encender
+ * (`reconcileDocumentStatus`, desde `onEnable: 'reconcile-documents'`). Este es el único punto de salteo: cubre a todos los
+ * llamadores.
  */
 export async function refreshDocumentStatus(
   db: DocumentStatusDb,
@@ -72,6 +78,7 @@ export async function refreshDocumentStatus(
   let changed = 0;
 
   for (const companyId of companyIds) {
+    if (!(await isModuleEnabledForCompany('documentacion', companyId))) continue;
     const dataset = await loadComplianceDataset(db, { companyId, kind, resourceIds });
     if (dataset.resources.length === 0) continue;
     const evaluations = evaluateDataset(dataset, now);
@@ -102,4 +109,17 @@ export function refreshResourceStatus(
   resourceId: string
 ): Promise<RefreshResult> {
   return refreshDocumentStatus(db, kind, { ids: [resourceId], companyId });
+}
+
+/**
+ * Reconciliación al ENCENDER `documentacion` en una empresa: recalcula el caché de todos los empleados y equipos, que
+ * quedó congelado mientras el módulo estuvo apagado. Idempotente.
+ */
+export async function reconcileDocumentStatus(db: DocumentStatusDb, companyId: string): Promise<RefreshResult> {
+  const employees = await refreshDocumentStatus(db, 'Persona', { companyId });
+  const equipment = await refreshDocumentStatus(db, 'Equipos', { companyId });
+  return {
+    evaluated: employees.evaluated + equipment.evaluated,
+    changed: employees.changed + equipment.changed,
+  };
 }

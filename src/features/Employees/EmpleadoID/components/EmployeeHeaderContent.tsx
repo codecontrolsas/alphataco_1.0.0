@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { EmployeeDocumentStatus } from '@/features/Documentacion/DocumentosEmpleados/components/EmployeeDocumentStatus';
 import { DocumentStatusChip } from '@/features/Documentacion/shared/components/DocumentStatusChip';
 import { isDocumentStatusKey } from '@/features/Documentacion/shared/lib/document-status-ui';
+import { ModuleGate } from '@/features/Modules/components/ModuleGate';
 import {
   employeeStatusBadges,
   employeeStatusLabels,
@@ -55,13 +56,18 @@ export function EmployeeHeaderContent({ employee, canViewDocuments }: EmployeeHe
               {getEnumLabel(employee.status, employeeStatusLabels)}
             </Badge>
           )}
-          {canViewDocuments ? (
-            <Suspense fallback={<DocumentStatusChip status={employee.status} />}>
-              <EmployeeDocumentStatus employeeId={employee.id} status={employee.status} />
-            </Suspense>
-          ) : (
-            <DocumentStatusChip status={employee.status} />
-          )}
+          {/* El chip se muestra aunque no haya permiso de documentos: solo lo oculta el módulo apagado (no es un permiso). */}
+          <Suspense fallback={null}>
+            <ModuleGate module="documentacion">
+              {canViewDocuments ? (
+                <Suspense fallback={<DocumentStatusChip status={employee.status} />}>
+                  <EmployeeDocumentStatus employeeId={employee.id} status={employee.status} />
+                </Suspense>
+              ) : (
+                <DocumentStatusChip status={employee.status} />
+              )}
+            </ModuleGate>
+          </Suspense>
           {!employee.is_active && employee.termination_date && (
             <span className="text-danger-subtle-foreground text-sm">
               Baja el <span className="font-mono">{moment.utc(employee.termination_date).format('DD/MM/YYYY')}</span>

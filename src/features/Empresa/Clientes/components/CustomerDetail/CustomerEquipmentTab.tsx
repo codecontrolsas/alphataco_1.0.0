@@ -11,13 +11,15 @@ import { AssignmentDialog } from './AssignmentDialog';
 interface CustomerEquipmentTabProps {
   customer: { id: string; name: string };
   canUpdate: boolean;
+  /** `documentacion` encendido: si no, la tabla oculta el estado documental. */
+  showDocumentStatus: boolean;
 }
 
 /**
  * Pestaña "Equipos afectados": equipos DE LA EMPRESA asignados a este cliente (tabla paginada en el
  * servidor) y el modal de altas/bajas. Mismo patrón que Empleados.
  */
-export function CustomerEquipmentTab({ customer, canUpdate }: CustomerEquipmentTabProps) {
+export function CustomerEquipmentTab({ customer, canUpdate, showDocumentStatus }: CustomerEquipmentTabProps) {
   const queryClient = useQueryClient();
 
   const loadOptions = async () => {
@@ -42,6 +44,7 @@ export function CustomerEquipmentTab({ customer, canUpdate }: CustomerEquipmentT
       <h3 className="text-xl font-semibold">Equipos afectados al cliente</h3>
       <_CustomerEquipmentDataTable
         customerId={customer.id}
+        showDocumentStatus={showDocumentStatus}
         toolbarActions={
           canUpdate ? (
             <AssignmentDialog

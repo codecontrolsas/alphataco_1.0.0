@@ -1,9 +1,9 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { formatQuantity } from '@/features/Warehouses/lib/format';
 import { MaintenanceMaterialRequestDialog } from '@/features/Warehouses/Requests/components/MaintenanceMaterialRequestDialog';
 import { RequestStatusBadge } from '@/features/Warehouses/Requests/components/RequestStatusBadge';
+import { formatQuantity } from '@/features/Warehouses/lib/format';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Package, PackagePlus } from 'lucide-react';
 import { useState } from 'react';
@@ -35,11 +35,14 @@ export function WorkOrderMaterials({
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const queryKey = ['operator-work-order-materials', workOrderId];
-  const { data: requests = [], isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey,
     queryFn: () => getWorkOrderMaterialRequests(workOrderId),
     refetchInterval: 30000,
   });
+  // `null`: Almacenes está apagado para la empresa, la sección no existe (F3.2).
+  if (data === null) return null;
+  const requests = data ?? [];
   const waiting = requests.some((r) => WAITING_STATUSES.includes(r.status));
   const canRequest = !CLOSED_STATUSES.includes(workOrderStatus);
 

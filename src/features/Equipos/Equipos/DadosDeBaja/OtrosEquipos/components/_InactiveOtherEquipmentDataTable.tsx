@@ -1,6 +1,11 @@
 'use client';
 
 import {
+  withDocumentStatusColumn,
+  withDocumentStatusDefault,
+  withDocumentStatusFacet,
+} from '@/features/Modules/lib/document-status-visibility';
+import {
   condition_enum,
   cost_type_enum,
   currency_enum,
@@ -27,7 +32,7 @@ import {
 } from '@/shared/utils/mappers';
 import type { LucideIcon } from 'lucide-react';
 import moment from 'moment';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { conditionIcons } from '../../../../lib/condition-config';
 import {
   getAllInactiveOtherEquipmentForExport,
@@ -46,6 +51,8 @@ interface Props {
   totalRows: number;
   searchParams: DataTableSearchParams;
   tableId: string;
+  /** `documentacion` encendido: si no, se ocultan la columna y el filtro de estado documental (caché congelado). */
+  showDocumentStatus: boolean;
   initialColumnVisibility: Record<string, boolean>;
   initialFilterVisibility: Record<string, boolean>;
 }
@@ -120,16 +127,26 @@ export function _InactiveOtherEquipmentDataTable({
   data,
   totalRows,
   searchParams,
+  showDocumentStatus,
   tableId,
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
+  const visibleColumns = useMemo(() => withDocumentStatusColumn(columns, showDocumentStatus), [showDocumentStatus]);
+  const facetedFilters = useMemo(
+    () => withDocumentStatusFacet(FACETED_FILTERS, showDocumentStatus),
+    [showDocumentStatus]
+  );
+  const defaultVisibleFilters = useMemo(
+    () => withDocumentStatusDefault(DEFAULT_VISIBLE_FILTERS, showDocumentStatus),
+    [showDocumentStatus]
+  );
   const { currentParams, tableProps } = useServerTableView({
     searchParams,
     tableId,
     hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
-    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
-    facetedFilters: FACETED_FILTERS,
+    defaultVisibleFilters,
+    facetedFilters,
     initialColumnVisibility,
     savedFilterVisibility: initialFilterVisibility,
   });
@@ -139,7 +156,7 @@ export function _InactiveOtherEquipmentDataTable({
   return (
     <DataTable
       {...tableProps}
-      columns={columns}
+      columns={visibleColumns}
       data={data}
       totalRows={totalRows}
       queryFn={tableQueryFn}

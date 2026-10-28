@@ -3,6 +3,7 @@
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { withMaintenanceActor } from '@/features/Mantenimiento/shared/maintenance-actor';
 import { findMaintenanceOrderIdByWorkOrder } from '@/features/Mantenimiento/shared/work-order-order';
+import { isModuleEnabledForCompany } from '@/features/Modules/server/modules.server';
 import { assertWorkOrderInScope, requireOperatorIdentity } from '@/features/OperatorPanel/actions/perimeter';
 import { toActionError } from '@/features/Warehouses/lib/action-errors';
 import { createMaterialRequest } from '@/features/Warehouses/lib/create-request';
@@ -23,12 +24,17 @@ const logger = new Logger('OperatorPanel/materials');
  * resto del panel. El destino (la orden de la OT y la OT) lo fija el servidor.
  */
 
+/** Mensaje cuando `almacenes` está apagado para la empresa del operario. */
+const MATERIALS_DISABLED = 'Los pedidos de materiales no están habilitados.';
+
 const OPTIONS_LIMIT = 30;
 const contains = (query: string) => ({ contains: query.trim(), mode: 'insensitive' as const });
 
 /** Catalogo ACTIVO de la empresa del operario: sin stock ni costos (no los necesita para pedir). */
 export async function searchOperatorMaterialOptions(query: string) {
   const operator = await requireOperatorIdentity();
+  // El operario no tiene permisos de rol: el apagado de `almacenes` se exige acá, por la empresa del perímetro.
+  if (!(await isModuleEnabledForCompany('almacenes', operator.companyId))) return { items: [], total: 0 };
   const where = {
     company_id: operator.companyId,
     is_active: true,
@@ -64,6 +70,7 @@ export async function createOperatorMaterialRequest(
     logger.warn('Pedido fuera del perimetro del operario', { data: { error } });
     return fail('La orden de trabajo no pertenece a tus sectores');
   }
+  if (!(await isModuleEnabledForCompany('almacenes', operator.companyId))) return fail(MATERIALS_DISABLED);
 
   try {
     const created = await withMaintenanceActor(operator.profileId, async (tx) => {
@@ -86,16 +93,19 @@ export async function createOperatorMaterialRequest(
         lines: parsed.data.lines,
       });
     });
-    logger.info('Pedido de materiales desde la OT', { data: { number: created.number, workOrderId: parsed.data.workOrderId } });
+    logger.info('Pedido de materiales desde la OT', {
+      data: { number: created.number, workOrderId: parsed.data.workOrderId },
+    });
     return ok({ number: created.number });
   } catch (error) {
     return toActionError(error, logger, 'enviar el pedido');
   }
 }
 
-/** Pedidos de la OT con lo pedido y lo entregado por linea. Sin costos. */
+/** Pedidos de la OT con lo pedido y lo entregado por linea. Sin costos. `null` si `almacenes` está apagado (la sección no se muestra). */
 export async function getWorkOrderMaterialRequests(workOrderId: string) {
-  await assertWorkOrderInScope(workOrderId);
+  const { operator } = await assertWorkOrderInScope(workOrderId);
+  if (!(await isModuleEnabledForCompany('almacenes', operator.companyId))) return null;
   const requests = await prisma.material_requests.findMany({
     where: { work_order_id: workOrderId },
     select: {
@@ -104,7 +114,11 @@ export async function getWorkOrderMaterialRequests(workOrderId: string) {
       status: true,
       created_at: true,
       lines: {
-        select: { id: true, quantity: true, material: { select: { code: true, name: true, unit: { select: { abbreviation: true } } } } },
+        select: {
+          id: true,
+          quantity: true,
+          material: { select: { code: true, name: true, unit: { select: { abbreviation: true } } } },
+        },
         orderBy: { material: { name: 'asc' } },
       },
     },

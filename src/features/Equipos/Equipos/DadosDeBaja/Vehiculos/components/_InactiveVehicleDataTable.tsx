@@ -2,6 +2,11 @@
 
 import { formatDbDate, formatTimestampDay } from '@/features/Equipos/lib/vehicle-list-client';
 import {
+  withDocumentStatusColumn,
+  withDocumentStatusDefault,
+  withDocumentStatusFacet,
+} from '@/features/Modules/lib/document-status-visibility';
+import {
   condition_enum,
   contract_type_vehicles_enum,
   cost_type_enum,
@@ -28,7 +33,7 @@ import {
   terminationReasonEquipmentLabels,
 } from '@/shared/utils/mappers';
 import type { LucideIcon } from 'lucide-react';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { conditionIcons } from '../../../../lib/condition-config';
 import {
   getAllInactiveVehiclesForExport,
@@ -47,6 +52,8 @@ interface Props {
   totalRows: number;
   searchParams: DataTableSearchParams;
   tableId: string;
+  /** `documentacion` encendido: si no, se ocultan la columna y el filtro de estado documental (caché congelado). */
+  showDocumentStatus: boolean;
   initialColumnVisibility: Record<string, boolean>;
   initialFilterVisibility: Record<string, boolean>;
 }
@@ -129,16 +136,26 @@ export function _InactiveVehicleDataTable({
   data,
   totalRows,
   searchParams,
+  showDocumentStatus,
   tableId,
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
+  const visibleColumns = useMemo(() => withDocumentStatusColumn(columns, showDocumentStatus), [showDocumentStatus]);
+  const facetedFilters = useMemo(
+    () => withDocumentStatusFacet(FACETED_FILTERS, showDocumentStatus),
+    [showDocumentStatus]
+  );
+  const defaultVisibleFilters = useMemo(
+    () => withDocumentStatusDefault(DEFAULT_VISIBLE_FILTERS, showDocumentStatus),
+    [showDocumentStatus]
+  );
   const { currentParams, tableProps } = useServerTableView({
     searchParams,
     tableId,
     hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
-    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
-    facetedFilters: FACETED_FILTERS,
+    defaultVisibleFilters,
+    facetedFilters,
     initialColumnVisibility,
     savedFilterVisibility: initialFilterVisibility,
   });
@@ -148,7 +165,7 @@ export function _InactiveVehicleDataTable({
   return (
     <DataTable
       {...tableProps}
-      columns={columns}
+      columns={visibleColumns}
       data={data}
       totalRows={totalRows}
       queryFn={tableQueryFn}

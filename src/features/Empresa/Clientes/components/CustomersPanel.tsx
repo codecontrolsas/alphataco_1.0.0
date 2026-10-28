@@ -9,13 +9,20 @@ interface CustomersPanelProps {
   children: React.ReactNode;
   permissionsMap: Record<string, boolean>;
   contractsPreferences: CustomerDetailPreferences;
+  /** `documentacion` encendido (calculado en el servidor). */
+  showDocumentStatus: boolean;
 }
 
 /**
  * Pestaña "Clientes" de Comercial: listado y, al elegir una fila, la ficha del cliente.
  * El listado llega del servidor; la ficha pide sus datos con React Query al abrirse.
  */
-export function CustomersPanel({ children, permissionsMap, contractsPreferences }: CustomersPanelProps) {
+export function CustomersPanel({
+  children,
+  permissionsMap,
+  contractsPreferences,
+  showDocumentStatus,
+}: CustomersPanelProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const selectCustomer = useCallback((customerId: string) => setSelectedId(customerId), []);
@@ -27,6 +34,7 @@ export function CustomersPanel({ children, permissionsMap, contractsPreferences 
         customerId={selectedId}
         permissionsMap={permissionsMap}
         contractsPreferences={contractsPreferences}
+        showDocumentStatus={showDocumentStatus}
         onClose={() => setSelectedId(null)}
       />
     );

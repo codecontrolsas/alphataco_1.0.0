@@ -8,6 +8,7 @@ import { NormalizedChecklistForm } from '@/features/Checklists/components/Normal
 import { getCurrentProfile } from '@/features/Formularios/actions/form-actions';
 import { getMaintenanceEmployeeForEquipment } from '@/features/Mantenimiento/shared/actions/employee-session.server';
 import { MaintenanceHeader } from '@/features/Mantenimiento/shared/components/maintenance-header';
+import { isModuleEnabledForCompany } from '@/features/Modules/server/modules.server';
 import { mapEquipmentToChecklistFormat } from '@/lib/utils';
 import { getSessionEmployeeIdClaim, getSessionUserId } from '@/shared/lib/session';
 import { redirect } from 'next/navigation';
@@ -42,11 +43,14 @@ export async function ChecklistFormServer({ equipmentId, checklistId }: Checklis
     redirect(`/maintenance/equipment/${equipmentId}/checklists?error=template_not_found`);
   }
 
-  const [employee, equipments, currentUserProfiles, customers] = await Promise.all([
+  const [employee, equipments, currentUserProfiles, customers, canRequestRepair] = await Promise.all([
     getMaintenanceEmployeeForEquipment(equipmentId),
     fetchFilteredEquipmentForChecklistByEquipment(template.id, equipmentId),
     userId ? getCurrentProfile() : Promise.resolve(null),
     fetchActiveCustomersForEquipment(equipmentId),
+    // Los desvíos del checklist solo se envían a Mantenimiento si el módulo está encendido (F3.2).
+    // La empresa sale del equipo: en el QR no hay empresa activa.
+    isModuleEnabledForCompany('mantenimiento', equipmentUsage.company_id),
   ]);
 
   const equipmentsForComboBox = equipments.map(mapEquipmentToChecklistFormat);
@@ -70,6 +74,7 @@ export async function ChecklistFormServer({ equipmentId, checklistId }: Checklis
           template={template}
           equipments={equipmentsForComboBox}
           customers={customers}
+          canRequestRepair={canRequestRepair}
           currentUser={currentUser}
           defaultEquipmentId={equipmentId}
           defaultEmployeeId={employeeId || undefined}

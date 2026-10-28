@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@/generated/prisma/client';
 import { ensureCity } from '@/test/db-fixtures';
 import {
+  createTestEmployee,
   createTestUser,
   dropCatalogRows,
   dropTestUsers,
@@ -26,6 +27,13 @@ import { syncModuleCatalog } from '../../../scripts/lib/module-control';
  * El estado de módulos es GLOBAL de la instancia: la suite lo guarda al empezar y lo restaura al final. Corre con
  * `scripts/test-rls.sh` (en serie).
  */
+vi.mock('next/cache', () => ({
+  cacheTag: () => undefined,
+  cacheLife: () => undefined,
+  revalidatePath: () => undefined,
+  revalidateTag: () => undefined,
+  updateTag: () => undefined,
+}));
 vi.mock('next/server', async (importOriginal) => ({
   ...(await importOriginal<typeof import('next/server')>()),
   connection: async () => undefined,
@@ -101,6 +109,10 @@ async function resetAllOn(): Promise<void> {
 }
 
 async function cleanup(): Promise<void> {
+  const companies = [COMPANY_A, COMPANY_B];
+  await owner.hse_documents.deleteMany({ where: { company_id: { in: companies } } });
+  await owner.employees.deleteMany({ where: { company_id: { in: companies } } });
+  await owner.document_types.deleteMany({ where: { company_id: { in: companies } } });
   await owner.module_change_log.deleteMany({ where: { actor_email: ACTOR } });
   await owner.user_permissions.deleteMany({ where: { user_id: USER } });
   await dropTestUsers(owner, [USER]);
@@ -354,5 +366,103 @@ describe.skipIf(!RUN_RLS)('control de módulos bajo los roles reales', () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+  it('con documentación o HSE apagados el caché derivado se congela y al encender se reconcilia (F3.2)', async () => {
+    const EMPLOYEE = '7c300000-0000-4000-8000-0000000002e1';
+    const DOC = '7c300000-0000-4000-8000-000000000501';
+    const VERSION = '7c300000-0000-4000-8000-000000000511';
+    await createTestEmployee(owner, {
+      id: EMPLOYEE,
+      companyId: COMPANY_A,
+      seed: 71,
+      lastname: 'Modulos',
+      firstname: 'Cache',
+    });
+    await owner.document_types.create({
+      data: {
+        applies: 'Persona',
+        name: 'Tipo obligatorio F3.2',
+        company_id: COMPANY_A,
+        mandatory: true,
+        multiresource: false,
+        explired: false,
+        special: false,
+      },
+    });
+    await owner.hse_documents.create({
+      data: { id: DOC, company_id: COMPANY_A, title: 'Norma F3.2', created_by: USER },
+    });
+    await owner.hse_document_versions.create({
+      data: {
+        id: VERSION,
+        company_id: COMPANY_A,
+        document_id: DOC,
+        version: 1,
+        file_path: `${COMPANY_A}/documents/${VERSION}/norma.pdf`,
+        file_name: 'norma.pdf',
+        file_size: 3,
+        file_sha256: 'a'.repeat(64),
+        created_by: USER,
+      },
+    });
+    await owner.hse_document_targets.create({ data: { company_id: COMPANY_A, document_id: DOC, kind: 'all' } });
+    await owner.hse_documents.update({
+      where: { id: DOC },
+      data: { current_version_id: VERSION, status: 'published' },
+    });
+    await owner.$executeRaw`UPDATE employees SET status = 'Avalado'::status_type WHERE id = ${EMPLOYEE}::uuid`;
+
+    const statusOf = async () =>
+      (await owner.$queryRaw<{ s: string }[]>`SELECT status::text AS s FROM employees WHERE id = ${EMPLOYEE}::uuid`)[0]
+        ?.s;
+    const acks = () => owner.hse_document_acknowledgements.count({ where: { company_id: COMPANY_A } });
+
+    const off = await apply({
+      scope: 'company',
+      companyId: COMPANY_A,
+      cascade: true, // Selección depende de Documentación
+      changes: [
+        { key: 'documentacion', enabled: false },
+        { key: 'portal', enabled: false },
+        { key: 'hse', enabled: false },
+      ],
+    });
+    expect(off.outcome.status).toBe('applied');
+
+    const { prisma } = await import('@/shared/lib/prisma');
+    const { runInCompanyScope } = await import('@/shared/lib/tenant-context');
+    const { refreshDocumentStatus } = await import(
+      '@/features/Documentacion/shared/compliance/server/document-status.server'
+    );
+    const { syncHseAcknowledgements } = await import('@/features/Hse/use-cases/sync-acknowledgements');
+    await runInCompanyScope(COMPANY_A, () =>
+      prisma.$transaction(async (tx) => {
+        expect(await refreshDocumentStatus(tx, 'Persona', { companyId: COMPANY_A })).toEqual({
+          evaluated: 0,
+          changed: 0,
+        });
+        await syncHseAcknowledgements(tx, { companyId: COMPANY_A, employeeId: EMPLOYEE });
+      })
+    );
+    expect(await statusOf()).toBe('Avalado');
+    expect(await acks()).toBe(0);
+
+    const on = await apply({
+      scope: 'company',
+      companyId: COMPANY_A,
+      changes: [
+        { key: 'documentacion', enabled: true },
+        { key: 'hse', enabled: true },
+        { key: 'portal', enabled: true },
+      ],
+    });
+    expect(on.outcome.status).toBe('applied');
+    const { runReconcileOnEnable } = await import('./server/reconcile.server');
+    const applied = on.outcome.status === 'applied' ? on.outcome.applied : [];
+    const results = await runReconcileOnEnable(applied);
+    expect(results.sort()).toEqual([`reconcile-documents:${COMPANY_A}:ok`, `reconcile-hse:${COMPANY_A}:ok`]);
+    expect(await statusOf()).toBe('Incompleto');
+    expect(await acks()).toBe(1);
   });
 });

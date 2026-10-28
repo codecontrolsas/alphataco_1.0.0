@@ -15,6 +15,7 @@ import {
   modulesListResponseSchema,
   planResponseSchema,
 } from '@/features/AdminApi/schemas/modules';
+import { runReconcileOnEnable } from '@/features/Modules/server/reconcile.server';
 import { Logger } from '@/lib/logger';
 
 const logger = new Logger('api/admin/v1/modules');
@@ -74,14 +75,15 @@ export async function PUT(request: Request) {
     if (outcome.status === 'blocked') {
       return adminError(409, 'BLOCKED', 'El cambio tiene bloqueos', { plan: planResponseSchema.parse(outcome.plan) });
     }
+    // Después del commit: reconcilia los cachés de lo que se encendió (§5.6). Un reintento idempotente no vuelve a correr.
+    const reconcile = outcome.replayed ? [] : await runReconcileOnEnable(outcome.applied);
     return adminJson(
       applyResponseSchema.parse({
         stateVersion: outcome.stateVersion,
         requestId: outcome.requestId,
         replayed: outcome.replayed,
         applied: outcome.applied,
-        // Reconciliación de cachés al encender (documentos, HSE): F3.2.
-        reconcile: [],
+        reconcile,
       })
     );
   } catch (error) {

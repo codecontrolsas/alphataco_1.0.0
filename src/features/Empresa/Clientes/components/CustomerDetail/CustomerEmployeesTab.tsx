@@ -11,6 +11,8 @@ import { AssignmentDialog } from './AssignmentDialog';
 interface CustomerEmployeesTabProps {
   customer: { id: string; name: string };
   canUpdate: boolean;
+  /** `documentacion` encendido: si no, la tabla oculta el estado documental. */
+  showDocumentStatus: boolean;
 }
 
 function capitalize(value: string): string {
@@ -21,7 +23,7 @@ function capitalize(value: string): string {
  * Pestaña "Empleados": los afectados al cliente (tabla paginada en el servidor) y el modal de altas/bajas.
  * Las opciones del modal son solo los empleados activos y se piden al abrirlo; el baseline sale de la base.
  */
-export function CustomerEmployeesTab({ customer, canUpdate }: CustomerEmployeesTabProps) {
+export function CustomerEmployeesTab({ customer, canUpdate, showDocumentStatus }: CustomerEmployeesTabProps) {
   const queryClient = useQueryClient();
 
   const loadOptions = async () => {
@@ -44,6 +46,7 @@ export function CustomerEmployeesTab({ customer, canUpdate }: CustomerEmployeesT
       <h3 className="text-xl font-semibold">Empleados del cliente</h3>
       <_CustomerEmployeesDataTable
         customerId={customer.id}
+        showDocumentStatus={showDocumentStatus}
         toolbarActions={
           canUpdate ? (
             <AssignmentDialog

@@ -8,6 +8,7 @@ import {
   isModuleKey,
   type ModuleKey,
 } from '@/features/Modules/catalog';
+import { reconcileKindsFor } from '@/features/Modules/server/reconcile.server';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { prismaSystem } from '@/shared/lib/prisma-system';
@@ -130,7 +131,10 @@ export async function getModulesStateSummary() {
 /** Vista previa: el plan sobre el estado actual, sin escribir. */
 export async function previewModuleChanges(request: PlanRequestInput) {
   const state = await readState(prismaSystem);
-  return { stateVersion: computeStateVersion(state), ...computeModulePlan(state, request), reconcile: [] as string[] };
+  const plan = computeModulePlan(state, request);
+  // Lo que correrá al encender (por tipo; las empresas se resuelven al aplicar, después del commit).
+  const reconcile: string[] = plan.applicable ? reconcileKindsFor(plan.effective) : [];
+  return { stateVersion: computeStateVersion(state), ...plan, reconcile };
 }
 
 export type ApplyOutcome =
@@ -183,7 +187,7 @@ export async function applyModuleChanges(
       if (stateVersion !== request.expectedStateVersion) return { status: 'stale' as const, stateVersion };
       const plan = computeModulePlan(state, request);
       if (!plan.applicable) {
-        return { status: 'blocked' as const, plan: { stateVersion, ...plan, reconcile: [] } };
+        return { status: 'blocked' as const, plan: { stateVersion, ...plan, reconcile: [] as string[] } };
       }
 
       const now = new Date();

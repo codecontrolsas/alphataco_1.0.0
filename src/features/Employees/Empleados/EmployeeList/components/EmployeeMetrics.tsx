@@ -10,13 +10,15 @@ interface EmployeeMetricsProps {
   /** Mismo `tableId` que la tabla: de ahí sale el prefijo de sus params en la URL. */
   tableId: string;
   metrics: Metrics;
+  /** Con `documentacion` apagado solo queda «Empleados activos» (el estado documental está congelado y oculto). */
+  showDocumentStatus: boolean;
 }
 
 /** Tarjetas del listado de activos. Cada una aplica su estado como filtro de la tabla. */
-export function EmployeeMetrics({ tableId, metrics }: EmployeeMetricsProps) {
+export function EmployeeMetrics({ tableId, metrics, showDocumentStatus }: EmployeeMetricsProps) {
   const [statusFilter, setStatusFilter] = useDataTableFilter(tableId, 'status');
 
-  const cards: { status: string | null; label: string; value: number; hint: string; tone: MetricTone }[] = [
+  const allCards: { status: string | null; label: string; value: number; hint: string; tone: MetricTone }[] = [
     { status: null, label: 'Empleados activos', value: metrics.total, hint: 'Ver todos', tone: 'default' },
     {
       status: 'Completo',
@@ -40,12 +42,13 @@ export function EmployeeMetrics({ tableId, metrics }: EmployeeMetricsProps) {
       tone: 'danger',
     },
   ];
+  const cards = showDocumentStatus ? allCards : allCards.filter((card) => card.status === null);
 
   return (
     <div
       className="grid grid-cols-2 gap-4 xl:grid-cols-4"
       role="group"
-      aria-label="Estado documental de los empleados activos"
+      aria-label={showDocumentStatus ? 'Estado documental de los empleados activos' : 'Empleados activos'}
     >
       {cards.map((card) => (
         <MetricCard

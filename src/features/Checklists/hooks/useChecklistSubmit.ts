@@ -1,7 +1,6 @@
 'use client';
 
-import { CreateChecklistAnswer } from '@/features/Checklists/actions/actionsServer';
-import { fetchSupervisorsForEquipment } from '@/features/Checklists/actions/actionsServer';
+import { CreateChecklistAnswer, fetchSupervisorsForEquipment } from '@/features/Checklists/actions/actionsServer';
 import {
   buildAnswersBySection,
   collectItemObservations,
@@ -26,6 +25,8 @@ type ChecklistFormData = z.infer<ReturnType<typeof generateChecklistSchema>>;
 
 type Params = {
   canSubmit: boolean;
+  /** `mantenimiento` encendido: si no, no se ofrece generar solicitudes de reparación desde los desvíos (F3.2). */
+  canRequestRepair: boolean;
   template: NonNullable<ChecklistTemplate>;
   visibleSections: ChecklistTemplateSection[];
   hitchSectionCodes: Set<string>;
@@ -45,6 +46,7 @@ type Params = {
  */
 export function useChecklistSubmit({
   canSubmit,
+  canRequestRepair,
   template,
   visibleSections,
   hitchSectionCodes,
@@ -210,6 +212,15 @@ export function useChecklistSubmit({
       // NUEVO FLUJO: Mostrar modal si hay CUALQUIER item fallido (crítico o no),
       // sea de la unidad tractora o del enganche.
       const allFailedItems = [...failedItems, ...hitchFailedItems];
+      if (!canRequestRepair) {
+        // Sin Mantenimiento no hay a dónde enviar un desvío: se guarda el checklist y se vuelve a la lista de respuestas.
+        const { toast } = await import('sonner');
+        toast.success('Checklist guardado correctamente');
+        router.push(getChecklistRedirectPath(pathname, data.equipment_id));
+        queryClient.invalidateQueries();
+        router.refresh();
+        return;
+      }
       if (allFailedItems.length > 0) {
         setCriticalItemsFailed(allFailedItems.map((item) => item.item_label));
 

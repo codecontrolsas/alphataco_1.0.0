@@ -15,6 +15,8 @@ interface CustomerComponentProps {
   /** Permisos del usuario cargados en el servidor (`modulo:tab:accion`). */
   permissionsMap: Record<string, boolean>;
   contractsPreferences: CustomerDetailPreferences;
+  /** `documentacion` encendido (calculado en el servidor). */
+  showDocumentStatus: boolean;
 }
 
 /** Invitados (usuarios compartidos con rol Invitado) asociados al cliente. */
@@ -61,7 +63,12 @@ function CustomerGuests({ customerId }: { customerId: string }) {
  * Página `/dashboard/configuration/customers/action`: alta de cliente (sin `id`) o
  * ficha completa (con `id`), reutilizando `CustomerDetail`.
  */
-export default function CustomerComponent({ customer, permissionsMap, contractsPreferences }: CustomerComponentProps) {
+export default function CustomerComponent({
+  customer,
+  permissionsMap,
+  contractsPreferences,
+  showDocumentStatus,
+}: CustomerComponentProps) {
   const router = useRouter();
 
   if (!customer) {
@@ -83,6 +90,7 @@ export default function CustomerComponent({ customer, permissionsMap, contractsP
         initialCustomer={customer}
         permissionsMap={permissionsMap}
         contractsPreferences={contractsPreferences}
+        showDocumentStatus={showDocumentStatus}
         onClose={() => router.push('/dashboard/configuration')}
       />
       <CustomerGuests customerId={customer.id} />

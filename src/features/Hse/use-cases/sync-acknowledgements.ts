@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { isModuleEnabledForCompany } from '@/features/Modules/server/modules.server';
 import type { Prisma } from '@/generated/prisma/client';
 
 /**
@@ -23,11 +24,15 @@ import type { Prisma } from '@/generated/prisma/client';
  * La función es SECURITY DEFINER porque el usuario de RR.HH. que edita un legajo puede no tener permisos de HSE (la RLS
  * de las aceptaciones le rechazaría el INSERT y rompería la edición); ella misma exige que la empresa sea la del contexto.
  * Devuelve `void`: se llama con `$executeRaw`, nunca con `$queryRaw`.
+ *
+ * Con el módulo `hse` apagado para la empresa NO hace nada: la función SQL es SECURITY DEFINER y saltea la RLS, así que
+ * seguiría escribiendo aceptaciones de un módulo apagado. Al encender, `reconcileHse` concilia la empresa entera.
  */
 export async function syncHseAcknowledgements(
   tx: Pick<Prisma.TransactionClient, '$executeRaw'>,
   scope: { companyId: string; documentId?: string | null; employeeId?: string | null }
 ): Promise<void> {
+  if (!(await isModuleEnabledForCompany('hse', scope.companyId))) return;
   await tx.$executeRaw`SELECT public.hse_sync_acknowledgements(${scope.companyId}::uuid, ${scope.documentId ?? null}::uuid, ${scope.employeeId ?? null}::uuid)`;
   // Sin documento puntual el cambio es del EMPLEADO (alta, puesto, sector, baja) o de la empresa entera: también
   // cambia qué capacitaciones le aplican. Así los puntos de enganche de Empleados cubren las dos cosas sin llamarse dos
@@ -46,5 +51,17 @@ export async function syncHseTrainingAssignments(
   tx: Pick<Prisma.TransactionClient, '$executeRaw'>,
   scope: { companyId: string; trainingId?: string | null; employeeId?: string | null }
 ): Promise<void> {
+  if (!(await isModuleEnabledForCompany('hse', scope.companyId))) return;
   await tx.$executeRaw`SELECT public.hse_sync_training_assignments(${scope.companyId}::uuid, ${scope.trainingId ?? null}::uuid, ${scope.employeeId ?? null}::uuid)`;
+}
+
+/**
+ * Reconciliación al ENCENDER `hse` en una empresa: crea las aceptaciones y capacitaciones pendientes que no se generaron
+ * mientras estuvo apagado (concilia la empresa entera, sin documento ni empleado puntual). Idempotente.
+ */
+export async function reconcileHse(
+  tx: Pick<Prisma.TransactionClient, '$executeRaw'>,
+  companyId: string
+): Promise<void> {
+  await syncHseAcknowledgements(tx, { companyId });
 }
