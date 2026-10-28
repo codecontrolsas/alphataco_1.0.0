@@ -113,6 +113,30 @@ export function HeaderBlock(rp: ReactPdf, s: HeaderStyles, data: PdfHeader, logo
   );
 }
 
+/**
+ * Bloque de FIRMA ELECTRÓNICA para los PDF que arma el servidor: quién firmó, cuándo (hora del servidor), cómo y
+ * desde dónde. Es la versión de servidor de `PdfSignature` (Formularios), que es un componente de cliente con su propia
+ * hoja de estilos y una imagen de trazo: acá no hay trazo, la firma es la identidad autenticada y su registro.
+ */
+export function ElectronicSignatureBlock(
+  rp: ReactPdf,
+  s: Record<'box' | 'boxTitle' | 'bold' | 'muted', PdfStyle>,
+  data: { title: string; signer: string; lines: string[] }
+) {
+  const { View, Text } = rp;
+  return (
+    <View style={[s.box, { flex: 1, marginBottom: 0 }]} wrap={false}>
+      <Text style={s.boxTitle}>{data.title}</Text>
+      <Text style={s.bold}>{data.signer}</Text>
+      {data.lines.map((line) => (
+        <Text key={line} style={s.muted}>
+          {line}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
 /** Fila "rótulo — valor" de los recuadros de datos. */
 export function Kv(rp: ReactPdf, s: Record<'kv' | 'kvLabel' | 'kvValue', PdfStyle>, label: string, value: string) {
   const { View, Text } = rp;

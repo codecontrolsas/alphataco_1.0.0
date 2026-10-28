@@ -62,11 +62,21 @@ export async function HseAttemptResult({ trainingId, attemptId }: { trainingId: 
         </p>
       )}
 
+      {result.passed &&
+        training?.certificate?.attemptId === result.attemptId &&
+        !training.certificate.certificateId && (
+          <p className="bg-card rounded-xl border p-4 text-sm text-pretty">
+            Te falta firmar la constancia: la encontrás en la capacitación. Con tu firma queda guardada en tu legajo.
+          </p>
+        )}
+
       <Link
         href={`/portal/trainings/${trainingId}`}
         className="bg-primary text-primary-foreground focus-visible:ring-ring inline-flex min-h-12 w-full items-center justify-center rounded-md px-4 text-sm font-medium outline-none hover:opacity-90 focus-visible:ring-2 sm:w-auto"
       >
-        Volver a la capacitación
+        {result.passed && training?.certificate && !training.certificate.certificateId
+          ? 'Firmar la constancia'
+          : 'Volver a la capacitación'}
       </Link>
     </div>
   );

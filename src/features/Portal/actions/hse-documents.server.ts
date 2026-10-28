@@ -5,13 +5,10 @@ import { isHseEnabled } from '@/features/Hse/lib/feature-gate';
 import { hseAcknowledgeSchema, type HseAcknowledgeInput } from '@/features/Hse/schemas/documents';
 import { requirePortalEmployee, type PortalEmployee } from '@/features/Portal/actions/perimeter';
 import { isPortalEnabled } from '@/features/Portal/lib/feature-gate';
+import { checkSignaturePassword, requestFingerprint } from '@/features/Portal/lib/signature.server';
 import { Logger } from '@/lib/logger';
-import { clearAttempts, consumeAttempt } from '@/shared/lib/login-rate-limit';
 import { prisma } from '@/shared/lib/prisma';
-import { prismaSystem } from '@/shared/lib/prisma-system';
-import { verifyPassword } from 'better-auth/crypto';
 import { revalidatePath } from 'next/cache';
-import { headers } from 'next/headers';
 
 /**
  * Respuesta del empleado a un documento HSE desde el portal: aceptar (con su contraseña) o rechazar (con motivo).
@@ -24,26 +21,7 @@ import { headers } from 'next/headers';
 
 const logger = new Logger('features/Portal/hse-documents');
 
-/** Freno de contraseñas: 5 intentos fallidos cada 15 minutos por persona (mismo mecanismo que el login). */
-const PASSWORD_RULE = { max: 5, windowSeconds: 15 * 60 };
 const NOT_AVAILABLE = 'Este documento ya no está disponible para responder. Recargá la página.';
-
-async function verifyEmployeePassword(employee: PortalEmployee, password: string): Promise<boolean> {
-  // Las tablas `auth_*` están cerradas al rol de la app: se leen con el cliente de sistema (como el login del portal).
-  const account = await prismaSystem.account.findFirst({
-    where: { userId: employee.userId, providerId: 'credential' },
-    select: { password: true },
-  });
-  if (!account?.password) return false;
-  return verifyPassword({ hash: account.password, password });
-}
-
-async function requestFingerprint() {
-  const h = await headers();
-  const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() || h.get('x-real-ip') || null;
-  const userAgent = h.get('user-agent')?.slice(0, 500) ?? null;
-  return { ip: ip?.slice(0, 100) ?? null, userAgent };
-}
 
 export async function respondHseDocument(
   input: HseAcknowledgeInput
@@ -61,16 +39,11 @@ export async function respondHseDocument(
   }
 
   if (data.decision === 'accept') {
-    const key = `hse-ack:${employee.userId}`;
-    const attempt = consumeAttempt(key, PASSWORD_RULE);
-    if (!attempt.allowed) {
-      return fail(`Demasiados intentos. Probá de nuevo en ${Math.ceil(attempt.retryAfterSeconds / 60)} minutos.`);
+    const passwordError = await checkSignaturePassword(employee, data.password, 'hse-ack');
+    if (passwordError) {
+      logger.warn('Aceptación HSE rechazada por la contraseña', { data: { employeeId: employee.employeeId } });
+      return fail(passwordError);
     }
-    if (!(await verifyEmployeePassword(employee, data.password))) {
-      logger.warn('Aceptación HSE con contraseña incorrecta', { data: { employeeId: employee.employeeId } });
-      return fail('La contraseña no es correcta.');
-    }
-    clearAttempts(key);
   }
 
   const { ip, userAgent } = await requestFingerprint();

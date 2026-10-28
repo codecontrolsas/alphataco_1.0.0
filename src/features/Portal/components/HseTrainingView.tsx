@@ -9,6 +9,7 @@ import { CheckCircle2, ChevronLeft, Download, ExternalLink, FileText, Link2 } fr
 import moment from 'moment';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { HseCertificatePanel } from './HseCertificatePanel';
 import { HseMaterialReadButton } from './HseMaterialReadButton';
 import { HseStartAttemptButton } from './HseStartAttemptButton';
 
@@ -36,6 +37,9 @@ export async function HseTrainingView({ trainingId }: { trainingId: string }) {
 
   const reason = blocker(training);
   const canStart = training.status !== 'passed' && reason === null;
+  const passedAttempt = training.certificate
+    ? training.attempts.find((a) => a.id === training.certificate?.attemptId)
+    : undefined;
 
   return (
     <div className="space-y-6">
@@ -71,6 +75,18 @@ export async function HseTrainingView({ trainingId }: { trainingId: string }) {
             </p>
           </div>
         </section>
+      )}
+
+      {training.certificate && (
+        <HseCertificatePanel
+          trainingTitle={training.title}
+          attemptId={training.certificate.attemptId}
+          certificateId={training.certificate.certificateId}
+          signedAt={training.certificate.signedAt}
+          employeeName={`${employee.lastname} ${employee.firstname}`.trim()}
+          employeeFile={employee.file}
+          scoreText={passedAttempt ? `${formatPercent(passedAttempt.scorePercent)} · aprobado` : 'Aprobado'}
+        />
       )}
 
       <section aria-labelledby="training-materials" className="space-y-3">

@@ -137,9 +137,35 @@ export async function resolveStorageObjectOwner(
       where: { file_path: path },
       select: { company_id: true, file_name: true },
     });
-    return material
-      ? { kind: 'company', companyId: material.company_id, downloadName: material.file_name ?? undefined }
-      : null;
+    if (material) {
+      return { kind: 'company', companyId: material.company_id, downloadName: material.file_name ?? undefined };
+    }
+    // Constancia firmada (fase 4): la RLS de `hse_training_certificates` deja verla al empleado dueño o con permiso de
+    // HSE. Un compañero que adivine la ruta no ve la fila y recibe 404.
+    if (path.split('/')[1] === 'certificates') {
+      const certificate = await prisma.hse_training_certificates.findFirst({
+        where: { pdf_path: path },
+        select: { company_id: true, attempt_id: true },
+      });
+      return certificate
+        ? {
+            kind: 'company',
+            companyId: certificate.company_id,
+            downloadName: `constancia-${certificate.attempt_id.slice(0, 8)}.pdf`,
+          }
+        : null;
+    }
+    // Acta: solo con permiso de actas (sin compuerta para el empleado: lista a todos los asistentes).
+    if (path.split('/')[1] === 'records') {
+      const record = await prisma.hse_training_records.findFirst({
+        where: { pdf_path: path },
+        select: { company_id: true, number: true },
+      });
+      return record
+        ? { kind: 'company', companyId: record.company_id, downloadName: `acta-${record.number}.pdf` }
+        : null;
+    }
+    return null;
   }
 
   if (isCompanyPrefixedBucket(bucket)) {
