@@ -282,7 +282,6 @@ export const navigationLinks: NavigationLink[] = [
       { name: 'Capacitaciones', tabSlug: 'capacitaciones' },
       { name: 'Cumplimiento', tabSlug: 'cumplimiento' },
       { name: 'Actas', tabSlug: 'actas' },
-      { name: 'Configuración', tabSlug: 'configuracion-hse' },
     ],
   },
   {
