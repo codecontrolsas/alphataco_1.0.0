@@ -12,6 +12,7 @@ import { TransporteSPANAYCHKHYS03 } from '@/features/Formularios/pdf/generators/
 import { TransporteSPANAYCHKHYS04 } from '@/features/Formularios/pdf/generators/TransporteSPANAYCHKHYS04';
 import { toPdfSections } from '@/features/Formularios/utils/checklistView';
 import { TONE_TO_BADGE, type StatusUi } from '@/features/Mantenimiento/lib/status-presentation';
+import { isModuleEnabled } from '@/features/Modules/server/modules.server';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { fetchCurrentCompany } from '@/shared/actions/company.actions';
 import BackButton from '@/shared/components/common/BackButton';
@@ -69,12 +70,15 @@ export default async function FormDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const [{ id }, resolvedSearchParams, canView, canCreate] = await Promise.all([
+  const [{ id }, resolvedSearchParams, canView, canCreate, canUpdate, checklistsOn] = await Promise.all([
     params,
     searchParams,
     checkPermissionServer('formularios', 'formularios', 'view'),
     checkPermissionServer('formularios', 'formularios', 'create'),
+    checkPermissionServer('formularios', 'formularios', 'update'),
+    isModuleEnabled('checklists'),
   ]);
+  const canConfigure = canUpdate && checklistsOn;
 
   if (!canView) {
     return (
@@ -120,7 +124,12 @@ export default async function FormDetailPage({
                 templateCode={checklistTemplate.code}
                 sections={toPdfSections(checklistTemplate)}
               />
-              {canCreate && (
+              {canConfigure && (
+                <Link className={buttonVariants({ variant: 'outline' })} href={`/dashboard/forms/${id}/edit`}>
+                  Editar plantilla
+                </Link>
+              )}
+              {canCreate && checklistTemplate.is_active && (
                 <Link className={buttonVariants({ variant: 'default' })} href={`/dashboard/forms/${id}/new`}>
                   Nueva respuesta
                 </Link>
