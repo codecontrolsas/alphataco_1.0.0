@@ -44,6 +44,17 @@ describe('setTenantContext', () => {
     expect(() => setTenantContext(tx, { ...CTX, companyId: "x'; drop table company; --" })).toThrow('companyId');
     expect(() => setTenantContext(tx, { ...CTX, userId: 'no-es-uuid' })).toThrow('userId');
   });
+
+  it('solo actor (sesión sin empresa activa): fija el usuario y deja la empresa vacía', async () => {
+    const { tx, calls } = fakeTx();
+    await setTenantContext(tx, { companyId: null, userId: '11111111-1111-1111-1111-111111111111', kind: 'user' });
+    expect(calls).toEqual([['11111111-1111-1111-1111-111111111111', 'user']]);
+  });
+
+  it('solo actor exige un usuario uuid: sin empresa, el usuario es lo único que identifica el contexto', () => {
+    const { tx } = fakeTx();
+    expect(() => setTenantContext(tx, { companyId: null, userId: 'no-es-uuid', kind: 'user' })).toThrow('userId');
+  });
 });
 
 describe('runWithTenantContext', () => {
@@ -55,7 +66,9 @@ describe('runWithTenantContext', () => {
         return 1;
       }),
     };
-    const base = { $transaction: vi.fn(async (fn: (t: unknown) => Promise<unknown>) => fn(tx)) } as unknown as PrismaClient;
+    const base = {
+      $transaction: vi.fn(async (fn: (t: unknown) => Promise<unknown>) => fn(tx)),
+    } as unknown as PrismaClient;
 
     const result = await runWithTenantContext(base, CTX, async () => {
       order.push('callback');
@@ -85,7 +98,9 @@ describe('createTenantClient', () => {
   });
 
   it('bloquea $transaction y envuelve cada operación en [set_config, consulta]', async () => {
-    let extension: { client: { $transaction: () => never }; query: { $allOperations: (a: unknown) => Promise<unknown> } } | undefined;
+    let extension:
+      | { client: { $transaction: () => never }; query: { $allOperations: (a: unknown) => Promise<unknown> } }
+      | undefined;
     const batch = vi.fn(async (ops: unknown[]) => Promise.all(ops));
     const base = {
       $extends: vi.fn((ext) => {
@@ -115,7 +130,9 @@ describe('createContextualClient', () => {
       query: { $allOperations: (a: unknown) => Promise<unknown> };
     };
     const $transaction = vi.fn(async (arg: unknown) =>
-      typeof arg === 'function' ? (arg as (t: unknown) => Promise<unknown>)({ $executeRaw: vi.fn(async () => 1) }) : Promise.all(arg as unknown[])
+      typeof arg === 'function'
+        ? (arg as (t: unknown) => Promise<unknown>)({ $executeRaw: vi.fn(async () => 1) })
+        : Promise.all(arg as unknown[])
     );
     const base = {
       $extends: vi.fn((ext) => {
@@ -153,7 +170,7 @@ describe('createContextualClient', () => {
   it('una operación suelta dentro de un arreglo no abre su propio lote', async () => {
     const { ext, $transaction } = build(async () => CTX);
     const query = vi.fn(async () => 'x');
-    $transaction.mockImplementationOnce(async (ops: unknown) => {
+    $transaction.mockImplementationOnce(async () => {
       // simula que Prisma ejecuta la operación (lazy) mientras corre el lote
       const r = await ext.query.$allOperations({ args: {}, query });
       return [1, r];

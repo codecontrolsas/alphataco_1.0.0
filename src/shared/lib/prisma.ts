@@ -39,8 +39,9 @@ export const prismaBase = globalForPrisma.prisma ?? createPrismaClient();
 /**
  * Cliente que usan las features. SIEMPRE lleva el contexto de la transaccion (`app.company_id`, `app.user_id`,
  * `app.actor_kind`, ver `tenant-context.ts`): es lo que completa solo `company_id` en cada fila nueva
- * (`DEFAULT app_current_company_id()`) y lo que leen las politicas RLS. Sin request (login, jobs, tests) la operacion
- * corre directa, sin contexto: ahi `company_id` hay que pasarlo explicito.
+ * (`DEFAULT app_current_company_id()`) y lo que leen las politicas RLS. Con sesion pero sin empresa activa fija solo el
+ * usuario (`app.user_id`). Sin request (login, jobs, tests) la operacion corre directa, sin contexto: ahi `company_id`
+ * hay que pasarlo explicito.
  */
 export const prisma: TenantPrismaClient =
   globalForPrisma.prismaContextual ??
@@ -49,8 +50,9 @@ export const prisma: TenantPrismaClient =
     const scoped = getCompanyScopeContext();
     if (scoped) return scoped;
     // Import dinamico: tenant-db trae `next/headers` y la sesion, que solo existen dentro de un request.
-    const { getTenantContextOrNull } = await import('./tenant-db');
-    return getTenantContextOrNull();
+    const { getSessionActorContextOrNull, getTenantContextOrNull } = await import('./tenant-db');
+    // Sesión sin empresa activa (primer ingreso): al menos el usuario, para que la RLS le muestre lo suyo.
+    return (await getTenantContextOrNull()) ?? getSessionActorContextOrNull();
   }) as unknown as TenantPrismaClient);
 
 if (process.env.NODE_ENV !== 'production') {

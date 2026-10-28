@@ -3,9 +3,10 @@ import 'server-only';
 import { prismaBase as prisma } from '@/shared/lib/prisma';
 import { prismaSystem } from '@/shared/lib/prisma-system';
 import { getSessionUserId, isSessionAnonymous } from '@/shared/lib/session';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { NoActiveCompanyError, getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   runWithTenantContext,
+  type ActorOnlyContext,
   type TenantContext,
   type TenantTransactionOptions,
   type TenantTx,
@@ -68,6 +69,34 @@ export async function getTenantContextOrNull(): Promise<TenantContext | null> {
     return null;
   }
 }
+
+/**
+ * Contexto de SOLO ACTOR para la sesión autenticada que todavía no tiene empresa activa (primer ingreso, o membresías
+ * sin ninguna elegida). Sin él las consultas corren sin `app.user_id` y, con el rol de aplicación, la RLS le oculta
+ * hasta su propio perfil: `createCompany` respondía «El usuario de sesión no tiene perfil» justo al usuario que el proxy
+ * manda a crear su empresa.
+ *
+ * Falla CERRADO: devuelve contexto solo si la empresa falta de verdad (`NoActiveCompanyError`), hay usuario de sesión y
+ * la sesión no es la anónima del QR. Si la empresa se resuelve, o falla por otra razón (sin request), devuelve null y
+ * no degrada en silencio un request con empresa. El usuario sale de la sesión validada por Better Auth, nunca del
+ * cliente; con la empresa vacía, las políticas solo dejan ver lo propio (perfil, membresías, empresas a las que
+ * pertenece) y nada de negocio. Memoizado por request, como `getTenantContext`.
+ */
+export const getSessionActorContextOrNull = cache(async (): Promise<ActorOnlyContext | null> => {
+  try {
+    await getActiveCompanyId();
+    return null;
+  } catch (error) {
+    if (!(error instanceof NoActiveCompanyError)) return null;
+  }
+  try {
+    const userId = await getSessionUserId();
+    if (!userId || (await isSessionAnonymous())) return null;
+    return { companyId: null, userId, kind: 'user' };
+  } catch {
+    return null;
+  }
+});
 
 /** Transacción interactiva con un contexto explícito (jobs por empresa, operarios, tests). */
 export function withTenantContext<T>(
