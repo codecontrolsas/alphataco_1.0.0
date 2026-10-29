@@ -174,5 +174,7 @@ export const config = {
   // se exigen solo en /dashboard/* y en el manual (`requiresSession`); /maintenance/* sigue público para anónimos.
   matcher: [
     '/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|txt|xml|webmanifest|js|css|map|woff2?)$).*)',
+    // Toda API, aunque termine en una extensión (`/api/files/logo/x.png`): la primera regla la dejaría pasar.
+    '/api/:path*',
   ],
 };

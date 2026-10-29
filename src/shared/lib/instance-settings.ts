@@ -99,9 +99,12 @@ export const getCompanyLimitStatus = cache(async (): Promise<CompanyLimitStatus>
 /**
  * Instancia de una sola empresa (`max_companies = 1`): la UI es la de esa empresa, sin selector, sin alta y sin
  * ninguna mención a «otras empresas». Con N > 1 la UI multiempresa aparece según cuántas haya.
+ *
+ * Una base anterior al límite puede tener más empresas que `max_companies` (807 sembró 1 sin mirar cuántas había):
+ * ahí NO se oculta la multiempresa, para que quien tiene varias pueda seguir cambiando entre ellas.
  */
-export function isSingleCompanyInstance(limit: Pick<CompanyLimitStatus, 'max'>): boolean {
-  return limit.max === 1;
+export function isSingleCompanyInstance(limit: Pick<CompanyLimitStatus, 'max' | 'count'>): boolean {
+  return limit.max === 1 && limit.count <= 1;
 }
 
 /**
@@ -110,7 +113,7 @@ export function isSingleCompanyInstance(limit: Pick<CompanyLimitStatus, 'max'>):
  * «Agregar compañía» vive en el desplegable).
  */
 export function companyHeaderMode(
-  limit: Pick<CompanyLimitStatus, 'max' | 'reached'>,
+  limit: Pick<CompanyLimitStatus, 'max' | 'count' | 'reached'>,
   userCompanies: number
 ): 'identity' | 'switcher' {
   if (isSingleCompanyInstance(limit)) return 'identity';
