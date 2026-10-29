@@ -3,7 +3,12 @@
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { withActor } from '@/shared/lib/actor';
-import { companyLimitReachedText, getCompanyLimitStatus, readCompanyLimitStatus } from '@/shared/lib/instance-settings';
+import {
+  COMPANY_LIMIT_LOCK_KEY,
+  companyLimitReachedText,
+  getCompanyLimitStatus,
+  readCompanyLimitStatus,
+} from '@/shared/lib/instance-settings';
 import { prisma } from '@/shared/lib/prisma';
 import { prismaSystem } from '@/shared/lib/prisma-system';
 import { getSessionToken, getSessionUserId } from '@/shared/lib/session';
@@ -283,9 +288,6 @@ class CompanyLimitReachedError extends Error {
   }
 }
 
-/** Clave del lock transaccional que serializa las altas de empresa (el conteo y el insert no pueden cruzarse). */
-const COMPANY_CREATE_LOCK_KEY = 'alphataco:company-create-limit';
-
 /**
  * Alta de empresa. `FormData` con los campos del formulario (+ `logo` opcional).
  * - `owner_id` = profile de sesión; se crea también la pertenencia en `share_company_users`.
@@ -322,7 +324,7 @@ export async function createCompany(formData: FormData): Promise<CompanyMutation
       credentialId,
       async (tx) => {
         // Serializa las altas y cuenta TODAS las empresas (cliente de sistema: la RLS limitaría a la activa).
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${COMPANY_CREATE_LOCK_KEY}))`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${COMPANY_LIMIT_LOCK_KEY}))`;
         const current = await readCompanyLimitStatus(tx);
         if (current.reached) throw new CompanyLimitReachedError(current.max);
 

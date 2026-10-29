@@ -5,6 +5,7 @@ import { JOB_NAMES } from '@/features/Jobs/lib/types';
 import { Logger } from '@/lib/logger';
 import { readCompanyLimitStatus } from '@/shared/lib/instance-settings';
 import { prismaSystem } from '@/shared/lib/prisma-system';
+import { getInstanceStateSummary } from './instance.server';
 import { listMigrationsOnDisk } from './migrations-on-disk.server';
 import { getModulesStateSummary } from './modules.server';
 
@@ -60,31 +61,41 @@ export async function getInstanceStatus() {
   await prismaSystem.$queryRaw`SELECT 1`;
   const latencyMs = Math.round(performance.now() - latencyStart);
 
-  const [migrationRows, onDisk, moduleRows, companyRows, userRows, sessionRows, jobRows, companyLimit, modulesState] =
-    await Promise.all([
-      prismaSystem.$queryRaw<MigrationRow[]>`
+  const [
+    migrationRows,
+    onDisk,
+    moduleRows,
+    companyRows,
+    userRows,
+    sessionRows,
+    jobRows,
+    companyLimit,
+    modulesState,
+    instanceState,
+  ] = await Promise.all([
+    prismaSystem.$queryRaw<MigrationRow[]>`
       SELECT migration_name, finished_at, rolled_back_at
       FROM _prisma_migrations ORDER BY started_at`,
-      listMigrationsOnDisk(),
-      prismaSystem.$queryRaw<ModuleRow[]>`
+    listMigrationsOnDisk(),
+    prismaSystem.$queryRaw<ModuleRow[]>`
       SELECT m.slug, m.name, m.is_active,
              count(t.id)::int AS tabs_total,
              count(t.id) FILTER (WHERE t.is_active)::int AS tabs_active,
              coalesce(array_agg(t.slug) FILTER (WHERE t.id IS NOT NULL AND t.is_active IS DISTINCT FROM true), '{}') AS tabs_inactive_slugs
       FROM modules m LEFT JOIN tabs t ON t.module_id = m.id
       GROUP BY m.id ORDER BY m.order_index, m.slug`,
-      prismaSystem.$queryRaw<CompanyCountRow[]>`
+    prismaSystem.$queryRaw<CompanyCountRow[]>`
       SELECT count(*) FILTER (WHERE is_active)::int AS companies_active,
              count(*) FILTER (WHERE NOT is_active)::int AS companies_inactive
       FROM company`,
-      prismaSystem.$queryRaw<UserCountRow[]>`
+    prismaSystem.$queryRaw<UserCountRow[]>`
       SELECT count(*) FILTER (WHERE NOT banned AND NOT is_anonymous)::int AS users_active,
              count(*) FILTER (WHERE banned)::int AS users_banned
       FROM auth_user`,
-      prismaSystem.$queryRaw<{ users_seen_30d: number }[]>`
+    prismaSystem.$queryRaw<{ users_seen_30d: number }[]>`
       SELECT count(DISTINCT user_id)::int AS users_seen_30d
       FROM auth_session WHERE updated_at > NOW() - interval '30 days'`,
-      prismaSystem.$queryRaw<JobRow[]>`
+    prismaSystem.$queryRaw<JobRow[]>`
       SELECT job,
              max(started_at)                                         AS last_started_at,
              max(finished_at)                                        AS last_finished_at,
@@ -95,13 +106,18 @@ export async function getInstanceStatus() {
       FROM jobs_runs
       WHERE started_at > NOW() - interval '30 days'
       GROUP BY job`,
-      readCompanyLimitStatus(prismaSystem),
-      // Control de módulos (F3): si la base todavía no tiene la migración, `null` (no rompe el estado).
-      getModulesStateSummary().catch((error: unknown) => {
-        logger.warn('No se pudo leer el estado de los módulos', { data: { error } });
-        return null;
-      }),
-    ]);
+    readCompanyLimitStatus(prismaSystem),
+    // Control de módulos (F3): si la base todavía no tiene la migración, `null` (no rompe el estado).
+    getModulesStateSummary().catch((error: unknown) => {
+      logger.warn('No se pudo leer el estado de los módulos', { data: { error } });
+      return null;
+    }),
+    // Controles de instancia (pausa, banners, límite): resumen sin textos; el detalle está en GET /api/admin/v1/instance.
+    getInstanceStateSummary().catch((error: unknown) => {
+      logger.warn('No se pudo leer el estado de los controles de instancia', { data: { error } });
+      return null;
+    }),
+  ]);
 
   // Migraciones: aplicadas / fallidas según _prisma_migrations; pendientes = carpetas en disco sin aplicar.
   const appliedRows = migrationRows.filter((row) => row.finished_at !== null && row.rolled_back_at === null);
@@ -185,5 +201,7 @@ export async function getInstanceStatus() {
       companies_total: companyLimit.count,
       companies_limit_reached: companyLimit.reached,
     },
+    // Controles de instancia (pausa del sistema y banners): `version` es la misma que pide el PUT de /instance.
+    instance_state: instanceState,
   };
 }

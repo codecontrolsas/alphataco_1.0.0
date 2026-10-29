@@ -2,6 +2,7 @@ import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { getMyTicketsWithUnread } from '@/features/Ayuda/actions/support-tickets';
 import { SupportTicketsRealtimeProvider } from '@/features/Ayuda/components/SupportTicketsRealtimeProvider';
 import { MY_TICKETS_WITH_UNREAD_QUERY_KEY } from '@/features/Ayuda/hooks/queryKeys';
+import { DashboardInstanceBanner } from '@/features/InstanceControls/components/DashboardInstanceBanner';
 import { DashboardHeader } from '@/features/Layout/header/DashboardHeader';
 import { AppSidebar } from '@/features/Layout/sidebar/AppSidebar';
 import { PasswordChangeAlertWrapper } from '@/shared/components/auth/PasswordChangeAlertWrapper';
@@ -59,6 +60,10 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset className="min-w-0">
+          {/* Banner global del dashboard (TaskApp), arriba de todas las vistas. */}
+          <Suspense fallback={null}>
+            <DashboardInstanceBanner />
+          </Suspense>
           <DashboardHeader />
           <Suspense fallback={null}>
             <PasswordChangeAlertWrapper />

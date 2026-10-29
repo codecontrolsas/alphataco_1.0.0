@@ -32,4 +32,17 @@ describe('límite de empresas de la instancia', () => {
     expect(companyLimitReachedText(1)).toBe('Tu plan permite 1 empresa y ya está en uso');
     expect(companyLimitReachedText(3)).toBe('Tu plan permite 3 empresas y ya están todas en uso');
   });
+
+  it('companyHeaderMode: con max_companies = 1 nunca hay selector; con N > 1, selector si hay más de una o lugar', async () => {
+    const { companyHeaderMode } = await import('./instance-settings');
+    expect(companyHeaderMode({ max: 1, count: 1, reached: true }, 1)).toBe('identity');
+    expect(companyHeaderMode({ max: 1, count: 0, reached: false }, 0)).toBe('identity');
+    // N = 2 con una empresa: el selector lleva el botón «Agregar compañía».
+    expect(companyHeaderMode({ max: 2, count: 1, reached: false }, 1)).toBe('switcher');
+    // Al llegar a N: el botón desaparece, el selector queda si el usuario tiene más de una.
+    expect(companyHeaderMode({ max: 2, count: 2, reached: true }, 2)).toBe('switcher');
+    expect(companyHeaderMode({ max: 2, count: 2, reached: true }, 1)).toBe('identity');
+    // Base vieja con más empresas que el límite (807 sembró 1): no se le quita el selector a quien tiene varias.
+    expect(companyHeaderMode({ max: 1, count: 4, reached: true }, 2)).toBe('switcher');
+  });
 });

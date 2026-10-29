@@ -23,6 +23,12 @@ export const INSTANCE_SETTING_KEYS = { maxCompanies: 'max_companies' } as const;
 /** Si la fila falta o el valor no es un entero >= 1, la instancia admite una sola empresa. */
 export const DEFAULT_MAX_COMPANIES = 1;
 
+/**
+ * Lock transaccional (`pg_advisory_xact_lock(hashtext(...))`) que serializa el alta de empresas con los cambios de
+ * `max_companies`: el conteo y el insert (o el cambio del límite) no pueden cruzarse.
+ */
+export const COMPANY_LIMIT_LOCK_KEY = 'alphataco:company-create-limit';
+
 type SettingsReader = Pick<Prisma.TransactionClient, 'instance_settings'>;
 type CompanyCounter = Pick<Prisma.TransactionClient, 'company'>;
 
@@ -89,6 +95,30 @@ export const getCompanyLimitStatus = cache(async (): Promise<CompanyLimitStatus>
     return { max: DEFAULT_MAX_COMPANIES, count: DEFAULT_MAX_COMPANIES, reached: true };
   }
 });
+
+/**
+ * Instancia de una sola empresa (`max_companies = 1`): la UI es la de esa empresa, sin selector, sin alta y sin
+ * ninguna mención a «otras empresas». Con N > 1 la UI multiempresa aparece según cuántas haya.
+ *
+ * Una base anterior al límite puede tener más empresas que `max_companies` (807 sembró 1 sin mirar cuántas había):
+ * ahí NO se oculta la multiempresa, para que quien tiene varias pueda seguir cambiando entre ellas.
+ */
+export function isSingleCompanyInstance(limit: Pick<CompanyLimitStatus, 'max' | 'count'>): boolean {
+  return limit.max === 1 && limit.count <= 1;
+}
+
+/**
+ * Qué muestra el header del sidebar: solo la identidad de la empresa (instancia de una sola empresa, o una sola
+ * empresa del usuario sin lugar para otra) o el selector (más de una empresa, o todavía se puede crear otra: el botón
+ * «Agregar compañía» vive en el desplegable).
+ */
+export function companyHeaderMode(
+  limit: Pick<CompanyLimitStatus, 'max' | 'count' | 'reached'>,
+  userCompanies: number
+): 'identity' | 'switcher' {
+  if (isSingleCompanyInstance(limit)) return 'identity';
+  return userCompanies > 1 || !limit.reached ? 'switcher' : 'identity';
+}
 
 /** Texto informativo del límite: «Tu plan permite 1 empresa». */
 export function companyLimitLabel(max: number): string {

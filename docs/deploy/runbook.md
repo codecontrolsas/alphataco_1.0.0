@@ -460,6 +460,25 @@ ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
 El cambio rige en la próxima petición (no hay caché entre requests). Bajar el límite por debajo de las empresas
 existentes no borra nada: solo impide crear nuevas.
 
+## Controles de instancia (`/api/admin/v1/instance`)
+
+TaskApp opera, por la API de administración (token `ADMIN_MODULES_TOKEN`; lectura también con `ADMIN_STATUS_TOKEN`),
+el límite de empresas, la **pausa del sistema** y los **banners** del login y del dashboard. Viven en
+`instance_settings` (`max_companies`, `instance_pause`, `banner_login`, `banner_dashboard`; la migración
+`20261109100000_instance_controls` los siembra apagados) y cada cambio queda en `instance_change_log`.
+
+- `GET /instance` → `{ version, limits, pause, banners }`; `PUT /instance` con `expectedVersion`, `reason`,
+  `X-Actor-Email` e `Idempotency-Key` (409 `STALE_PLAN` si la versión cambió, 409 `LIMIT_BELOW_COMPANIES` si el límite
+  queda por debajo de las empresas existentes); `GET /instance/log` el historial. `/status` lo resume en `instance_state`.
+- **Límite = 1**: la UI es de una sola empresa (sin selector, sin alta, sin listado de compañías). Con N > 1 el alta
+  aparece mientras haya lugar. Las empresas no se borran desde la app (el rol `alphataco_app` no tiene `DELETE` sobre
+  `company`): es una acción de soporte, con el dueño de la base.
+- **Pausa**: las páginas (salvo las de ingreso) muestran «Sistema en pausa temporal» y las APIs de usuario, móvil y
+  externa responden 503 `INSTANCE_PAUSED`; siguen andando `/api/admin`, `/api/health`, `/api/jobs` y `/api/auth`. La
+  app guarda los controles 5 s en memoria por proceso: otro proceso (la API móvil, otra réplica) ve el cambio a más
+  tardar en ese tiempo.
+- Si TaskApp no responde, se pueden cambiar por psql como `max_companies` (el valor es jsonb, ver la migración).
+
 ## Pendientes
 
 - **Jobs periódicos**: en compose los dispara el contenedor `cron` (`docker/cron`). En la
