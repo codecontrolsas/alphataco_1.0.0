@@ -8,7 +8,7 @@ import { Suspense } from 'react';
 import { RetryButton } from './RetryButton';
 
 /**
- * Pantalla «Sistema en pausa temporal». El proxy reescribe acá (con 503) toda página mientras la instancia está en
+ * Pantalla «Sistema en pausa temporal». El proxy reescribe acá toda página mientras la instancia está en
  * pausa; la URL del navegador no cambia, así que «Reintentar» recarga la misma página. El mensaje sale de la base
  * (nunca de la URL), dentro de un `Suspense`: el resto de la pantalla es estático.
  */

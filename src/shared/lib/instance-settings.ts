@@ -104,6 +104,19 @@ export function isSingleCompanyInstance(limit: Pick<CompanyLimitStatus, 'max'>):
   return limit.max === 1;
 }
 
+/**
+ * Qué muestra el header del sidebar: solo la identidad de la empresa (instancia de una sola empresa, o una sola
+ * empresa del usuario sin lugar para otra) o el selector (más de una empresa, o todavía se puede crear otra: el botón
+ * «Agregar compañía» vive en el desplegable).
+ */
+export function companyHeaderMode(
+  limit: Pick<CompanyLimitStatus, 'max' | 'reached'>,
+  userCompanies: number
+): 'identity' | 'switcher' {
+  if (isSingleCompanyInstance(limit)) return 'identity';
+  return userCompanies > 1 || !limit.reached ? 'switcher' : 'identity';
+}
+
 /** Texto informativo del límite: «Tu plan permite 1 empresa». */
 export function companyLimitLabel(max: number): string {
   return `Tu plan permite ${max} ${max === 1 ? 'empresa' : 'empresas'}`;

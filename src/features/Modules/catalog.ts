@@ -242,6 +242,7 @@ export const MODULE_CATALOG: Readonly<Record<ModuleKey, ModuleDef>> = {
       'countries',
       'industry_type',
       'instance_settings',
+      'instance_change_log',
       'instance_modules',
       'company_modules',
       'module_change_log',

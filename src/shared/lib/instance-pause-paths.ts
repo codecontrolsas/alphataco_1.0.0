@@ -6,7 +6,7 @@
  *   salir siguen andando; adentro se ve la pantalla de pausa), las pantallas de ingreso (muestran el mensaje) y la
  *   propia pantalla de pausa.
  * - `api`: el resto de `/api/*` (móvil, externa, archivos, eventos de TaskApp, lo que se agregue): 503 `INSTANCE_PAUSED`.
- * - `page`: toda otra página: se reescribe a la pantalla «Sistema en pausa temporal» con 503.
+ * - `page`: toda otra página: se reescribe a la pantalla «Sistema en pausa temporal» (la URL no cambia).
  */
 
 /** Ruta interna de la pantalla de pausa (el proxy reescribe acá). */

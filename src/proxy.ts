@@ -140,13 +140,16 @@ function requiresSession(pathname: string): boolean {
   );
 }
 
-/** Respuesta en pausa: 503 con el mensaje (JSON en las APIs, la pantalla de pausa en las páginas). */
+/**
+ * Respuesta en pausa. APIs: 503 `INSTANCE_PAUSED` con el mensaje. Páginas: se reescribe a la pantalla de pausa (la URL
+ * no cambia); la página la sirve Next con su propio status (200: el App Router no deja fijar un 503 desde una página).
+ */
 function pausedResponse(req: NextRequest, kind: 'api' | 'page', message: string): NextResponse {
   const headers = { 'Retry-After': '120', 'Cache-Control': 'no-store' };
   if (kind === 'api') {
     return NextResponse.json({ error: { code: INSTANCE_PAUSED_CODE, message } }, { status: 503, headers });
   }
-  return NextResponse.rewrite(new URL(PAUSED_PAGE_PATH, req.url), { status: 503, headers });
+  return NextResponse.rewrite(new URL(PAUSED_PAGE_PATH, req.url), { headers });
 }
 
 /** 404 con la página de «no encontrado» de la app: se reescribe a una ruta que no existe. */

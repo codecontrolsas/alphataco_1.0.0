@@ -168,10 +168,9 @@ describe('proxy: pausa de la instancia', () => {
   );
 
   it.each(['/dashboard', '/dashboard/employee', '/portal', '/maintenance', '/'])(
-    'la página %s se reescribe a la pantalla de pausa con 503, sin mirar la sesión',
+    'la página %s se reescribe a la pantalla de pausa, sin mirar la sesión',
     async (path) => {
       const response = await run(`http://app.test${path}`);
-      expect(response.status).toBe(503);
       expect(response.headers.get('x-middleware-rewrite')).toContain('/sistema-en-pausa');
       expect(getSession).not.toHaveBeenCalled();
     }

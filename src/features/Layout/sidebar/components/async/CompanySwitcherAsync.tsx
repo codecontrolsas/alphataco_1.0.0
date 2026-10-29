@@ -1,5 +1,5 @@
 import { fetchCurrentCompany, fetchUserCompanies } from '@/shared/actions/company.actions';
-import { companyLimitLabel, getCompanyLimitStatus, isSingleCompanyInstance } from '@/shared/lib/instance-settings';
+import { companyHeaderMode, companyLimitLabel, getCompanyLimitStatus } from '@/shared/lib/instance-settings';
 import { CompanyIdentity } from '../CompanyIdentity';
 import { CompanySwitcher } from '../CompanySwitcher';
 
@@ -23,7 +23,7 @@ export async function CompanySwitcherAsync() {
   const canCreateCompany = !companyLimit.reached;
   const active = currentCompany?.[0] ?? allCompanies[0] ?? sharedCompanies[0] ?? null;
 
-  if (isSingleCompanyInstance(companyLimit) || (userCompanies <= 1 && !canCreateCompany)) {
+  if (companyHeaderMode(companyLimit, userCompanies) === 'identity') {
     return <CompanyIdentity name={active?.company_name ?? null} logo={active?.company_logo ?? null} />;
   }
 
