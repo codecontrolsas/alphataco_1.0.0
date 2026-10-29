@@ -65,6 +65,18 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL('/maintenance', req.url));
   }
 
+  // 2a. Contraseña temporal (primer administrador del alta remota, altas con contraseña puesta por un admin): no se
+  //     usa el sistema hasta cambiarla. Las páginas van a /cambiar-contrasena; las Server Actions (POST) se cortan.
+  if (session.user.needsPasswordChange) {
+    if (req.method !== 'GET') {
+      return NextResponse.json(
+        { error: 'PASSWORD_CHANGE_REQUIRED', message: 'Tenés que cambiar la contraseña temporal antes de seguir' },
+        { status: 403 }
+      );
+    }
+    return NextResponse.redirect(new URL('/cambiar-contrasena', req.url));
+  }
+
   // 2b. Enlace viejo al manual (`?tab=manual[&guide=…]`) en cualquier ruta del dashboard: va a `/manual`, que valida el
   //     permiso. Antes de las consultas de abajo, que la página del manual vuelve a hacer.
   const manualHref = legacyManualRedirectHref(req.nextUrl.pathname, req.nextUrl.searchParams);
