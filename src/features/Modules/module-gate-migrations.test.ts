@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { gatedTables } from './catalog';
@@ -23,8 +23,14 @@ function keys(list: string | undefined): string {
 
 describe('lotes de RLS por módulo: migraciones vs. catálogo', () => {
   const lots = readdirSync(MIGRATIONS).filter((dir) => dir.includes('_module_gate_lot_'));
+  // Una tabla creada DESPUÉS de los lotes declara su compuerta en su propia migración (junto con el CREATE TABLE).
+  const withGate = readdirSync(MIGRATIONS).filter((dir) => {
+    if (dir.includes('_module_gate_lot_')) return true;
+    const file = join(MIGRATIONS, dir, 'migration.sql');
+    return existsSync(file) && readFileSync(file, 'utf8').includes('app_enable_module_gate(');
+  });
   const declared = new Map<string, string>();
-  for (const dir of lots) {
+  for (const dir of withGate) {
     const sql = readFileSync(join(MIGRATIONS, dir, 'migration.sql'), 'utf8');
     for (const match of sql.matchAll(CALL)) {
       if (declared.has(match[1])) throw new Error(`${match[1]} aparece en dos lotes`);

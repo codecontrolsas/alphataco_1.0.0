@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { getEmployeeContacts } from '@/features/Hse/lib/employee-contacts.server';
 import { isModuleEnabledForCompany } from '@/features/Modules/server/modules.server';
 import { notify } from '@/features/Notifications/lib/dispatch.server';
 import { Logger } from '@/lib/logger';
@@ -40,7 +41,6 @@ const logger = new Logger('features/Jobs/hse-expiry');
 
 const dateOnly = (day: string) => new Date(`${day}T00:00:00Z`);
 const dayOf = (value: Date) => value.toISOString().slice(0, 10);
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export interface HseExpiryJobDeps {
   date?: string;
@@ -121,35 +121,6 @@ async function collectCandidates(companyId: string, today: string, limit: string
   return { candidates, trainings, currentAcks };
 }
 
-/** Correo del empleado: el de su acceso al portal (con el que entra) o, si no tiene, el del legajo. */
-async function employeeEmails(companyId: string, employeeIds: string[]) {
-  if (employeeIds.length === 0) return new Map<string, { email: string | null; name: string }>();
-  const [employees, access] = await Promise.all([
-    prismaSystem.employees.findMany({
-      where: { company_id: companyId, id: { in: employeeIds } },
-      select: { id: true, email: true, firstname: true },
-    }),
-    prismaSystem.employee_portal_access.findMany({
-      where: { company_id: companyId, employee_id: { in: employeeIds }, status: 'enabled' },
-      select: { employee_id: true, credential_id: true },
-    }),
-  ]);
-  const users = access.length
-    ? await prismaSystem.user.findMany({
-        where: { id: { in: access.map((a) => a.credential_id) } },
-        select: { id: true, email: true },
-      })
-    : [];
-  const userEmail = new Map(users.map((u) => [u.id, u.email]));
-  const accessEmail = new Map(access.map((a) => [a.employee_id, userEmail.get(a.credential_id) ?? null]));
-  return new Map(
-    employees.map((e) => {
-      const email = [accessEmail.get(e.id), e.email].find((v): v is string => !!v && EMAIL_RE.test(v.trim())) ?? null;
-      return [e.id, { email: email?.trim() ?? null, name: e.firstname }];
-    })
-  );
-}
-
 export async function runHseExpiryJob(deps: HseExpiryJobDeps = {}): Promise<JobSummary> {
   const date = deps.date ?? argentinaDate();
   const send = deps.sendMail ?? defaultSendMail;
@@ -164,7 +135,7 @@ export async function runHseExpiryJob(deps: HseExpiryJobDeps = {}): Promise<JobS
         return { skipped: true, reason: 'HSE apagado en la instancia o en la empresa' };
 
       const { candidates, trainings, currentAcks } = await collectCandidates(company.id, date, limit);
-      const contacts = await employeeEmails(company.id, [...new Set(candidates.map((c) => c.employeeId))]);
+      const contacts = await getEmployeeContacts(company.id, [...new Set(candidates.map((c) => c.employeeId))]);
 
       // 1. Avisos (idempotentes por la clave única).
       const created = candidates.length

@@ -1,3 +1,4 @@
+import { HseEvaluationPdfButton } from '@/features/Hse/components/HseEvaluationPdfButton';
 import { HSE_ATTEMPT_STATUS_LABELS } from '@/features/Hse/lib/constants';
 import { formatPercent } from '@/features/Hse/lib/training-status';
 import { getMyHseAttemptResult, getMyHseTraining } from '@/features/Portal/actions/hse-trainings.queries';
@@ -70,14 +71,22 @@ export async function HseAttemptResult({ trainingId, attemptId }: { trainingId: 
           </p>
         )}
 
-      <Link
-        href={`/portal/trainings/${trainingId}`}
-        className="bg-primary text-primary-foreground focus-visible:ring-ring inline-flex min-h-12 w-full items-center justify-center rounded-md px-4 text-sm font-medium outline-none hover:opacity-90 focus-visible:ring-2 sm:w-auto"
-      >
-        {result.passed && training?.certificate && !training.certificate.certificateId
-          ? 'Firmar la constancia'
-          : 'Volver a la capacitación'}
-      </Link>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Link
+          href={`/portal/trainings/${trainingId}`}
+          className="bg-primary text-primary-foreground focus-visible:ring-ring inline-flex min-h-12 w-full items-center justify-center rounded-md px-4 text-sm font-medium outline-none hover:opacity-90 focus-visible:ring-2 sm:w-auto"
+        >
+          {result.passed && training?.certificate && !training.certificate.certificateId
+            ? 'Firmar la constancia'
+            : 'Volver a la capacitación'}
+        </Link>
+        <HseEvaluationPdfButton
+          attemptId={result.attemptId}
+          scope="portal"
+          label="Descargar mi resultado (PDF)"
+          accessibleLabel={`Descargar en PDF el resultado del intento ${result.number}`}
+        />
+      </div>
     </div>
   );
 }

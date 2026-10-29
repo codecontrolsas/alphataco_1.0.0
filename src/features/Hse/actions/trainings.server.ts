@@ -7,6 +7,7 @@ import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
+import type { PdfDownload } from '@/shared/lib/pdf/types';
 import { prisma } from '@/shared/lib/prisma';
 import { storageRemove, storageUpload } from '@/shared/lib/storage';
 import { UUID_RE } from '@/shared/lib/storage-buckets';
@@ -15,6 +16,8 @@ import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'node:crypto';
 import { HSE_EXAM_LIMITS, HSE_FILES_BUCKET } from '../lib/constants';
 import { cleanFileName, hseMaterialPath, validatePdfUpload } from '../lib/pdf-file';
+import { noticeAfterCommit } from '../lib/publication-notices.after';
+import { renderEvaluationPdf } from '../pdf/evaluation-pdf.server';
 import type { HseTargetInput } from '../schemas/documents';
 import {
   hseMaterialFileMetaSchema,
@@ -280,6 +283,7 @@ export async function publishHseTraining(trainingId: string): Promise<ActionResu
       return tx.hse_training_assignments.count({ where: { training_id: trainingId, archived_at: null } });
     });
     logger.info('Capacitación HSE publicada', { data: { trainingId, assigned } });
+    noticeAfterCommit({ kind: 'training', companyId: auth.companyId, trainingId });
     revalidateTraining(trainingId);
     return ok({ assigned });
   } catch (error) {
@@ -633,3 +637,22 @@ export async function fetchHseEmployeeTrainingAttempts(trainingId: string, emplo
   });
 }
 export type HseEmployeeTrainingAttempt = Awaited<ReturnType<typeof fetchHseEmployeeTrainingAttempts>>[number];
+
+/**
+ * Hoja de evaluación (PDF) de un intento cerrado, con el detalle por pregunta y la clave. Solo dashboard con permiso
+ * de ver capacitaciones; la hoja se genera al momento (un intento cerrado no cambia) y no se guarda.
+ */
+export async function getHseAttemptEvaluationPdf(attemptId: string): Promise<ActionResult<{ file: PdfDownload }>> {
+  if (!(await isModuleEnabled('hse'))) return fail('El módulo HSE no está disponible');
+  if (!(await checkPermissionServer('hse', 'capacitaciones', 'view'))) return fail(NO_PERMISSION);
+  if (!UUID_RE.test(attemptId)) return fail('El examen no existe');
+  try {
+    const result = await renderEvaluationPdf(attemptId, { kind: 'dashboard', companyId: await getActiveCompanyId() });
+    if (!result) return fail('El examen no existe o todavía está en curso');
+    if (!result.ok) return fail(result.error);
+    return ok({ file: result.file });
+  } catch (error) {
+    logger.error('Error al preparar la evaluación', { data: { error, attemptId } });
+    return fail('No se pudo preparar el PDF de la evaluación');
+  }
+}

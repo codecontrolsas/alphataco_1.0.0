@@ -317,6 +317,37 @@ BEGIN
 END
 $function$;
 
+-- function hse_mark_material_opened: el empleado del contexto registra que ABRIÓ un material de una capacitación que le
+-- aplica (clic en el enlace del portal). La primera apertura queda; las siguientes solo mueven `last_opened_at`. NO
+-- cuenta como lectura: no toca `hse_training_material_reads`, así que no destraba el examen. Con `first_opened_at` y
+-- el `read_at` de la lectura se mide el tiempo de estudio.
+CREATE OR REPLACE FUNCTION public.hse_mark_material_opened(p_material_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path = public, pg_temp
+ SET "TimeZone" TO 'America/Argentina/Buenos_Aires'
+AS $function$
+DECLARE
+  v_employee uuid := public.app_current_employee_id();
+  v_company uuid := public.app_current_company_id();
+  v_training uuid;
+BEGIN
+  IF v_employee IS NULL OR v_company IS NULL THEN
+    RAISE EXCEPTION 'hse_mark_material_opened: falta el empleado del contexto';
+  END IF;
+  SELECT m.training_id INTO v_training
+  FROM public.hse_training_materials m
+  WHERE m.id = p_material_id AND m.company_id = v_company;
+  IF v_training IS NULL OR NOT public.hse_employee_can_read_training(v_training) THEN
+    RAISE EXCEPTION 'hse_mark_material_opened: el material no está disponible';
+  END IF;
+  INSERT INTO public.hse_training_material_opens (company_id, training_id, material_id, employee_id)
+  VALUES (v_company, v_training, p_material_id, v_employee)
+  ON CONFLICT (material_id, employee_id) DO UPDATE SET last_opened_at = now();
+END
+$function$;
+
 -- function hse_grade_attempt: LA corrección (una sola regla). Cierra el intento y calcula puntos (suma de los puntos de
 -- las preguntas respondidas con la opción de la clave), porcentaje sobre `max_points` (fijado al empezar) y aprobado
 -- (porcentaje >= `passing_score`). Si ya pasó `deadline_at` (reloj de la base) queda `expired`, con lo respondido hasta

@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, CircleMinus, ListChecks, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { fetchHseEmployeeTrainingAttempts } from '../../../actions/trainings.server';
+import { HseEvaluationPdfButton } from '../../../components/HseEvaluationPdfButton';
 import { HseStatusBadge } from '../../../components/HseStatusBadge';
 import { HSE_QUERY_KEYS } from '../../../lib/constants';
 import { HSE_ATTEMPT_STATUS_UI } from '../../../lib/status-presentation';
@@ -103,6 +104,15 @@ export function EmployeeAttemptsButton({
                     {a.scorePercent !== null &&
                       ` · ${formatPercent(a.scorePercent)} (${a.scorePoints} de ${a.maxPoints} puntos)`}
                   </p>
+                  {a.status !== 'in_progress' && (
+                    <HseEvaluationPdfButton
+                      attemptId={a.id}
+                      scope="dashboard"
+                      size="sm"
+                      label="Evaluación en PDF"
+                      accessibleLabel={`Descargar la evaluación en PDF del intento ${a.number} de ${employeeLabel}`}
+                    />
+                  )}
                   {a.questions.length > 0 && (
                     <ul className="space-y-1 text-sm">
                       {a.questions.map((q, index) => {

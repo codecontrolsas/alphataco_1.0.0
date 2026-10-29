@@ -93,6 +93,28 @@ export async function markHseMaterialRead(input: {
 }
 
 /**
+ * El empleado ABRIÓ un material (clic en el enlace): deja la primera y la última apertura para medir el tiempo de
+ * estudio. NO cuenta como lectura (no destraba el examen). Mejor esfuerzo: nunca interrumpe la apertura del archivo.
+ */
+export async function markHseMaterialOpened(input: { materialId: string }): Promise<ActionResult<null>> {
+  const auth = await portalEmployee();
+  if (!auth.ok) return fail(auth.error);
+  const parsed = hseMarkMaterialReadSchema.safeParse({ materialId: input?.materialId });
+  if (!parsed.success) return fail(UNAVAILABLE);
+  try {
+    await prisma.$transaction(
+      (tx) => tx.$executeRaw`SELECT public.hse_mark_material_opened(${parsed.data.materialId}::uuid)`
+    );
+    return ok(null);
+  } catch (error) {
+    logger.warn('No se pudo registrar la apertura del material', {
+      data: { error, employeeId: auth.employee.employeeId, materialId: parsed.data.materialId },
+    });
+    return fail(UNAVAILABLE);
+  }
+}
+
+/**
  * Empieza (o retoma) el examen y lleva al examen con un `redirect()` de la propia acción.
  *
  * Antes la acción devolvía el intento y el cliente hacía `router.push(...)`: la revalidación de la acción re-renderizaba
