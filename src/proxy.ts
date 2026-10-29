@@ -2,6 +2,9 @@ import { legacyManualRedirectHref } from '@/features/Ayuda/Manual/lib/manual-url
 import { routeModules } from '@/features/Modules/catalog';
 import { Logger } from '@/lib/logger';
 import { auth } from '@/shared/lib/auth';
+import { getInstanceControlsCached } from '@/shared/lib/instance-controls';
+import { INSTANCE_PAUSED_CODE, pauseMessageOf } from '@/shared/lib/instance-controls-core';
+import { PAUSED_PAGE_PATH, classifyPausePath } from '@/shared/lib/instance-pause-paths';
 import { prismaSystem } from '@/shared/lib/prisma-system';
 import { resolveDefaultCompanyId, writeCompanyClaim } from '@/shared/lib/session-claims';
 import { NextResponse, type NextRequest } from 'next/server';
@@ -20,6 +23,10 @@ const logger = new Logger('Proxy');
  * 4. Redirigir los enlaces viejos `?tab=manual` de cualquier ruta del dashboard a `/manual`
  * 5. Responder 404 a las páginas de un módulo apagado para la empresa (F3, prefijo de ruta del catálogo), antes de
  *    renderizar: el módulo «no existe» para esa empresa (sin página de «no contratado», que filtraría el catálogo)
+ * 0. Antes que todo, la pausa de la instancia (modo mantenimiento, la opera TaskApp): en pausa las páginas se
+ *    reescriben a «Sistema en pausa temporal» y las APIs de usuario, móvil y externa responden 503 `INSTANCE_PAUSED`.
+ *    Qué queda exento (API de administración, health, jobs, auth, pantallas de ingreso): `instance-pause-paths.ts`.
+ *    La lectura es de memoria (caché de proceso de 5 s): no suma una consulta por request.
  *
  * Notas:
  * - /maintenance/* NO está protegido (acceso anónimo para empleados con CUIL)
@@ -29,6 +36,18 @@ const logger = new Logger('Proxy');
  *   que sembrarla era redundante.
  */
 export async function proxy(req: NextRequest) {
+  const pathname = req.nextUrl.pathname;
+
+  // 0. Pausa de la instancia: corre para todas las rutas del matcher (no solo el dashboard).
+  const routeKind = classifyPausePath(pathname);
+  if (routeKind !== 'exempt') {
+    const { pause } = await getInstanceControlsCached();
+    if (pause.active) return pausedResponse(req, routeKind, pauseMessageOf(pause));
+  }
+
+  // Lo que sigue (sesión, empresa, módulos) es solo del dashboard y del manual.
+  if (!requiresSession(pathname)) return NextResponse.next();
+
   const session = await auth.api.getSession({ headers: req.headers });
 
   // 1. Verificar autenticación
@@ -111,6 +130,25 @@ async function anyModuleEnabled(companyId: string | null, keys: readonly string[
   }
 }
 
+/** Rutas que exigen sesión y empresa (las del matcher original). */
+function requiresSession(pathname: string): boolean {
+  return (
+    pathname === '/dashboard' ||
+    pathname.startsWith('/dashboard/') ||
+    pathname === '/manual' ||
+    pathname.startsWith('/manual/')
+  );
+}
+
+/** Respuesta en pausa: 503 con el mensaje (JSON en las APIs, la pantalla de pausa en las páginas). */
+function pausedResponse(req: NextRequest, kind: 'api' | 'page', message: string): NextResponse {
+  const headers = { 'Retry-After': '120', 'Cache-Control': 'no-store' };
+  if (kind === 'api') {
+    return NextResponse.json({ error: { code: INSTANCE_PAUSED_CODE, message } }, { status: 503, headers });
+  }
+  return NextResponse.rewrite(new URL(PAUSED_PAGE_PATH, req.url), { status: 503, headers });
+}
+
 /** 404 con la página de «no encontrado» de la app: se reescribe a una ruta que no existe. */
 function moduleNotFound(req: NextRequest): NextResponse {
   return NextResponse.rewrite(new URL('/_modulo-no-disponible', req.url), { status: 404 });
@@ -129,7 +167,9 @@ async function isEmployeeOnly(userId: string): Promise<boolean> {
 }
 
 export const config = {
-  // Proteger /dashboard/* y el manual (`/manual`, página propia fuera del dashboard: misma sesión y
-  // empresa que el resto). /maintenance/* es público para usuarios anónimos.
-  matcher: ['/dashboard/:path*', '/manual', '/manual/:path*'],
+  // Todas las rutas salvo los estáticos: la pausa de la instancia corta cualquier página o API. La sesión y la empresa
+  // se exigen solo en /dashboard/* y en el manual (`requiresSession`); /maintenance/* sigue público para anónimos.
+  matcher: [
+    '/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|txt|xml|webmanifest|js|css|map|woff2?)$).*)',
+  ],
 };

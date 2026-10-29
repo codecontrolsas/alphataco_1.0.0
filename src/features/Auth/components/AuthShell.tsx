@@ -1,6 +1,8 @@
+import { AuthInstanceNotices } from '@/features/InstanceControls/components/AuthInstanceNotices';
 import { BrandMark } from '@/shared/components/brand/BrandMark';
 import { BRAND_NAME } from '@/shared/lib/branding';
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { AuthProductPanel } from './AuthProductPanel';
 
 interface AuthShellProps {
@@ -29,6 +31,10 @@ export function AuthShell({ kicker, title, description, children }: AuthShellPro
 
         <main className="flex flex-1 items-center">
           <div className="mx-auto w-full max-w-sm py-12">
+            {/* Pausa del sistema y banner del login (TaskApp): dato por request, no bloquea el resto de la pantalla. */}
+            <Suspense fallback={null}>
+              <AuthInstanceNotices />
+            </Suspense>
             <p className="text-brand-ink mb-3 flex items-center gap-2 font-mono text-xs font-medium tracking-wider uppercase before:h-px before:w-4 before:bg-current">
               {kicker}
             </p>

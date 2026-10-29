@@ -1524,6 +1524,25 @@ model instance_settings {
   @@schema("public")
 }
 
+/// Auditoría de los controles de instancia (límite de empresas, pausa y banners) que opera TaskApp por
+/// `PUT /api/admin/v1/instance`: una fila por campo cambiado, agrupadas por pedido (`request_id` = Idempotency-Key).
+/// Solo de alta: la app no la ve y el rol de sistema solo la lee y le agrega filas.
+model instance_change_log {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  request_id  String   @db.Uuid
+  field       String
+  from_value  Json?
+  to_value    Json?
+  actor_email String
+  origin      String
+  reason      String
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([created_at(sort: Desc)])
+  @@index([request_id])
+  @@schema("public")
+}
+
 /// Control de módulos (F3): módulos encendidos en la instancia. Sin fila = apagado (salvo `nucleo`, que decide el código).
 /// La app no la lee ni la escribe (REVOKE + RLS sin políticas): la lee por `app_enabled_modules()` y la escribe el rol
 /// de sistema (API de administración, scripts). Ver la migración `20261104100000_module_control`.

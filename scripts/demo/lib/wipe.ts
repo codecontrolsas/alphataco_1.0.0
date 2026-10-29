@@ -47,6 +47,8 @@ const KEEP = new Set([
   'company_modules',
   'module_change_log',
   'module_tab_owners',
+  // auditoría de los controles de instancia (pausa, banners, límite de empresas): no es de negocio.
+  'instance_change_log',
 ]);
 
 interface FkRow {

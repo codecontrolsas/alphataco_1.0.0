@@ -19,6 +19,11 @@ interface CompanyFormFieldsProps {
   industryTypes: CatalogOption[];
   /** Empresa a editar; ausente en el alta. */
   company?: CompanyForEdit | null;
+  /**
+   * Instancia de una sola empresa: no se ofrece «compañía por defecto» (no hay otra entre las que elegir). El valor
+   * viaja oculto para que guardar no lo cambie: el alta de la primera queda por defecto y la edición conserva el suyo.
+   */
+  singleCompany?: boolean;
 }
 
 /**
@@ -38,7 +43,12 @@ function FormField({ id, label, children }: { id: string; label: string; childre
   );
 }
 
-export default function CompanyFormFields({ provinces, industryTypes, company }: CompanyFormFieldsProps) {
+export default function CompanyFormFields({
+  provinces,
+  industryTypes,
+  company,
+  singleCompany = false,
+}: CompanyFormFieldsProps) {
   // Valores guardados que no están en el catálogo (datos viejos o cargados por script): se ofrecen
   // igual, así el selector no aparece vacío y guardar no los pisa sin que el usuario lo note.
   const industryOptions =
@@ -100,11 +110,15 @@ export default function CompanyFormFields({ provinces, industryTypes, company }:
               />
             </FormField>
           </div>
-          <div className="flex items-center gap-2 md:col-span-2">
-            {/* Sin `defaultChecked`, guardar la edición desmarcaba en silencio la empresa por defecto. */}
-            <Checkbox id="by_defect" name="by_defect" defaultChecked={company?.by_defect ?? false} />
-            <Label htmlFor="by_defect">Usar como compañía por defecto al ingresar</Label>
-          </div>
+          {singleCompany ? (
+            <input type="hidden" name="by_defect" value={(company ? company.by_defect : true) ? 'on' : ''} />
+          ) : (
+            <div className="flex items-center gap-2 md:col-span-2">
+              {/* Sin `defaultChecked`, guardar la edición desmarcaba en silencio la empresa por defecto. */}
+              <Checkbox id="by_defect" name="by_defect" defaultChecked={company?.by_defect ?? false} />
+              <Label htmlFor="by_defect">Usar como compañía por defecto al ingresar</Label>
+            </div>
+          )}
         </div>
       </SectionCard>
 

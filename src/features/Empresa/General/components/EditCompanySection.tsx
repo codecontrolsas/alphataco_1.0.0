@@ -12,6 +12,7 @@ import { getProvinces } from '@/shared/actions/countries.server';
 import { PageHeader } from '@/shared/components/common/PageHeader';
 import { SectionCard } from '@/shared/components/common/SectionCard';
 import { StateBlock } from '@/shared/components/common/StateBlock';
+import { getCompanyLimitStatus, isSingleCompanyInstance } from '@/shared/lib/instance-settings';
 import { Info } from 'lucide-react';
 import Link from 'next/link';
 
@@ -30,11 +31,12 @@ interface EditCompanySectionProps {
  * coincidía, mostraba igual un formulario vacío contra ese id).
  */
 export default async function EditCompanySection({ companyId }: EditCompanySectionProps) {
-  const [company, hasCompany, provinces, industryTypes] = await Promise.all([
+  const [company, hasCompany, provinces, industryTypes, companyLimit] = await Promise.all([
     getCompanyForEdit(companyId),
     hasAnyCompanyMembership(),
     getProvinces(),
     getIndustryTypes(),
+    getCompanyLimitStatus(),
   ]);
 
   if (!company) {
@@ -66,7 +68,12 @@ export default async function EditCompanySection({ companyId }: EditCompanySecti
         >
           <CompanyLogoField currentLogoUrl={company.company_logo} companyId={company.id} />
         </SectionCard>
-        <CompanyFormFields provinces={provinces} industryTypes={industryTypes} company={company} />
+        <CompanyFormFields
+          provinces={provinces}
+          industryTypes={industryTypes}
+          company={company}
+          singleCompany={isSingleCompanyInstance(companyLimit)}
+        />
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Link
             href="/dashboard/configuration?tab=general&subtab=company"

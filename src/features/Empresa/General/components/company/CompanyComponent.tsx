@@ -5,7 +5,7 @@ import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
 import { SectionCard } from '@/shared/components/common/SectionCard';
 import { StateBlock } from '@/shared/components/common/StateBlock';
-import { companyLimitLabel, getCompanyLimitStatus } from '@/shared/lib/instance-settings';
+import { companyLimitLabel, getCompanyLimitStatus, isSingleCompanyInstance } from '@/shared/lib/instance-settings';
 import { Building2 } from 'lucide-react';
 import Link from 'next/link';
 import { getActiveCompany } from '../../actions/company.server';
@@ -42,10 +42,12 @@ export default async function CompanyComponent() {
             <div className="min-w-0">
               <h2 className="truncate text-lg font-semibold">{company.company_name}</h2>
               <p className="text-muted-foreground font-mono text-sm tabular-nums">CUIT {company.company_cuit || '—'}</p>
-              {/* Ticket 807: informa el límite; el alta de otra empresa solo se ofrece si hay lugar. */}
-              <p className="text-muted-foreground text-xs">
-                {companyLimitLabel(companyLimit.max)} · {companyLimit.count} en uso
-              </p>
+              {/* Ticket 807: informa el límite (solo en instancias multiempresa; con una sola empresa no hay plan que mostrar). */}
+              {!isSingleCompanyInstance(companyLimit) && (
+                <p className="text-muted-foreground text-xs">
+                  {companyLimitLabel(companyLimit.max)} · {companyLimit.count} en uso
+                </p>
+              )}
             </div>
           </div>
         }
