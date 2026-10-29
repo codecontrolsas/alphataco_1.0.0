@@ -45,6 +45,15 @@ describe.skipIf(!RUN_RLS)('controles de instancia (roles reales)', () => {
       where: { key: { in: KEYS } },
       select: { key: true, value: true, description: true },
     });
+    // Punto de partida fijo: pausa y banners apagados (la base puede venir de una prueba manual).
+    const off = {
+      instance_pause: { active: false, message: '', since: null },
+      banner_login: { enabled: false, message: '', severity: 'info' },
+      banner_dashboard: { enabled: false, message: '', severity: 'info' },
+    };
+    for (const [key, value] of Object.entries(off)) {
+      await owner.instance_settings.upsert({ where: { key }, create: { key, value }, update: { value } });
+    }
   }, 60_000);
 
   afterAll(async () => {
