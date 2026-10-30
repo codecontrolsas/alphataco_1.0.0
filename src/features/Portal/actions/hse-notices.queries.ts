@@ -22,6 +22,7 @@ export const getMyHseNotices = cache(async (employee: PortalEmployee) => {
   return rows.map((r) => ({
     id: r.id,
     kind: r.item_kind,
+    itemId: r.item_id,
     title: r.item_title,
     dueOn: r.due_on.toISOString().slice(0, 10),
     window: r.window,
