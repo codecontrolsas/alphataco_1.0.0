@@ -3,6 +3,7 @@ import { AuthShell } from '@/features/Auth/components/AuthShell';
 import { AuthSkeleton } from '@/features/Auth/components/AuthSkeleton';
 import { UpdateUserPasswordForm } from '@/features/Auth/components/UpdateUserPasswordForm';
 import { requireInstanceRoute } from '@/features/Modules/server/public-routes.server';
+import { PortalAuthAside } from '@/features/Portal/components/auth/PortalAuthAside';
 import { CircleAlert } from 'lucide-react';
 import { Suspense } from 'react';
 
@@ -25,6 +26,7 @@ async function PortalActivateContent({ searchParams }: PortalActivatePageProps) 
   return (
     <AuthShell
       kicker="Portal del empleado"
+      aside={<PortalAuthAside />}
       title={valid ? 'Elegí tu contraseña' : 'El enlace no es válido'}
       description={valid ? 'Con ella vas a entrar al portal desde el celular o la computadora.' : undefined}
     >

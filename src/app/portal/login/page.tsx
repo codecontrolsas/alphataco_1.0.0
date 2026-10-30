@@ -6,6 +6,7 @@ import { CredentialsLoginForm } from '@/features/Auth/components/CredentialsLogi
 import { requireInstanceRoute } from '@/features/Modules/server/public-routes.server';
 import { getPortalSession } from '@/features/Portal/actions/perimeter';
 import { portalLogin, portalLogout } from '@/features/Portal/actions/session.server';
+import { PortalAuthAside } from '@/features/Portal/components/auth/PortalAuthAside';
 import { CircleAlert, CircleCheck } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
@@ -36,8 +37,9 @@ async function PortalLoginContent({ searchParams }: PortalLoginPageProps) {
   return (
     <AuthShell
       kicker="Portal del empleado"
+      aside={<PortalAuthAside />}
       title="Ingresá a tu portal"
-      description="Consultá tus datos y, pronto, tus documentos para leer y aceptar."
+      description="Tus documentos para leer y aceptar, tus capacitaciones y tus constancias."
     >
       <div className="space-y-6">
         {activado === '1' && !deniedMessage && (

@@ -1,4 +1,4 @@
-import { ForcedPasswordChange } from '@/features/Portal/components/ForcedPasswordChange';
+import { ForcedPasswordChange } from '@/features/Portal/components/account/ForcedPasswordChange';
 import { getSessionNeedsPasswordChange, getSessionUserId } from '@/shared/lib/session';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';

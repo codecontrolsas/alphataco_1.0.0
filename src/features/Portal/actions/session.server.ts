@@ -6,6 +6,7 @@ import { requirePortalEmployee } from '@/features/Portal/actions/perimeter';
 import { Logger } from '@/lib/logger';
 import { auth } from '@/shared/lib/auth';
 import { prismaSystem } from '@/shared/lib/prisma-system';
+import { getSessionToken } from '@/shared/lib/session';
 import { writeCompanyClaim } from '@/shared/lib/session-claims';
 import { clearActiveCompanyCookie, setActiveCompanyCookie } from '@/shared/lib/tenant';
 import { passwordSchema as portalPasswordSchema } from '@/shared/schemas/schemas';
@@ -89,11 +90,18 @@ export async function changePortalPassword(
   const parsed = portalPasswordSchema.safeParse(newPassword);
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? 'Contraseña inválida' };
   try {
-    await requirePortalEmployee();
+    const employee = await requirePortalEmployee();
+    const currentToken = await getSessionToken();
+    // Sin `revokeOtherSessions` de Better Auth: esa opción también reemplaza la sesión ACTUAL por una nueva, y la
+    // respuesta de esta action se renderiza con la cookie vieja (ya borrada) → el panel mandaba al login y el router
+    // quedaba rebotando entre /portal y /portal/login. Se cierran las OTRAS sesiones y la actual sigue igual.
     await auth.api.changePassword({
-      body: { currentPassword, newPassword: parsed.data, revokeOtherSessions: true },
+      body: { currentPassword, newPassword: parsed.data, revokeOtherSessions: false },
       headers: await headers(),
     });
+    if (currentToken) {
+      await prismaSystem.session.deleteMany({ where: { userId: employee.userId, token: { not: currentToken } } });
+    }
     return { success: true };
   } catch (error) {
     if (error instanceof APIError) return { success: false, error: 'La contraseña actual no es correcta.' };

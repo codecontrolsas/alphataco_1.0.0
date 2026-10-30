@@ -10,6 +10,8 @@ interface AuthShellProps {
   kicker: string;
   title: string;
   description?: string;
+  /** Panel derecho (pantallas anchas). Opcional: por defecto, el panel de producto del sistema. */
+  aside?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -18,7 +20,7 @@ interface AuthShellProps {
  * indumentaria: formulario a la izquierda y panel de producto a la derecha (sólo en pantallas
  * anchas). Sin tarjeta alrededor del formulario: el espacio en blanco hace de contenedor.
  */
-export function AuthShell({ kicker, title, description, children }: AuthShellProps) {
+export function AuthShell({ kicker, title, description, aside, children }: AuthShellProps) {
   return (
     <div className="grid min-h-dvh lg:grid-cols-[5fr_6fr]">
       <div className="flex min-h-dvh flex-col px-6 py-6 sm:px-12 sm:py-8">
@@ -47,7 +49,7 @@ export function AuthShell({ kicker, title, description, children }: AuthShellPro
         <footer className="text-muted-foreground border-t pt-5 text-sm">© {BRAND_NAME}</footer>
       </div>
 
-      <AuthProductPanel />
+      {aside ?? <AuthProductPanel />}
     </div>
   );
 }
