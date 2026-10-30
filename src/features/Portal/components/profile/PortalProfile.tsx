@@ -31,7 +31,12 @@ export async function PortalProfile() {
             aria-labelledby="profile-identity"
             className="bg-card flex items-center gap-4 rounded-xl border p-4 sm:p-6"
           >
-            <PortalAvatar employee={employee} decorative={false} className="size-16 rounded-2xl text-lg" />
+            <PortalAvatar
+              employee={employee}
+              decorative={false}
+              className="size-16 rounded-2xl"
+              fallbackClassName="text-lg"
+            />
             <div className="min-w-0 space-y-0.5">
               <p className="text-muted-foreground font-mono text-sm tabular-nums">
                 Legajo <span className="text-foreground font-semibold">{employee.file ?? 'sin número'}</span>

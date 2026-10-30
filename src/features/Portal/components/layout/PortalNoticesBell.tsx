@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { dueLabel } from '@/features/Portal/lib/work-summary';
+import { dueLabel } from '@/features/Portal/lib/due-label';
 import { cn } from '@/lib/utils';
 import { Bell, ChevronRight, FileText, GraduationCap } from 'lucide-react';
 import Link from 'next/link';

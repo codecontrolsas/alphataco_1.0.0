@@ -27,7 +27,7 @@ export function NavBadge({
         className={cn(
           'bg-brand text-brand-foreground inline-flex items-center justify-center rounded-full font-semibold tabular-nums',
           variant === 'sidebar'
-            ? 'ml-auto h-5 min-w-5 px-1.5 text-xs group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:-top-1 group-data-[collapsible=icon]:-right-1 group-data-[collapsible=icon]:h-4 group-data-[collapsible=icon]:min-w-4 group-data-[collapsible=icon]:px-1 group-data-[collapsible=icon]:text-[0.625rem]'
+            ? 'ml-auto h-5 min-w-5 px-1.5 text-xs group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:top-1 group-data-[collapsible=icon]:right-1 group-data-[collapsible=icon]:size-2 group-data-[collapsible=icon]:min-w-0 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:text-[0px]'
             : 'ring-background absolute top-1.5 left-1/2 ml-2 h-4.5 ring-2 min-w-4.5 px-1 text-[0.6875rem]'
         )}
       >

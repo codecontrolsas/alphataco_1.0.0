@@ -9,8 +9,10 @@ import { cn } from '@/lib/utils';
 export function PortalAvatar({
   employee,
   className,
+  fallbackClassName,
   decorative = true,
 }: {
+  fallbackClassName?: string;
   employee: Pick<PortalEmployee, 'firstname' | 'lastname' | 'picture'>;
   className?: string;
   /** Al lado del nombre, la foto es decorativa (`alt=""`). */
@@ -23,7 +25,10 @@ export function PortalAvatar({
       {employee.picture && <AvatarImage src={employee.picture} alt={alt} />}
       <AvatarFallback
         aria-hidden={decorative || undefined}
-        className="bg-brand-subtle text-brand-subtle-foreground rounded-[inherit] text-xs font-semibold"
+        className={cn(
+          'bg-brand-subtle text-brand-subtle-foreground rounded-[inherit] text-xs font-semibold',
+          fallbackClassName
+        )}
       >
         {initials}
       </AvatarFallback>
