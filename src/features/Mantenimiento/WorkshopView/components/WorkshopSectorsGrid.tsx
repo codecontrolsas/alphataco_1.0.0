@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { SectorCapacityCard } from '@/features/Mantenimiento/shared/components/SectorCapacityCard';
@@ -9,7 +10,7 @@ import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useOptimistic, useState, useSyncExternalStore, useTransition, type ReactNode } from 'react';
 import type { WorkshopSectorWithCount } from '../actions.server';
-import { WORKSHOP_SECTOR_PARAM } from '../workshop-view-filters';
+import { WORKSHOP_ALL_SECTORS, WORKSHOP_SECTOR_PARAM } from '../workshop-view-filters';
 
 // El plano trae el kit isométrico: se carga recién cuando se muestra, no con la pantalla.
 const WorkshopPlan = dynamic(() => import('./iso/WorkshopPlan').then((module) => module.WorkshopPlan), {
@@ -29,8 +30,8 @@ const getDesktop = () => window.matchMedia(DESKTOP_QUERY).matches;
 
 interface WorkshopSectorsGridProps {
   sectors: WorkshopSectorWithCount[];
-  /** Sector con el que se renderizó el servidor (el de la URL, o el primero con trabajo abierto). */
-  selectedSectorId: string;
+  /** Sector con el que se renderizó el servidor (el de la URL, o el primero con trabajo abierto); `null` = todos. */
+  selectedSectorId: string | null;
   /** Tabla de OT del sector elegido, ya renderizada por el servidor. */
   children: ReactNode;
 }
@@ -47,14 +48,14 @@ export function WorkshopSectorsGrid({ sectors, selectedSectorId, children }: Wor
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
-  const [pressedSectorId, setPressedSectorId] = useOptimistic(selectedSectorId);
+  const [pressedSectorId, setPressedSectorId] = useOptimistic(selectedSectorId ?? WORKSHOP_ALL_SECTORS);
   // Plano por defecto desde `md`; en móvil, tarjetas. Lo que elija la persona manda sobre el default.
   const isDesktop = useSyncExternalStore(subscribeDesktop, getDesktop, () => true);
   const [chosenView, setChosenView] = useState<SectorsView | null>(null);
   const view: SectorsView = chosenView ?? (isDesktop ? 'plan' : 'cards');
 
   const selectSector = (sectorId: string) => {
-    if (sectorId === selectedSectorId) return;
+    if (sectorId === pressedSectorId) return;
     const params = new URLSearchParams(searchParams.toString());
     params.set(WORKSHOP_SECTOR_PARAM, sectorId);
     startTransition(() => {
@@ -65,7 +66,16 @@ export function WorkshopSectorsGrid({ sectors, selectedSectorId, children }: Wor
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant={pressedSectorId === WORKSHOP_ALL_SECTORS ? 'default' : 'outline'}
+          aria-pressed={pressedSectorId === WORKSHOP_ALL_SECTORS}
+          onClick={() => selectSector(WORKSHOP_ALL_SECTORS)}
+        >
+          Todos los sectores
+        </Button>
         <ToggleGroup
           type="single"
           variant="outline"
