@@ -51,3 +51,6 @@ export const OCCUPYING_WORK_ORDER_STATUSES: work_order_status[] = ['in_progress'
  * tocar una tarjeta. No lleva el prefijo de ninguna tabla: los parámetros de cada tabla van namespaced.
  */
 export const WORKSHOP_SECTOR_PARAM = 'sector';
+
+/** Valor de `?sector=` para ver las OT de todos los sectores a la vez. */
+export const WORKSHOP_ALL_SECTORS = 'all';

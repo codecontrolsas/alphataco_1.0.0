@@ -1,13 +1,13 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { StateBlock } from '@/shared/components/common/StateBlock';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { Building2 } from 'lucide-react';
 import { Suspense } from 'react';
 import { WorkshopSectorTasksList } from './WorkshopSectorTasksTable/WorkshopSectorTasksList';
 import { WorkshopSectorTasksSkeleton } from './WorkshopSectorTasksTable/fallback/WorkshopSectorTasksSkeleton';
 import { getWorkshopSectorsWithCounts, type WorkshopSectorWithCount } from './actions.server';
 import { WorkshopSectorsGrid } from './components/WorkshopSectorsGrid';
-import { WORKSHOP_SECTOR_PARAM } from './workshop-view-filters';
+import { WORKSHOP_ALL_SECTORS, WORKSHOP_SECTOR_PARAM } from './workshop-view-filters';
 
 interface WorkshopViewTabContentProps {
   searchParams: Record<string, string | string[] | undefined>;
@@ -70,16 +70,22 @@ export async function WorkshopViewTabContent({ searchParams }: WorkshopViewTabCo
   }
 
   const requestedParam = searchParams[WORKSHOP_SECTOR_PARAM];
-  const selected = resolveSelectedSector(sectors, typeof requestedParam === 'string' ? requestedParam : undefined);
+  const requestedId = typeof requestedParam === 'string' ? requestedParam : undefined;
+  const showAll = requestedId === WORKSHOP_ALL_SECTORS;
+  const selected = showAll ? null : resolveSelectedSector(sectors, requestedId);
 
   return (
-    <WorkshopSectorsGrid sectors={sectors} selectedSectorId={selected.id}>
-      <Suspense key={selected.id} fallback={<WorkshopSectorTasksSkeleton />}>
+    <WorkshopSectorsGrid sectors={sectors} selectedSectorId={selected?.id ?? null}>
+      <Suspense key={selected?.id ?? WORKSHOP_ALL_SECTORS} fallback={<WorkshopSectorTasksSkeleton />}>
         <WorkshopSectorTasksList
-          sectorId={selected.id}
+          sectorId={selected?.id ?? null}
           searchParams={searchParams as DataTableSearchParams}
-          title={`${selected.name} · órdenes de trabajo`}
-          description={describeSector(selected)}
+          title={selected ? `${selected.name} · órdenes de trabajo` : 'Todos los sectores · órdenes de trabajo'}
+          description={
+            selected
+              ? describeSector(selected)
+              : 'Las órdenes abiertas de todos los sectores del taller. Las que ya están en el taller van primero.'
+          }
         />
       </Suspense>
     </WorkshopSectorsGrid>

@@ -116,6 +116,8 @@ const SECTOR_WORK_ORDERS_SELECT = {
   },
   // Cantidad de tareas de la OT (la columna que pidió el ticket 678)
   _count: { select: { maintenance_order_items: true } },
+  // Sector de la OT: lo muestra la columna "Sector" de la vista "Todos".
+  workshop_sectors: { select: { id: true, name: true } },
   // OM de la que salieron las tareas — en la práctica siempre una sola. Además de cada tarea salen:
   // si es crítica y el estado de sus trabajos de reparación (de ahí el avance "2/4" de la columna Tareas).
   maintenance_order_items: {
@@ -173,6 +175,7 @@ function mapWorkOrderRow(row: Prisma.work_ordersGetPayload<{ select: typeof SECT
     completedTaskCount,
     hasCriticalTask,
     resourceSubtitle,
+    sectorName: row.workshop_sectors?.name ?? null,
     maintenanceOrders: Array.from(ordersById.values()),
   };
 }
@@ -185,7 +188,7 @@ function mapWorkOrderRow(row: Prisma.work_ordersGetPayload<{ select: typeof SECT
  * y spreadearlas al nivel raíz haría que una pise a la otra en silencio.
  */
 function buildWhereClause(
-  sectorId: string,
+  sectorId: string | null,
   rawState: ReturnType<typeof parseSearchParams>,
   hiddenTypeIds: readonly string[],
   companyId: string
@@ -301,14 +304,18 @@ function buildWhereClause(
     else if (wantsFalse) and.push({ maintenance_order_items: { none: { [flag]: true } } });
   }
 
-  return withCompany({ sector_id: sectorId, AND: and }, companyId);
+  // `sectorId` null = vista "Todos": las OT de todos los sectores.
+  return withCompany({ ...(sectorId ? { sector_id: sectorId } : {}), AND: and }, companyId);
 }
 
 // ============================================================================
 // PAGINATED QUERY
 // ============================================================================
 
-export async function getWorkshopSectorWorkOrdersPaginated(sectorId: string, searchParams: DataTableSearchParams) {
+export async function getWorkshopSectorWorkOrdersPaginated(
+  sectorId: string | null,
+  searchParams: DataTableSearchParams
+) {
   if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) {
     throw new Error('No tenés permiso para ver la Vista Taller');
   }
@@ -365,7 +372,7 @@ export type WorkshopSectorWorkOrderListItem = Awaited<
 // ============================================================================
 
 export async function getAllWorkshopSectorWorkOrdersForExport(
-  sectorId: string,
+  sectorId: string | null,
   searchParams: DataTableSearchParams
 ): Promise<ExportResult<WorkshopSectorWorkOrderListItem[]>> {
   if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) {
@@ -538,7 +545,7 @@ export async function getWorkOrderTasks(workOrderId: string) {
  */
 export async function getWorkshopSectorWorkOrdersSingleFacet(
   columnId: string,
-  sectorId: string,
+  sectorId: string | null,
   searchParams?: DataTableSearchParams
 ): Promise<{
   counts: Map<string, number>;

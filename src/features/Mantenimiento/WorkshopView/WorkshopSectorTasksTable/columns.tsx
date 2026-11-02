@@ -56,7 +56,19 @@ function isPlannedEndOverdue(plannedEnd: Date): boolean {
 // COLUMNS
 // ============================================================================
 
-export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWorkOrderListItem>[] {
+/** `showSector`: en la vista "Todos" cada fila necesita decir a qué sector pertenece. */
+export function getWorkshopSectorWorkOrdersColumns(showSector = false): ColumnDef<WorkshopSectorWorkOrderListItem>[] {
+  const sectorColumn: ColumnDef<WorkshopSectorWorkOrderListItem>[] = showSector
+    ? [
+        {
+          id: 'sector',
+          accessorFn: (row) => row.sectorName ?? '',
+          ...titled('Sector'),
+          enableSorting: false,
+          cell: ({ row }) => row.original.sectorName ?? <span className="text-muted-foreground">-</span>,
+        },
+      ]
+    : [];
   return [
     // ── N° OT: abre las tareas de la orden ──────────────────────────────────
     {
@@ -81,6 +93,8 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
         />
       ),
     },
+
+    ...sectorColumn,
 
     // ── Equipo (vehículo o equipamiento de la OT) ───────────────────────────
     {

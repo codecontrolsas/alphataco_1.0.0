@@ -10,8 +10,8 @@ import { getWorkshopSectorWorkOrdersPaginated } from './actions.server';
 // ============================================================================
 
 interface WorkshopSectorTasksListProps {
-  /** ID del sector de taller — filtro base obligatorio. */
-  sectorId: string;
+  /** ID del sector de taller — filtro base. `null` = todos los sectores. */
+  sectorId: string | null;
   /** Todos los searchParams de la URL. Se aplica stripPrefix con el namespace de la tabla. */
   searchParams: DataTableSearchParams;
   /** Título de la tarjeta (el sector elegido). */
@@ -40,7 +40,7 @@ export async function WorkshopSectorTasksList({
   title,
   description,
 }: WorkshopSectorTasksListProps) {
-  const paramNamespace = `workshop-sector-work-orders-${sectorId}`;
+  const paramNamespace = `workshop-sector-work-orders-${sectorId ?? 'all'}`;
   const tableId = `${paramNamespace}-v2`;
 
   // Strip del namespace antes de parsear los searchParams de esta tabla

@@ -43,7 +43,8 @@ const FILTER_ONLY_COLUMNS = ['mo_status', 'repair_type', 'is_rejected', 'is_diag
 // ============================================================================
 
 interface Props {
-  sectorId: string;
+  /** `null` = vista "Todos" (OT de todos los sectores). */
+  sectorId: string | null;
   data: WorkshopSectorWorkOrderListItem[];
   totalRows: number;
   searchParams: DataTableSearchParams;
@@ -98,7 +99,7 @@ export function _WorkshopSectorTasksDataTable({
   );
 
   // ── Columns ───────────────────────────────────────────────────────────────
-  const columns = useMemo(() => getWorkshopSectorWorkOrdersColumns(), []);
+  const columns = useMemo(() => getWorkshopSectorWorkOrdersColumns(sectorId === null), [sectorId]);
 
   // ── fetchFacet factories: lazy-load por columna ────────────────────────────
 
@@ -280,7 +281,7 @@ export function _WorkshopSectorTasksDataTable({
   const exportConfig = useMemo(
     () => ({
       options: {
-        filename: `ot-sector-${sectorId.slice(0, 8)}`,
+        filename: sectorId ? `ot-sector-${sectorId.slice(0, 8)}` : 'ot-todos-los-sectores',
         sheetName: 'Órdenes de trabajo',
       },
       fetchAllData: async () =>
@@ -298,19 +299,23 @@ export function _WorkshopSectorTasksDataTable({
       totalRows={totalRows}
       searchParams={searchParams}
       queryFn={tableQueryFn}
-      queryKey={['workshop-sector-work-orders', sectorId]}
+      queryKey={['workshop-sector-work-orders', sectorId ?? 'all']}
       onStateChange={handleStateChange}
       tableId={tableId}
       paramNamespace={paramNamespace}
       mobileCards
       searchPlaceholder="Buscar por N° OT, N° OM o descripción de la tarea..."
-      emptyMessage="No hay órdenes de trabajo abiertas en este sector. Si esperabas ver alguna, revisá los filtros activos."
+      emptyMessage={
+        sectorId
+          ? 'No hay órdenes de trabajo abiertas en este sector. Si esperabas ver alguna, revisá los filtros activos.'
+          : 'No hay órdenes de trabajo abiertas en el taller. Si esperabas ver alguna, revisá los filtros activos.'
+      }
       showFilterToggle={true}
       facetedFilters={facetedFilters}
       exportConfig={exportConfig}
       initialColumnVisibility={mergedColumnVisibility}
       initialFilterVisibility={mergedFilterVisibility}
-      data-testid={`workshop-sector-work-orders-table-${sectorId}`}
+      data-testid={`workshop-sector-work-orders-table-${sectorId ?? 'all'}`}
     />
   );
 }

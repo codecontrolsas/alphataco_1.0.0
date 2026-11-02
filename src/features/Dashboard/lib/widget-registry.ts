@@ -524,7 +524,7 @@ export type BoardTemplateKey = (typeof BOARD_TEMPLATES)[number]['key'];
  */
 export const ACTIVE_BOARD_TEMPLATE_KEYS: readonly BoardTemplateKey[] = [
   'resumen',
-  // 'dia',
+  'dia',
   'vencimientos',
   // 'operacion',
   // 'flota',
@@ -543,18 +543,18 @@ export function isActiveBoardTemplate(key: string | null | undefined): key is Bo
 }
 
 /**
- * #802: secciones del catálogo de widgets que se pueden ver y agregar. Las de los tableros ocultos quedan comentadas
- * (sus widgets siguen en `WIDGETS`, pero no se muestran ni se pueden agregar, aunque estén en un tablero guardado).
+ * #784: el catálogo de widgets que se pueden agregar vuelve a incluir todas las secciones (cada widget sigue
+ * filtrado por los permisos del usuario). Los tableros predefinidos activos son los de `ACTIVE_BOARD_TEMPLATE_KEYS`.
  */
 export const ACTIVE_WIDGET_SECTIONS: readonly WidgetSection[] = [
   'resumen',
-  // 'dia',
+  'dia',
   'vencimientos',
-  // 'operacion',
-  // 'flota',
-  // 'personal',
-  // 'desvios',
-  // 'indicadores',
+  'operacion',
+  'flota',
+  'personal',
+  'desvios',
+  'indicadores',
 ];
 
 /**
