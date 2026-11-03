@@ -37,7 +37,8 @@ export const mantenimientoSection = defineSection({
     },
     {
       slug: 'vista-taller',
-      access: [tab('mantenimiento', 'workshop_view')],
+      // Sección «Sectores» (ex Vista taller): tablero + administración de sectores, que vino de Configuración (778).
+      access: [tab('mantenimiento', 'workshop_view'), tab('configuracion', 'sectores_taller')],
       screens: [{ path: '/dashboard/maintenance', tab: 'workshop_view' }],
       related: ['taller', 'panel-del-operario', 'catalogos-de-mantenimiento'],
     },
@@ -65,7 +66,13 @@ export const mantenimientoSection = defineSection({
       ],
       // Las pestañas internas (`?gomeria_tab=...`) no se pueden declarar: abren esta misma guía.
       screens: [{ path: '/dashboard/maintenance', tab: 'gomeria' }],
-      related: ['ficha-del-vehiculo', 'qr-del-equipo', 'catalogos-de-equipos', 'materiales', 'configuracion-de-almacenes'],
+      related: [
+        'ficha-del-vehiculo',
+        'qr-del-equipo',
+        'catalogos-de-equipos',
+        'materiales',
+        'configuracion-de-almacenes',
+      ],
     },
   ],
 });

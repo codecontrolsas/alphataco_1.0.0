@@ -88,23 +88,23 @@ Este formulario sigue la misma regla que el resto del circuito:
 
 | Si en el paso Supervisor elegiste… | Qué se crea | Dónde aparece |
 |---|---|---|
-| **Sí, soy el supervisor** | Un **pedido** ya aprobado. | **Taller → Por Programar**. El aviso dice **Pedido de mantenimiento creado exitosamente** (o **Pedido creado con N reparaciones**). |
-| **No, seleccionaré uno** | Una **solicitud** pendiente. | **Operaciones → Validar Solicitud**, para el supervisor elegido. El aviso dice **Solicitud enviada. El supervisor debe aprobarla antes de que pase a Pedidos.** (o **Solicitud creada con N reparaciones**). |
+| **Sí, soy el supervisor** | Un **pedido** ya aprobado. | **Gestión → Taller → Programación pendiente**. El aviso dice **Pedido de mantenimiento creado exitosamente** (o **Pedido creado con N reparaciones**). |
+| **No, seleccionaré uno** | Una **solicitud** pendiente. | **Gestión → Supervisión → Por validar**, para el supervisor elegido. El aviso dice **Solicitud enviada. El supervisor debe aprobarla antes de que pase a Pedidos.** (o **Solicitud creada con N reparaciones**). |
 
 En la lista de supervisores aparecen los usuarios de la empresa del equipo con el rol de supervisor de operaciones. Los que figuran con **Sin empleado vinculado** o **Sin diagrama activo** (no trabajan hoy según su diagrama) se ven atenuados y no se pueden elegir.
 
 <Flow title="Qué pasa después">
   <FlowStep title="Nuevo Pedido" module="Mantenimiento">Cargás el pedido.</FlowStep>
-  <FlowStep title="Validar Solicitud" module="Operaciones" to="validar-solicitudes">Solo si no sos el supervisor.</FlowStep>
-  <FlowStep title="Por Programar" module="Taller" to="taller">El taller le pone fecha.</FlowStep>
+  <FlowStep title="Por validar" module="Supervisión" to="validar-solicitudes">Solo si no sos el supervisor.</FlowStep>
+  <FlowStep title="Programación pendiente" module="Taller" to="taller">El taller le pone fecha.</FlowStep>
   <FlowStep title="En Taller" module="Taller" to="taller" tone="warning">El equipo queda No operativo.</FlowStep>
   <FlowStep title="Completada" tone="success">Vuelve a Operativo.</FlowStep>
 </Flow>
 
 ## Cómo se conecta con el resto del sistema
 
-- **Taller**: el pedido aprobado aparece en **Por Programar** con su descripción. En una carga manual hecha por el supervisor, el taller ve el texto de cada reparación tal como lo escribiste.
-- **Operaciones**: la solicitud pendiente aparece en **Validar Solicitud** del supervisor elegido; ahí se aprueba o rechaza ítem por ítem (ver <GuideLink to="validar-solicitudes">Validar solicitudes</GuideLink>).
+- **Taller**: el pedido aprobado aparece en **Programación pendiente** con su descripción. En una carga manual hecha por el supervisor, el taller ve el texto de cada reparación tal como lo escribiste.
+- **Supervisión**: la solicitud pendiente aparece en **Gestión → Supervisión → Por validar** del supervisor elegido; ahí se aprueba o rechaza ítem por ítem (ver <GuideLink to="validar-solicitudes">Validar solicitudes</GuideLink>).
 - **Equipo**: cargar el pedido **no** cambia la condición. El equipo pasa a **No operativo** recién cuando el taller registra su ingreso; desde ese momento cuenta como no disponible en el <GuideLink to="dashboard-principal">Dashboard</GuideLink> y genera un desvío si se lo carga en un <GuideLink to="partes-diarios">parte diario</GuideLink>.
 - **Historial**: todo queda en la pestaña **Historial de Mantenimiento** de la <GuideLink to="ficha-del-vehiculo">ficha del vehículo</GuideLink>.
 - **Desde el campo**: el mismo formulario lo usa el chofer al escanear el QR del equipo (ver <GuideLink to="qr-del-equipo">QR del equipo</GuideLink>); en ese caso el equipo ya viene elegido, el paso **Recurso** no aparece y el chofer siempre elige un supervisor, así que lo que carga queda como solicitud a validar.

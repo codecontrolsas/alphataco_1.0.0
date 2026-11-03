@@ -65,7 +65,7 @@ El asistente pregunta **¿Eres el supervisor de este pedido?**. Esa respuesta ca
 
 ## Paso 3: el supervisor valida la solicitud
 
-En <GuideLink to="validar-solicitudes">Mantenimiento → Operaciones → Validar Solicitud</GuideLink> el supervisor ve las solicitudes nuevas. En **Validar Solicitud de Mantenimiento** decide **ítem por ítem**: cada uno queda **Aprobado** o **Rechazado**, y no se puede guardar mientras quede alguno sin decidir ("Todos los items deben ser aprobados o rechazados"). Los rechazados llevan motivo. Si se aprueba algo, hay que escribir una descripción de lo que se aprueba y qué hay que hacer (mínimo 15 caracteres): **el taller usa ese texto para planificar el trabajo**.
+En <GuideLink to="validar-solicitudes">Mantenimiento → Gestión → Supervisión → Por validar</GuideLink> el supervisor ve las solicitudes nuevas. En **Validar Solicitud de Mantenimiento** decide **ítem por ítem**: cada uno queda **Aprobado** o **Rechazado**, y no se puede guardar mientras quede alguno sin decidir ("Todos los items deben ser aprobados o rechazados"). Los rechazados llevan motivo. Si se aprueba algo, hay que escribir una descripción de lo que se aprueba y qué hay que hacer (mínimo 15 caracteres): **el taller usa ese texto para planificar el trabajo**.
 
 <Figure
   name="validacion-solicitud"
@@ -86,26 +86,26 @@ En <GuideLink to="validar-solicitudes">Mantenimiento → Operaciones → Validar
 
 ## Paso 4: el pedido recorre el taller
 
-El taller trabaja en <GuideLink to="taller">Mantenimiento → Taller</GuideLink>, organizado en cuatro pasos:
+El taller trabaja en <GuideLink to="taller">Mantenimiento → Gestión → Taller</GuideLink>, organizado en cuatro pestañas:
 
-1. **Por Programar**: pedidos aprobados sin fecha. Con **Planificar Pedido de Mantenimiento** se fija la **Fecha de recepción en taller**. El taller también puede **Rechazar Pedido** con motivo; queda en el historial del equipo.
-2. **Por Ingresar**: pedidos con fecha. Cuando el equipo llega, **Aprobar Entrada a Taller** pide el **Kilometraje actual del equipo** (no puede ser menor al registrado) y, si corresponde, el horómetro. Al confirmar, **el equipo pasa a No operativo** ("Entrada a taller aprobada. El equipo ahora está "No Operativo"").
-3. **En Taller**: los equipos activos. Se reparten los trabajos por **sector** y se generan las **órdenes de trabajo** (OT), que los operarios ejecutan desde su <GuideLink to="panel-del-operario">panel</GuideLink>. Los trabajos de un taller externo se registran como OT externas. La <GuideLink to="vista-taller">Vista Taller</GuideLink> muestra lo mismo agrupado por sector. Si hacen falta **repuestos**, el operario (desde su OT) o el taller (desde el detalle de la orden) hacen un **pedido de materiales** al almacén, imputado a la orden (ver <GuideLink to="pedidos-de-materiales">Pedidos de materiales</GuideLink>).
+1. **Programación pendiente**: pedidos aprobados sin fecha. Con **Planificar Pedido de Mantenimiento** se fija la **Fecha de recepción en taller**. El taller también puede **Rechazar Pedido** con motivo; queda en el historial del equipo.
+2. **Para ingreso**: pedidos con fecha. Cuando el equipo llega, **Aprobar Entrada a Taller** pide el **Kilometraje actual del equipo** (no puede ser menor al registrado) y, si corresponde, el horómetro. Al confirmar, **el equipo pasa a No operativo** ("Entrada a taller aprobada. El equipo ahora está "No Operativo"").
+3. **En mantenimiento**: los equipos activos. Se reparten los trabajos por **sector** y se generan las **órdenes de trabajo** (OT), que los operarios ejecutan desde su <GuideLink to="panel-del-operario">panel</GuideLink>. Los trabajos de un taller externo se registran como OT externas. La sección <GuideLink to="vista-taller">Sectores</GuideLink> muestra lo mismo agrupado por sector. Si hacen falta **repuestos**, el operario (desde su OT) o el taller (desde el detalle de la orden) hacen un **pedido de materiales** al almacén, imputado a la orden (ver <GuideLink to="pedidos-de-materiales">Pedidos de materiales</GuideLink>).
 4. **Aprobaciones**: lo que necesita la autorización del jefe de taller (tareas a aprobar, reasignaciones de sector y pedidos con todas sus OT terminadas).
 
 <Figure
   name="taller-circuito"
-  caption="Las cuatro pestañas del taller como cuatro estaciones en fila: los pedidos esperan en la bandeja de Por programar, pasan la barrera en Por ingresar, el equipo sube al elevador en En taller (ahí queda No operativo) y el cierre se firma en Aprobaciones."
+  caption="Las cuatro pestañas del taller como cuatro estaciones en fila: los pedidos esperan en la bandeja de Programación pendiente, pasan la barrera en Para ingreso, el equipo sube al elevador en En mantenimiento (ahí queda No operativo) y el cierre se firma en Aprobaciones."
 />
 
-Del lado de Operaciones, el paso **Seguimiento** muestra los equipos pendientes de ingreso y los que están en el taller.
+Del lado de Supervisión, la pestaña **Seguimiento** muestra los equipos pendientes de ingreso y los que están en el taller.
 
 <States title="Estados de un pedido de mantenimiento">
   <State name="Pendiente de programación" tone="warning" next="Fecha confirmada, Rechazado">
-    Aprobado, sin fecha. Se ve en **Por Programar**.
+    Aprobado, sin fecha. Se ve en **Programación pendiente**.
   </State>
   <State name="Fecha confirmada" tone="info" next="En Taller, Pendiente de programación">
-    Tiene fecha de recepción. Se ve en **Por Ingresar**.
+    Tiene fecha de recepción. Se ve en **Para ingreso**.
   </State>
   <State name="En Taller" tone="warning" next="Pend. Validación Taller, Rechazada por Taller">
     El equipo está adentro y no operativo.
@@ -137,7 +137,7 @@ Cuando todas las OT de un pedido están **Completada** o **Completada Parcial**,
 | -------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | Se guarda un checklist con ítems en M        | Se crean los desvíos del equipo; si no se registran, el equipo aparece en **Equipos con Desvíos**. |
 | Se guarda un checklist con kilometraje mayor | Se actualiza el kilometraje del equipo.                                                            |
-| Se aprueba una solicitud                     | Se crea el pedido en **Por Programar**.                                                            |
+| Se aprueba una solicitud                     | Se crea el pedido en **Programación pendiente**.                                                            |
 | Se aprueba la entrada a taller               | El equipo pasa a **No operativo** y se actualiza su kilometraje/horómetro.                         |
 | Se cierra el último pedido del equipo        | El equipo vuelve a **Operativo**.                                                                  |
 
@@ -153,13 +153,13 @@ Las cubiertas tienen su propio circuito en <GuideLink to="gomeria">Mantenimiento
 
 ## Permisos
 
-Cada paso es una pestaña con su permiso: **Formularios** para completar checklists, **Equipos con Desvíos** y **Nuevo Pedido** para pedir mantenimiento, **Operaciones** (Mantenimiento) para validar solicitudes, **Taller** y **Vista Taller** para programar, ingresar y cerrar. El detalle de cada pantalla está en su guía.
+Cada paso es una pestaña con su permiso: **Formularios** para completar checklists, **Equipos con Desvíos** y **Nuevo Pedido** para pedir mantenimiento, **Supervisión** y **Taller** (Mantenimiento → Gestión) para validar solicitudes, programar, ingresar y cerrar, y **Sectores** para seguir el trabajo de cada sector. El detalle de cada pantalla está en su guía.
 
 ## Problemas frecuentes
 
 **"El chofer hizo el checklist y el taller no ve nada"**: los desvíos no se registraron en una solicitud. Buscá el equipo en **Equipos con Desvíos** y usá **Resolver Desvíos**.
 
-**"La solicitud no llega al taller"**: está esperando al supervisor en **Validar Solicitud**, o el supervisor rechazó todos los ítems.
+**"La solicitud no llega al taller"**: está esperando al supervisor en **Por validar**, o el supervisor rechazó todos los ítems.
 
 **"No me deja cerrar la orden"**: tiene pedidos de materiales abiertos. El aviso nombra cuáles; resolvelos en **Almacenes → Pedidos**.
 

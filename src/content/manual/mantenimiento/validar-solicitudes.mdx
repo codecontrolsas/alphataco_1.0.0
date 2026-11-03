@@ -1,36 +1,36 @@
 ---
 title: Validar solicitudes y seguimiento
-summary: La pestaña Operaciones de Mantenimiento: aprobar o rechazar ítem por ítem lo que pide el chofer y seguir el equipo hasta que sale del taller.
-keywords: operaciones, validar, solicitud, aprobar, rechazar, desvío, supervisor, seguimiento, taller, ver todas, reasignar
-updated: 2026-10-07
+summary: La vista Supervisión de Mantenimiento → Gestión: aprobar o rechazar ítem por ítem lo que pide el chofer y seguir el equipo hasta que sale del taller.
+keywords: gestión, supervisión, operaciones, validar, por validar, solicitud, aprobar, rechazar, desvío, supervisor, seguimiento, taller, ver todas, reasignar
+updated: 2026-11-03
 ---
 
-La pestaña **Operaciones** del módulo **Mantenimiento** es la puerta de entrada al taller. Cada vez que un chofer marca un desvío en un checklist o alguien carga un pedido, se genera una **solicitud de mantenimiento** que tiene que validar el supervisor de operaciones: decide qué se arregla y qué no, y le explica al taller qué hay que hacer. Después, desde la misma pestaña, sigue el equipo mientras está en el taller.
+La vista **Supervisión** de **Mantenimiento → Gestión** es la puerta de entrada al taller. Cada vez que un chofer marca un desvío en un checklist o alguien carga un pedido, se genera una **solicitud de mantenimiento** que tiene que validar el supervisor de operaciones: decide qué se arregla y qué no, y le explica al taller qué hay que hacer. Después, desde la misma vista, sigue el equipo mientras está en el taller.
 
 <OpenScreen />
 
-Es la pestaña que se abre por defecto al entrar a **Mantenimiento** desde el menú lateral.
+**Gestión** es la sección que se abre por defecto al entrar a **Mantenimiento** desde el menú lateral. Arriba tiene un selector de vista con **Supervisión** y **Taller**: cada usuario ve solo las vistas sobre las que tiene permiso, y si tiene una sola, se abre directamente esa.
 
 <Flow title="Dónde está esta pantalla dentro del circuito">
   <FlowStep title="Desvío o pedido" module="Checklist / Nuevo Pedido" to="del-checklist-al-taller">El chofer marca un desvío o alguien carga un pedido.</FlowStep>
-  <FlowStep title="Validar Solicitud" module="Operaciones" tone="info">Aprobás o rechazás cada ítem y describís el trabajo.</FlowStep>
-  <FlowStep title="Por Programar" module="Taller" to="taller">El taller le pone fecha.</FlowStep>
-  <FlowStep title="En Taller" module="Taller" to="taller" tone="warning">El equipo queda No operativo.</FlowStep>
+  <FlowStep title="Por validar" module="Supervisión" tone="info">Aprobás o rechazás cada ítem y describís el trabajo.</FlowStep>
+  <FlowStep title="Programación pendiente" module="Taller" to="taller">El taller le pone fecha.</FlowStep>
+  <FlowStep title="En mantenimiento" module="Taller" to="taller" tone="warning">El equipo queda No operativo.</FlowStep>
   <FlowStep title="Completada" module="Taller" tone="success">El jefe de taller cierra y el equipo vuelve a Operativo.</FlowStep>
 </Flow>
 
 ## Qué ves en la pantalla
 
-Arriba hay dos pasos con forma de flecha. Cada uno muestra cuántos registros tiene pendientes; hacé clic en uno para ver su tabla.
+Debajo del selector de vista hay dos pestañas. Cada una muestra cuántos registros tiene pendientes; hacé clic en una (o movete con las flechas del teclado) para ver su tabla.
 
-| Paso | Qué muestra |
+| Pestaña | Qué muestra |
 |---|---|
-| **1 Validar Solicitud** | Solicitudes nuevas pendientes de tu aprobación. |
-| **2 Seguimiento** | Equipos pendientes de ingreso y actualmente en taller (solo lectura). |
+| **Por validar** | Solicitudes nuevas pendientes de tu aprobación. |
+| **Seguimiento** | Equipos pendientes de ingreso y actualmente en taller (solo lectura). |
 
-El paso elegido queda en la dirección de la página, así que podés guardarla como favorito o compartirla.
+La pestaña elegida queda en la dirección de la página, así que podés guardarla como favorito o compartirla.
 
-## Validar Solicitud
+## Por validar
 
 La tabla lista **solo las solicitudes pendientes**. Las que ya se aprobaron pasan al taller y las rechazadas salen de la lista: quedan como registro en la ficha del equipo, pestaña **Historial de Mantenimiento** (ver <GuideLink to="ficha-del-vehiculo">Ficha del vehículo</GuideLink>).
 
@@ -64,7 +64,7 @@ Los botones de cada fila son:
 
 No todos ven las mismas solicitudes:
 
-- **Por supervisor**: si tu rol no tiene el permiso **Ver Todas** en **Solicitudes de Mantenimiento**, solo ves las solicitudes donde **vos** sos el supervisor de turno. Con ese permiso ves las de toda la empresa. Lo mismo vale para el paso **Seguimiento** y para los pasos **Por Programar** y **Por Ingresar** del taller.
+- **Por supervisor**: si tu rol no tiene el permiso **Ver Todas** en **Solicitudes de Mantenimiento**, solo ves las solicitudes donde **vos** sos el supervisor de turno. Con ese permiso ves las de toda la empresa. Lo mismo vale para la pestaña **Seguimiento** y para las pestañas **Programación pendiente** y **Para ingreso** del taller.
 - **Por tipo de equipamiento**: en el editor del rol, dentro del módulo **Mantenimiento**, el bloque **Tipos de equipamiento** permite destildar los tipos (contenedores, piletas, trailers…) cuyas solicitudes ese rol no debe ver. Los vehículos no se ven afectados. Si un usuario tiene varios roles, un tipo queda oculto solo si **todos** sus roles lo ocultan. Ver <GuideLink to="usuarios-y-roles">Usuarios y roles</GuideLink>.
 
 ## Cómo validar una solicitud
@@ -91,7 +91,7 @@ El resumen muestra cuántos ítems aprobaste, rechazaste y cuántos quedan pendi
 
 Qué pasa al procesar:
 
-- **Si aprobaste al menos un ítem que va al taller**, se crea el **pedido de mantenimiento** y aparece en **Taller → Por Programar** con tu descripción. Si la solicitud informaba kilometraje, también se actualiza el kilometraje del vehículo.
+- **Si aprobaste al menos un ítem que va al taller**, se crea el **pedido de mantenimiento** y aparece en **Gestión → Taller → Programación pendiente** con tu descripción. Si la solicitud informaba kilometraje, también se actualiza el kilometraje del vehículo.
 - **Si rechazaste todo**, la solicitud queda **Rechazada**, sale de la lista y queda en el historial del equipo con los motivos.
 - Los ítems rechazados no llegan al taller; los aprobados sí, con tus comentarios.
 
@@ -136,7 +136,7 @@ Si la solicitud le llegó al supervisor equivocado (o el de turno no está), toc
 
 ## Seguimiento
 
-El paso **2 Seguimiento** es de consulta: no tiene acciones que cambien nada. Sirve para que operaciones vea en qué anda cada pedido aprobado y pueda reclamarle al taller si se demora.
+La pestaña **Seguimiento** es de consulta: no tiene acciones que cambien nada. Sirve para que operaciones vea en qué anda cada pedido aprobado y pueda reclamarle al taller si se demora.
 
 | Columna | Qué muestra |
 |---|---|
@@ -170,7 +170,7 @@ Por defecto se ven los pedidos en curso. Los **Completada** no aparecen al entra
 ## Cómo se conecta con el resto del sistema
 
 - **De dónde vienen las solicitudes**: de los checklists que completan los choferes desde el QR o el panel (<GuideLink to="qr-del-equipo">QR del equipo</GuideLink>, <GuideLink to="panel-del-operario">Panel del operario</GuideLink>), de la pestaña <GuideLink to="nuevo-pedido-de-mantenimiento">Nuevo Pedido</GuideLink> y de <GuideLink to="equipos-con-desvios">Equipos con Desvíos</GuideLink>. Cuando quien carga **es** el supervisor, el pedido se aprueba solo y no pasa por esta pantalla.
-- **Hacia dónde van**: lo que aprobás aparece en **Taller → Por Programar** (<GuideLink to="taller">Taller</GuideLink>). Lo que rechazás queda en la pestaña **Historial de Mantenimiento** de la <GuideLink to="ficha-del-vehiculo">ficha del vehículo</GuideLink>.
+- **Hacia dónde van**: lo que aprobás aparece en **Gestión → Taller → Programación pendiente** (<GuideLink to="taller">Taller</GuideLink>). Lo que rechazás queda en la pestaña **Historial de Mantenimiento** de la <GuideLink to="ficha-del-vehiculo">ficha del vehículo</GuideLink>.
 - **Condición del equipo**: aprobar no cambia la condición. El equipo pasa a **No operativo** recién cuando el taller registra el ingreso, y vuelve a **Operativo** cuando se cierra la orden.
 - **Partes diarios**: mientras el equipo está **No operativo**, si se lo carga en un parte aparece como desvío de equipo por condición (ver <GuideLink to="partes-diarios">Partes diarios</GuideLink> y <GuideLink to="diagramas-afectaciones-y-desvios">Diagramas, afectaciones y desvíos</GuideLink>).
 - **Dashboard**: los equipos No operativos dejan de contar como flota disponible en el <GuideLink to="dashboard-principal">Dashboard principal</GuideLink>, y los pedidos (por origen y por tipo de mantenimiento) junto con la condición de cada equipo alimentan la sección de mantenimiento de las <GuideLink to="dashboard-estadisticas">Estadísticas</GuideLink>.
@@ -181,9 +181,9 @@ El recorrido completo, de punta a punta, está en <GuideLink to="del-checklist-a
 
 | Para… | Hace falta |
 |---|---|
-| Ver la pestaña Operaciones (los dos pasos) | **Ver** en **Operaciones** del módulo Mantenimiento. |
+| Ver la vista Supervisión en Gestión | **Ver** en **Supervisión** del módulo Mantenimiento; cada pestaña exige además **Ver** en la suya (**Solicitudes de mantenimiento** para Por validar, **Seguimiento en taller** para Seguimiento). |
 | Ver las solicitudes de todos los supervisores | **Ver Todas** en **Solicitudes de Mantenimiento**. Sin él, solo ves las tuyas. |
-| Aprobar, rechazar y reasignar | Cualquier usuario que ve la solicitud en el paso **Validar Solicitud** tiene los botones. |
+| Aprobar, rechazar y reasignar | Cualquier usuario que ve la solicitud en la pestaña **Por validar** tiene los botones. |
 | Dejar de ver ciertos tipos de equipamiento | Configuración del rol (bloque **Tipos de equipamiento**). |
 
 ## Problemas frecuentes
@@ -197,5 +197,5 @@ Falta decidir algún ítem (el resumen dice cuántos quedan **pendientes**), fal
 </Callout>
 
 <Callout type="danger" title="Validar es definitivo">
-Una solicitud aprobada o rechazada no se puede volver a abrir. Si aprobaste algo por error, el taller puede rechazar el pedido desde **Por Programar** indicando el motivo.
+Una solicitud aprobada o rechazada no se puede volver a abrir. Si aprobaste algo por error, el taller puede rechazar el pedido desde **Programación pendiente** indicando el motivo.
 </Callout>

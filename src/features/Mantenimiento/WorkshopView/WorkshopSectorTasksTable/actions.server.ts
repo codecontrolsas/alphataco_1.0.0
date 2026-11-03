@@ -317,7 +317,7 @@ export async function getWorkshopSectorWorkOrdersPaginated(
   searchParams: DataTableSearchParams
 ) {
   if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) {
-    throw new Error('No tenés permiso para ver la Vista Taller');
+    throw new Error('No tenés permiso para ver los sectores del taller');
   }
 
   try {
@@ -376,7 +376,7 @@ export async function getAllWorkshopSectorWorkOrdersForExport(
   searchParams: DataTableSearchParams
 ): Promise<ExportResult<WorkshopSectorWorkOrderListItem[]>> {
   if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) {
-    return { ok: false, message: 'No tenés permiso para exportar la Vista Taller' };
+    return { ok: false, message: 'No tenés permiso para exportar los sectores del taller' };
   }
 
   try {

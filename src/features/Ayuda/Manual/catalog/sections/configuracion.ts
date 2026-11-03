@@ -114,14 +114,12 @@ export const configuracionSection = defineSection({
       access: [tab('configuracion', 'mantenimiento')],
       covers: [
         tab('configuracion', 'talleres'),
-        tab('configuracion', 'sectores_taller'),
         tab('configuracion', 'type_of_repair'),
         tab('configuracion', 'maintenance_groups'),
       ],
       screens: [
         { path: CONFIG, tab: 'mantenimiento' },
         { path: CONFIG, tab: 'mantenimiento', subtab: 'talleres' },
-        { path: CONFIG, tab: 'mantenimiento', subtab: 'sectores_taller' },
         { path: CONFIG, tab: 'mantenimiento', subtab: 'type_of_repair' },
         { path: CONFIG, tab: 'mantenimiento', subtab: 'maintenance_groups' },
       ],

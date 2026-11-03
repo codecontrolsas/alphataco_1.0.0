@@ -2,28 +2,30 @@
 title: Taller
 summary: Del pedido aprobado al equipo reparado: programar la fecha, registrar el ingreso, armar las órdenes de trabajo por sector, autorizar tareas y cerrar la orden.
 keywords: taller, pedido, programar, fecha, ingreso, kilometraje, orden de mantenimiento, orden de trabajo, OT, OM, sector, jefe de taller, aprobaciones, cerrar, no operativo, repuestos, materiales, pedido de materiales
-updated: 2026-10-08
+updated: 2026-11-03
 ---
 
-La pestaña **Taller** del módulo **Mantenimiento** es donde trabaja el jefe de taller. Recibe los pedidos que aprobó operaciones (o que cargó directamente un supervisor), les pone fecha, registra cuándo entra el equipo, reparte el trabajo entre los sectores del taller y, cuando los sectores terminan, revisa y cierra.
+La vista **Taller** de **Mantenimiento → Gestión** es donde trabaja el jefe de taller. Recibe los pedidos que aprobó operaciones (o que cargó directamente un supervisor), les pone fecha, registra cuándo entra el equipo, reparte el trabajo entre los sectores del taller y, cuando los sectores terminan, revisa y cierra.
 
 <OpenScreen />
 
 ## Qué ves en la pantalla
 
-Arriba hay cuatro pasos con forma de flecha, cada uno con la cantidad de registros pendientes. Hacé clic en un paso para ver su tabla; el paso elegido queda en la dirección de la página.
+Entrá a **Mantenimiento → Gestión** y, en el selector de vista de arriba, elegí **Taller** (si solo tenés permiso sobre el taller, se abre directamente esa vista). Debajo hay pestañas, cada una con la cantidad de registros pendientes. Hacé clic en una pestaña (o movete con las flechas del teclado) para ver su tabla; la pestaña elegida queda en la dirección de la página.
 
-| Paso | Qué muestra | Qué hacés |
+| Pestaña | Qué muestra | Qué hacés |
 |---|---|---|
-| **1 Por Programar** | Pedidos aprobados sin fecha. | Ponés la fecha de recepción o rechazás el pedido. |
-| **2 Por Ingresar** | Pedidos con fecha asignada. | Registrás el ingreso del equipo al taller. |
-| **3 En Taller** | Equipos dentro del taller. | Asignás tareas y sectores, y generás las órdenes de trabajo. |
-| **4 Aprobaciones** | Trabajos que requieren tu autorización. | Cerrás órdenes terminadas, autorizás tareas y reasignás las devueltas. |
+| **Programación pendiente** | Pedidos aprobados sin fecha. | Ponés la fecha de recepción o rechazás el pedido. |
+| **Para ingreso** | Pedidos con fecha asignada. | Registrás el ingreso del equipo al taller. |
+| **En mantenimiento** | Equipos dentro del taller. | Asignás tareas y sectores, y generás las órdenes de trabajo. |
+| **Aprobaciones** | Trabajos que requieren tu autorización. | Cerrás órdenes terminadas, autorizás tareas y reasignás las devueltas. |
+
+Solo ves las pestañas sobre las que tenés permiso.
 
 <Flow title="El recorrido de un pedido en el taller">
-  <FlowStep title="Por Programar" module="Taller">Fecha de recepción.</FlowStep>
-  <FlowStep title="Por Ingresar" module="Taller">Ingreso: el equipo pasa a No operativo.</FlowStep>
-  <FlowStep title="En Taller" module="Taller" tone="warning">Gestionar: tareas, sectores y OT.</FlowStep>
+  <FlowStep title="Programación pendiente" module="Taller">Fecha de recepción.</FlowStep>
+  <FlowStep title="Para ingreso" module="Taller">Ingreso: el equipo pasa a No operativo.</FlowStep>
+  <FlowStep title="En mantenimiento" module="Taller" tone="warning">Gestionar: tareas, sectores y OT.</FlowStep>
   <FlowStep title="Sectores" module="Panel del operario" to="panel-del-operario">Los operarios hacen las tareas.</FlowStep>
   <FlowStep title="Aprobaciones" module="Taller" tone="info">Validar y cerrar la orden.</FlowStep>
   <FlowStep title="Completada" tone="success">El equipo vuelve a Operativo.</FlowStep>
@@ -34,7 +36,7 @@ Dos palabras que vas a ver todo el tiempo:
 - **OM (orden de mantenimiento)**: es el pedido completo de un equipo. Recibe su número (el **N° Orden**) cuando el equipo ingresa al taller.
 - **OT (orden de trabajo)**: es la parte del pedido que hace **un sector**. Una OM puede tener varias OT, una por cada sector por el que pasa el equipo.
 
-## 1 Por Programar
+## Programación pendiente
 
 Lista los pedidos aprobados que todavía no tienen fecha, del más reciente al más viejo.
 
@@ -61,19 +63,19 @@ Tocá el ícono de calendario (**Planificar fecha**) de la fila. Se abre **Plani
 En **Fecha de recepción en taller** escribí la fecha o elegila del calendario. No se aceptan fechas pasadas.
 </Step>
 <Step title="Confirmá">
-Tocá **Confirmar Planificación**. El pedido pasa a **Por Ingresar** y operaciones lo ve en su **Seguimiento** como **Pendiente de ingreso a taller**.
+Tocá **Confirmar Planificación**. El pedido pasa a **Para ingreso** y operaciones lo ve en su **Seguimiento** como **Pendiente de ingreso a taller**.
 </Step>
 </Steps>
 
 <Callout type="info" title="Acá solo va la fecha">
-En este paso no se eligen tipos de reparación ni sectores: eso se hace cuando el equipo ya está en el taller, con **Gestionar** (paso 3). La fecha que ponés es directamente la fecha de reparación; operaciones no tiene que aprobarla.
+En este paso no se eligen tipos de reparación ni sectores: eso se hace cuando el equipo ya está en el taller, con **Gestionar** (pestaña **En mantenimiento**). La fecha que ponés es directamente la fecha de reparación; operaciones no tiene que aprobarla.
 </Callout>
 
 ### Cómo rechazar un pedido
 
 Si el pedido no corresponde (por ejemplo, está duplicado), tocá la cruz roja (**Rechazar pedido**), completá **Motivo del rechazo** y confirmá con **Rechazar Pedido**. El pedido sale de la lista, la solicitud que le dio origen también queda rechazada, y todo queda registrado con el motivo en la pestaña **Historial de Mantenimiento** de la <GuideLink to="ficha-del-vehiculo">ficha del vehículo</GuideLink>.
 
-## 2 Por Ingresar
+## Para ingreso
 
 Pedidos con fecha, esperando que el equipo llegue.
 
@@ -113,7 +115,7 @@ Al confirmar el ingreso:
 Desde este momento el equipo figura fuera de servicio en todo el sistema: no cuenta como flota disponible en el Dashboard y, si alguien lo carga en un parte diario, aparece como desvío por condición.
 </Callout>
 
-## 3 En Taller
+## En mantenimiento
 
 Las órdenes de los equipos que están dentro del taller. Las completadas no se muestran al entrar; las traés tildando **Completada** en el filtro **Estado**.
 
@@ -166,7 +168,7 @@ El resumen dice cuántas OT se generan (**una por cada sector asignado**), qué 
 </Step>
 </Steps>
 
-Las OT generadas aparecen en la <GuideLink to="vista-taller">Vista Taller</GuideLink> y en el <GuideLink to="panel-del-operario">Panel del operario</GuideLink> de cada sector, donde los operarios las inician, pausan y terminan.
+Las OT generadas aparecen en <GuideLink to="vista-taller">Mantenimiento → Sectores</GuideLink> y en el <GuideLink to="panel-del-operario">Panel del operario</GuideLink> de cada sector, donde los operarios las inician, pausan y terminan.
 
 <Callout type="info" title="Volver a gestionar">
 Si después aparece trabajo nuevo, podés volver a **Gestionar** la misma orden: los ítems que ya tienen OT no se tocan y el asistente te pide agregar al menos un ítem nuevo para seguir.
@@ -205,7 +207,7 @@ Tocá **Enviar pedido**. Ves "**PED-000012 enviado: queda pendiente de aprobaci�
 
 Los operarios también piden materiales desde su OT, en el <GuideLink to="panel-del-operario">Panel del operario</GuideLink>. Esos pedidos aparecen acá con su OT.
 
-## 4 Aprobaciones
+## Aprobaciones
 
 Es la bandeja del jefe de taller. Arriba hay dos indicadores que se habilitan cuando tienen pendientes:
 
@@ -236,21 +238,21 @@ Una orden con pedidos de materiales **Pendientes de aprobación**, **Aprobados**
 </Callout>
 
 <States title="Estados del pedido en el taller">
-  <State name="Pendiente de planificar fecha de taller" tone="warning" next="Pendiente de ingreso a taller, Rechazada">Está en Por Programar, sin fecha.</State>
+  <State name="Pendiente de planificar fecha de taller" tone="warning" next="Pendiente de ingreso a taller, Rechazada">Está en Programación pendiente, sin fecha.</State>
   <State name="Rechazada" tone="danger">El taller rechazó el pedido antes de programarlo. Queda en el historial del equipo.</State>
-  <State name="Pendiente de ingreso a taller" tone="info" next="En Taller">Tiene fecha; está en Por Ingresar. En la Vista Taller figura como Fecha confirmada.</State>
+  <State name="Pendiente de ingreso a taller" tone="info" next="En Taller">Tiene fecha; está en Para ingreso. En el tablero de Sectores figura como Fecha confirmada.</State>
   <State name="En Taller" tone="info" next="Pend. Validación Taller, Rechazada por Taller">El equipo entró y está No operativo. Se gestiona y se generan las OT.</State>
   <State name="Rechazada por Taller" tone="danger" next="En Taller">Se rechazaron todos los desvíos en Gestionar. Restaurando alguno, vuelve a En Taller.</State>
   <State name="Pend. Validación Taller" tone="warning" next="Completada, En Taller">Todas las OT terminaron; está en Aprobaciones esperando al jefe de taller.</State>
   <State name="Completada" tone="success">Cerrada. El equipo vuelve a Operativo si no tiene otra orden en el taller.</State>
 </States>
 
-Los nombres cambian un poco según la tabla (por ejemplo, **Pendiente Planificar** en Por Programar o **Por planificar** en la Vista Taller), pero son los mismos estados.
+Los nombres cambian un poco según la tabla (por ejemplo, **Pendiente Planificar** en Programación pendiente o **Por planificar** en el tablero de Sectores), pero son los mismos estados.
 
 ## Cómo se conecta con el resto del sistema
 
 - **De dónde llegan los pedidos**: de la validación de operaciones (<GuideLink to="validar-solicitudes">Validar solicitudes</GuideLink>) o directamente de <GuideLink to="nuevo-pedido-de-mantenimiento">Nuevo Pedido</GuideLink> cuando quien carga es el supervisor.
-- **Qué ve operaciones**: cada cambio de estado se refleja en el paso **Seguimiento** de la pestaña Operaciones, con fecha planificada, días en taller, sectores y progreso.
+- **Qué ve operaciones**: cada cambio de estado se refleja en la pestaña **Seguimiento** de la vista Supervisión, con fecha planificada, días en taller, sectores y progreso.
 - **Condición del equipo**: pasa a **No operativo** al registrar el ingreso y vuelve a **Operativo** al cerrar la última orden. Esa condición la ves en la <GuideLink to="ficha-del-vehiculo">ficha del vehículo</GuideLink> y en el <GuideLink to="equipos-listado">listado de equipos</GuideLink>.
 - **Partes diarios**: un equipo No operativo cargado en un parte genera un desvío de equipo por condición (ver <GuideLink to="partes-diarios">Partes diarios</GuideLink>).
 - **Dashboard**: los equipos No operativos cuentan como **No disponibles** en el <GuideLink to="dashboard-principal">Dashboard principal</GuideLink> y bajan el porcentaje de operatividad de la flota.
@@ -264,9 +266,9 @@ El recorrido completo está en <GuideLink to="del-checklist-al-taller">Del check
 
 | Para… | Hace falta |
 |---|---|
-| Ver la pestaña Taller y sus cuatro pasos | **Ver** en **Taller** del módulo Mantenimiento. |
-| Ver todos los pedidos en Por Programar y Por Ingresar | Igual que en Operaciones: sin **Ver Todas** en **Solicitudes de Mantenimiento** ves solo los pedidos de las solicitudes donde sos el supervisor. |
-| Rechazar un pedido en Por Programar | **Editar** en **Pendientes** (dentro de **Pedidos de Mantenimiento**). |
+| Ver la vista Taller en Gestión | **Ver** en **Taller** del módulo Mantenimiento; cada pestaña exige además **Ver** en la suya (**Pendientes**, **Confirmados**, **Órdenes de mantenimiento**, **Bandeja de aprobaciones**). |
+| Ver todos los pedidos en Programación pendiente y Para ingreso | Igual que en Supervisión: sin **Ver Todas** en **Solicitudes de Mantenimiento** ves solo los pedidos de las solicitudes donde sos el supervisor. |
+| Rechazar un pedido en Programación pendiente | **Editar** en **Pendientes** (dentro de **Pedidos de Mantenimiento**). |
 | Registrar el ingreso al taller | **Editar** en **Confirmados** (dentro de **Pedidos de Mantenimiento**). |
 | Agregar reparaciones y generar las OT | **Crear** en **Gestión de Órdenes**. |
 | Asignar tareas y rechazar desvíos en Gestionar | **Editar** en **Gestión de Órdenes**. |

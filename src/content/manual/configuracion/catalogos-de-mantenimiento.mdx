@@ -1,11 +1,11 @@
 ---
 title: Catálogos de mantenimiento
-summary: Cómo configurar los talleres, sus sectores y cupos, los tipos de reparación y los grupos de reparaciones que usa el circuito de mantenimiento.
+summary: Cómo configurar los talleres, los tipos de reparación y los grupos de reparaciones que usa el circuito de mantenimiento. Los sectores de taller se administran en Mantenimiento → Sectores.
 keywords: taller, talleres, interno, externo, proveedor, sector de taller, cupo, tipo de reparación, criticidad, preventivo, correctivo, autorizable, grupo de reparación, mantenimiento
-updated: 2026-10-10
+updated: 2026-11-03
 ---
 
-La pestaña **Mantenimiento** de Configuración arma el "mapa" del taller: **dónde** se repara (talleres y sus sectores), **qué** se repara (tipos de reparación) y qué reparaciones suelen ir juntas (grupos). Todo el circuito de mantenimiento, desde el pedido hasta la orden en el taller, usa estas listas. La configura el jefe de taller o quien administra mantenimiento.
+La pestaña **Mantenimiento** de Configuración arma el "mapa" del taller: **dónde** se repara (talleres), **qué** se repara (tipos de reparación) y qué reparaciones suelen ir juntas (grupos). Todo el circuito de mantenimiento, desde el pedido hasta la orden en el taller, usa estas listas. La configura el jefe de taller o quien administra mantenimiento.
 
 <OpenScreen />
 
@@ -14,13 +14,12 @@ La pestaña **Mantenimiento** de Configuración arma el "mapa" del taller: **dó
 | Subpestaña | Qué se configura |
 |---|---|
 | **Talleres** | Los talleres propios y externos. |
-| **Sectores** | Los sectores de cada taller (mecánica, gomería, electricidad…) y su cupo. |
 | **Tipos de Reparación** | El catálogo de reparaciones, con su criticidad y qué sectores las hacen. |
 | **Grupos** | Conjuntos de reparaciones que se piden juntas. |
 
-Conviene cargarlas en ese orden: un sector necesita un taller, y un tipo de reparación necesita sectores.
+Conviene cargarlas en ese orden. Los **sectores** de cada taller (mecánica, gomería, electricidad…) y su cupo ya no están acá: se administran en **Mantenimiento → Sectores → Administrar sectores** (ver <GuideLink to="vista-taller">Sectores</GuideLink>). Un sector necesita un taller, y un tipo de reparación necesita sectores: cargá primero el taller, después sus sectores y al final los tipos de reparación. En la tabla de talleres, **Ver sectores** abre esa pantalla filtrada por el taller.
 
-En las cuatro, si tenés permiso para crear o editar, a la izquierda está el formulario y a la derecha la tabla; **Editar** carga la fila en el formulario.
+En las tres, si tenés permiso para crear o editar, a la izquierda está el formulario y a la derecha la tabla; **Editar** carga la fila en el formulario.
 
 ## Talleres
 
@@ -34,22 +33,6 @@ En las cuatro, si tenés permiso para crear o editar, a la izquierda está el fo
 | **Estado** | **Activo** o **Inactivo**. |
 
 La tabla muestra **Nombre**, **Tipo**, **Direccion**, **Provincia**, **Ciudad**, **Proveedor** y **Estado**, con filtros por nombre, tipo y provincia.
-
-## Sectores
-
-Cada sector pertenece a un taller.
-
-| Campo | Qué es |
-|---|---|
-| **Taller** | El taller al que pertenece. Obligatorio. |
-| **Nombre del Sector** | Obligatorio. |
-| **Descripcion** | Opcional. |
-| **Cupo Máximo (opcional)** | "Cantidad máxima de equipos/dominios que puede atender el sector simultáneamente". Si lo cargás, tiene que ser al menos 1. |
-| **Estado** | **Activo** o **Inactivo**. |
-
-El **cupo** se usa en la vista del taller: cada sector con cupo muestra un semáforo de ocupación, y se pone en alerta cuando tiene más equipos de los que puede atender (ver <GuideLink to="vista-taller">Vista taller</GuideLink>). Un sector sin cupo no tiene semáforo.
-
-Los sectores también se asignan a las personas: en la ficha del empleado, el campo **Sectores de Taller** dice en qué sectores trabaja cada mecánico. Eso define qué tareas le aparecen en su panel (ver <GuideLink to="panel-del-operario">Panel del operario</GuideLink>).
 
 ## Tipos de Reparación
 
@@ -98,7 +81,8 @@ Al cargar un pedido de mantenimiento, en lugar de elegir las reparaciones una po
 ## Cómo se conecta con el resto del sistema
 
 <Flow>
-<FlowStep title="Talleres y sectores" module="Configuración">Dónde se repara y con qué cupo.</FlowStep>
+<FlowStep title="Talleres" module="Configuración">Dónde se repara.</FlowStep>
+<FlowStep title="Sectores" module="Mantenimiento" to="vista-taller">En qué sectores y con qué cupo.</FlowStep>
 <FlowStep title="Tipos y grupos" module="Configuración">Qué se repara y quién lo hace.</FlowStep>
 <FlowStep title="Pedido" module="Mantenimiento" to="nuevo-pedido-de-mantenimiento" tone="info">Se eligen reparaciones o grupos.</FlowStep>
 <FlowStep title="Orden" module="Mantenimiento" to="taller" tone="info">Se asigna taller y sectores.</FlowStep>
@@ -107,7 +91,7 @@ Al cargar un pedido de mantenimiento, en lugar de elegir las reparaciones una po
 
 - **Pedidos y órdenes**: las reparaciones de un pedido salen de **Tipos de Reparación** (o de un **Grupo**), y al gestionar la orden se elige el taller y los sectores (<GuideLink to="del-checklist-al-taller">Del checklist al taller</GuideLink>).
 - **Panel del operario**: cada operario ve las tareas de sus sectores, y solo puede agregar los tipos de reparación de su sector. Si un sector no tiene tipos de reparación, el panel muestra "Sin tipos de reparacion disponibles".
-- **Vista taller**: los sectores y sus cupos ordenan la vista del taller (<GuideLink to="vista-taller">Vista taller</GuideLink>).
+- **Sectores**: los sectores, sus cupos y su tablero de trabajo están en <GuideLink to="vista-taller">Mantenimiento → Sectores</GuideLink>.
 - **Documentos**: los **Sectores de Taller** de los empleados se pueden usar como condición de un tipo de documento (<GuideLink to="tipos-de-documento">Tipos de documento</GuideLink>).
 
 ## Permisos
@@ -115,9 +99,8 @@ Al cargar un pedido de mantenimiento, en lugar de elegir las reparaciones una po
 | Acción | Permiso necesario |
 |---|---|
 | Ver la pestaña Mantenimiento | **Ver** en **Mantenimiento** (la pestaña de Configuración) |
-| Ver cada subpestaña | **Ver** en **Talleres**, **Sectores**, **Tipos de Reparación** o **Grupos** |
+| Ver cada subpestaña | **Ver** en **Talleres**, **Tipos de Reparación** o **Grupos** |
 | Crear y editar talleres | **Crear** / **Editar** en **Talleres** |
-| Crear y editar sectores | **Crear** / **Editar** en **Sectores** |
 | Crear, editar y eliminar tipos de reparación | **Crear** / **Editar** en **Tipos de Reparación** |
 | Crear y editar grupos | **Crear** / **Editar** en **Grupos** |
 
@@ -128,5 +111,5 @@ Revisá en el tipo de reparación que tenga tildado el sector del operario en **
 </Callout>
 
 <Callout type="tip" title="Un sector no aparece en Sectores de taller del tipo de reparación">
-Solo se ofrecen los sectores **Activos**. Revisá su estado en la subpestaña **Sectores**.
+Solo se ofrecen los sectores **Activos**. Revisá su estado en **Mantenimiento → Sectores → Administrar sectores**.
 </Callout>

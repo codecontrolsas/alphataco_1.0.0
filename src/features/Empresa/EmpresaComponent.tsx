@@ -93,7 +93,7 @@ export default async function EmpresaComponent({
         {
           value: 'mantenimiento',
           label: 'Taller',
-          description: 'Talleres, sectores, tipos de reparación y grupos de mantenimiento',
+          description: 'Talleres, tipos de reparación y grupos de mantenimiento',
           moduleSlug: 'configuracion',
           tabSlug: 'mantenimiento',
           content: <TallerSectionContent searchParams={searchParams} permissions={permissions} />,
