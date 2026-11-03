@@ -25,14 +25,21 @@ import type { DemoEmployee } from './employees.ts';
 
 const HSE_BUCKET = 'hse-files';
 
-type Target = { kind: 'all' } | { kind: 'position'; positionKey: string } | { kind: 'sector'; sectorKey: string };
+type Target =
+  | { kind: 'all' }
+  | { kind: 'position'; positionKey: string }
+  | { kind: 'sector'; sectorKey: string }
+  | { kind: 'employee'; employeeId: string };
+
+/** Destinatarios de un documento HSE de la demo (los documentos no se dirigen a un legajo puntual). */
+type DocTarget = Exclude<Target, { kind: 'employee' }>;
 
 interface DemoHseDoc {
   key: string;
   title: string;
   type: string;
   description: string;
-  targets: Target[];
+  targets: DocTarget[];
   /** Versiones publicadas: días atrás de cada publicación (la última es la vigente). Vacío = borrador. */
   publishedDaysAgo: number[];
   /** Fracción de destinatarios que aceptó la versión vigente. */
@@ -224,7 +231,7 @@ export async function seedHse(ctx: Ctx, employees: DemoEmployee[]): Promise<void
 
 // ── Capacitaciones (fase 3) ──────────────────────────────────────────────────────────────────
 
-interface DemoQuestion {
+export interface DemoQuestion {
   prompt: string;
   points: number;
   options: string[];
@@ -232,7 +239,7 @@ interface DemoQuestion {
   correct: number;
 }
 
-interface DemoTraining {
+export interface DemoTraining {
   key: string;
   title: string;
   kind: 'induction' | 'refresher' | 'specific' | 'other';
@@ -408,6 +415,119 @@ const TRAININGS: DemoTraining[] = [
 ];
 
 /**
+ * Crea una capacitación con sus destinatarios, materiales (los de tipo archivo, con su PDF), preguntas, opciones y
+ * clave de corrección, SIN publicarla. Devuelve la opción correcta y las incorrectas de cada pregunta. No usa el azar
+ * de la demo (`ctx.faker`): la reusa el portal demo sin correr los datos de los dominios que siguen.
+ */
+export async function createTrainingContent(
+  ctx: Ctx,
+  t: DemoTraining
+): Promise<Map<string, { correct: string; wrong: string[] }>> {
+  const { tx, company } = ctx;
+  const trainingId = demoId('hse-training', t.key);
+  await tx.hse_trainings.create({
+    data: {
+      id: trainingId,
+      company_id: company.id,
+      title: t.title,
+      description: t.description,
+      kind: t.kind,
+      passing_score: t.passingScore,
+      max_attempts: t.maxAttempts,
+      time_limit_minutes: t.timeLimitMinutes,
+      validity_months: t.validityMonths,
+      created_by: ctx.actorId,
+      created_at: daysAgo(ctx, (t.publishedDaysAgo ?? 1) + 3),
+    },
+    select: { id: true },
+  });
+  await tx.hse_training_targets.createMany({
+    data: t.targets.map((target) => ({
+      company_id: company.id,
+      training_id: trainingId,
+      kind: target.kind,
+      position_id: target.kind === 'position' ? demoId('position', target.positionKey) : null,
+      sector_id: target.kind === 'sector' ? demoId('hierarchy', target.sectorKey) : null,
+      employee_id: target.kind === 'employee' ? target.employeeId : null,
+    })),
+  });
+  for (const [position, m] of t.materials.entries()) {
+    const materialId = demoId('hse-material', `${t.key}:${position}`);
+    const key = m.kind === 'file' ? `${company.id}/trainings/${trainingId}/${materialId}.pdf` : null;
+    let size = 0;
+    let sha = '';
+    if (key) {
+      await addPdf(ctx, HSE_BUCKET, key, {
+        title: m.title,
+        fields: [['Capacitación', t.title]],
+        body: t.description,
+        reference: `HSE-CAP-${t.key.toUpperCase()}`,
+      });
+      const body = ctx.files[ctx.files.length - 1]?.body ?? new Uint8Array();
+      size = body.byteLength;
+      sha = createHash('sha256').update(body).digest('hex');
+    }
+    await tx.hse_training_materials.create({
+      data: {
+        id: materialId,
+        company_id: company.id,
+        training_id: trainingId,
+        kind: m.kind,
+        title: m.title,
+        url: m.kind === 'link' ? m.url : null,
+        file_path: key,
+        file_name: key ? `${t.key}.pdf` : null,
+        file_size: key ? size : null,
+        file_sha256: key ? sha : null,
+        is_required: m.required,
+        position,
+      },
+      select: { id: true },
+    });
+  }
+  const keyByQuestion = new Map<string, { correct: string; wrong: string[] }>();
+  for (const [qIndex, q] of t.questions.entries()) {
+    const questionId = demoId('hse-question', `${t.key}:${qIndex}`);
+    await tx.hse_training_questions.create({
+      data: {
+        id: questionId,
+        company_id: company.id,
+        training_id: trainingId,
+        prompt: q.prompt,
+        points: q.points,
+        position: qIndex,
+      },
+      select: { id: true },
+    });
+    const optionIds = q.options.map((_, oIndex) => demoId('hse-option', `${t.key}:${qIndex}:${oIndex}`));
+    await tx.hse_training_options.createMany({
+      data: q.options.map((label, oIndex) => ({
+        id: optionIds[oIndex] as string,
+        company_id: company.id,
+        training_id: trainingId,
+        question_id: questionId,
+        label,
+        position: oIndex,
+      })),
+    });
+    await tx.hse_training_answer_keys.create({
+      data: {
+        question_id: questionId,
+        company_id: company.id,
+        training_id: trainingId,
+        option_id: optionIds[q.correct] as string,
+      },
+      select: { question_id: true },
+    });
+    keyByQuestion.set(questionId, {
+      correct: optionIds[q.correct] as string,
+      wrong: optionIds.filter((_, i) => i !== q.correct),
+    });
+  }
+  return keyByQuestion;
+}
+
+/**
  * Capacitaciones de la demo. Quién la tiene asignada lo calcula la MISMA conciliación de la app
  * (`hse_sync_training_assignments`) y los intentos se rinden con las MISMAS funciones del portal (`hse_start_attempt`,
  * `hse_save_answer`, `hse_grade_attempt`) con el legajo de cada empleado como contexto: así los puntajes salen de la
@@ -419,104 +539,7 @@ async function seedHseTrainings(ctx: Ctx): Promise<void> {
 
   for (const t of TRAININGS) {
     const trainingId = demoId('hse-training', t.key);
-    await tx.hse_trainings.create({
-      data: {
-        id: trainingId,
-        company_id: company.id,
-        title: t.title,
-        description: t.description,
-        kind: t.kind,
-        passing_score: t.passingScore,
-        max_attempts: t.maxAttempts,
-        time_limit_minutes: t.timeLimitMinutes,
-        validity_months: t.validityMonths,
-        created_by: ctx.actorId,
-        created_at: daysAgo(ctx, (t.publishedDaysAgo ?? 1) + 3),
-      },
-      select: { id: true },
-    });
-    await tx.hse_training_targets.createMany({
-      data: t.targets.map((target) => ({
-        company_id: company.id,
-        training_id: trainingId,
-        kind: target.kind,
-        position_id: target.kind === 'position' ? demoId('position', target.positionKey) : null,
-        sector_id: target.kind === 'sector' ? demoId('hierarchy', target.sectorKey) : null,
-      })),
-    });
-    for (const [position, m] of t.materials.entries()) {
-      const materialId = demoId('hse-material', `${t.key}:${position}`);
-      const key = m.kind === 'file' ? `${company.id}/trainings/${trainingId}/${materialId}.pdf` : null;
-      let size = 0;
-      let sha = '';
-      if (key) {
-        await addPdf(ctx, HSE_BUCKET, key, {
-          title: m.title,
-          fields: [['Capacitación', t.title]],
-          body: t.description,
-          reference: `HSE-CAP-${t.key.toUpperCase()}`,
-        });
-        const body = ctx.files[ctx.files.length - 1]?.body ?? new Uint8Array();
-        size = body.byteLength;
-        sha = createHash('sha256').update(body).digest('hex');
-      }
-      await tx.hse_training_materials.create({
-        data: {
-          id: materialId,
-          company_id: company.id,
-          training_id: trainingId,
-          kind: m.kind,
-          title: m.title,
-          url: m.kind === 'link' ? m.url : null,
-          file_path: key,
-          file_name: key ? `${t.key}.pdf` : null,
-          file_size: key ? size : null,
-          file_sha256: key ? sha : null,
-          is_required: m.required,
-          position,
-        },
-        select: { id: true },
-      });
-    }
-    const keyByQuestion = new Map<string, { correct: string; wrong: string[] }>();
-    for (const [qIndex, q] of t.questions.entries()) {
-      const questionId = demoId('hse-question', `${t.key}:${qIndex}`);
-      await tx.hse_training_questions.create({
-        data: {
-          id: questionId,
-          company_id: company.id,
-          training_id: trainingId,
-          prompt: q.prompt,
-          points: q.points,
-          position: qIndex,
-        },
-        select: { id: true },
-      });
-      const optionIds = q.options.map((_, oIndex) => demoId('hse-option', `${t.key}:${qIndex}:${oIndex}`));
-      await tx.hse_training_options.createMany({
-        data: q.options.map((label, oIndex) => ({
-          id: optionIds[oIndex] as string,
-          company_id: company.id,
-          training_id: trainingId,
-          question_id: questionId,
-          label,
-          position: oIndex,
-        })),
-      });
-      await tx.hse_training_answer_keys.create({
-        data: {
-          question_id: questionId,
-          company_id: company.id,
-          training_id: trainingId,
-          option_id: optionIds[q.correct] as string,
-        },
-        select: { question_id: true },
-      });
-      keyByQuestion.set(questionId, {
-        correct: optionIds[q.correct] as string,
-        wrong: optionIds.filter((_, i) => i !== q.correct),
-      });
-    }
+    const keyByQuestion = await createTrainingContent(ctx, t);
     if (t.publishedDaysAgo === null) continue;
 
     await tx.hse_trainings.update({
@@ -670,16 +693,16 @@ const INSTRUCTORS: Record<string, { kind: 'external'; fullName: string; license:
   };
 
 /** Contexto de la transacción como en la app: empleado del portal o usuario del dashboard. */
-async function asEmployee(ctx: Ctx, employeeId: string) {
+export async function asEmployee(ctx: Ctx, employeeId: string) {
   await ctx.tx
     .$executeRaw`SELECT set_config('app.company_id', ${ctx.company.id}, true), set_config('app.employee_id', ${employeeId}, true), set_config('app.actor_kind', 'employee', true), set_config('app.user_id', '', true)`;
 }
-async function asAdmin(ctx: Ctx) {
+export async function asAdmin(ctx: Ctx) {
   await ctx.tx
     .$executeRaw`SELECT set_config('app.company_id', ${ctx.company.id}, true), set_config('app.employee_id', '', true), set_config('app.actor_kind', 'user', true), set_config('app.user_id', ${ctx.actorId}, true)`;
 }
 
-async function signCertificate(ctx: Ctx, employeeId: string, attemptId: string, n: number) {
+export async function signCertificate(ctx: Ctx, employeeId: string, attemptId: string, n: number) {
   await asEmployee(ctx, employeeId);
   await ctx.tx
     .$queryRaw`SELECT public.hse_sign_certificate(${attemptId}::uuid, ${`10.0.0.${10 + n}`}, ${'Mozilla/5.0 (Linux; Android 14) Portal demo'}) AS r`;

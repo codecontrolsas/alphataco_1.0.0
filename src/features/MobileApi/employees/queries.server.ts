@@ -9,9 +9,7 @@ import { prismaBase } from '@/shared/lib/prisma';
 import { runInTenantScope, runWithTenantContext, type TenantContext } from '@/shared/lib/tenant-context';
 import {
   costTypeLabels,
-  documentStateLabels,
   documentTypeLabels,
-  employeeStatusBadges,
   employeeStatusLabels,
   genderLabels,
   levelOfEducationLabels,
@@ -22,6 +20,8 @@ import {
 import moment from 'moment';
 import { z } from 'zod';
 import type { EmployeeListQuery } from '../contracts/employees';
+import { DOCUMENT_STATE_LABELS, DOCUMENT_STATE_TONE } from '../documents/rows';
+import { docStatusOf, isoDay } from '../lib/labels';
 import type { EmployeeAccess } from './access';
 import { buildPhotoUrls } from './photo';
 
@@ -31,21 +31,6 @@ import { buildPhotoUrls } from './photo';
  * Nunca seleccionan `picture` en listas: la foto viaja por su propia ruta y aquí solo se calcula su versión.
  */
 
-type Tone = 'ok' | 'warn' | 'danger' | 'neutral';
-
-const BADGE_TONE: Record<string, Tone> = { success: 'ok', yellow: 'warn', destructive: 'danger' };
-
-function docStatusOf(status: string | null) {
-  if (!status) return null;
-  return {
-    code: status,
-    label: employeeStatusLabels[status] ?? status,
-    tone: BADGE_TONE[employeeStatusBadges[status] ?? ''] ?? 'neutral',
-  };
-}
-
-/** Columnas `@db.Date`: llegan como medianoche UTC. */
-const isoDay = (value: Date | null | undefined) => (value ? moment.utc(value).format('YYYY-MM-DD') : null);
 const label = (value: string | null | undefined, labels: Record<string, string>) =>
   value ? labels[value] ?? value : null;
 
@@ -383,16 +368,6 @@ export async function employeeExists(ctx: TenantContext, employeeId: string): Pr
 }
 
 // ─── Documentación ────────────────────────────────────────────────────────────
-
-/** Estados de las listas de documentos: `pendiente` es la fila faltante (igual que `documentListStateLabels`). */
-const DOCUMENT_STATE_LABELS: Record<string, string> = { ...documentStateLabels, pendiente: 'Faltante' };
-const DOCUMENT_STATE_TONE: Record<string, Tone> = {
-  aprobado: 'ok',
-  presentado: 'neutral',
-  rechazado: 'danger',
-  vencido: 'warn',
-  pendiente: 'danger',
-};
 
 const toDay = (value: Date | string | null) => (value ? argentinaDate(new Date(value)) : null);
 

@@ -16,6 +16,8 @@ export const MOBILE_MODULES = [
   'operaciones.daily-reports',
   'operaciones.resources',
   'empleados.employees',
+  'equipos.equipment',
+  'documentacion.documents',
 ] as const;
 
 /**

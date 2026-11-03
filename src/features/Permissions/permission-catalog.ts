@@ -361,6 +361,27 @@ export const MOBILE_PERMISSION_KEYS = [
   'documentacion:documentos-de-empleados:view_private',
   'documentacion:docs-empleados-permanentes:view',
   'documentacion:docs-empleados-mensuales:view',
+  // Equipos (solo lectura): listados de vehículos, equipamiento y bajas, y las fichas con sus bloques
+  'equipos:vehicles:view',
+  'equipos:others:view',
+  'equipos:inactive:view',
+  'equipos:detalle-equipo:view',
+  'equipos:datos-basicos:view',
+  'equipos:asignacion:view',
+  'equipos:detalle-otro-equipo:view',
+  'equipos:datos-basicos-otro:view',
+  'equipos:asignacion-otro:view',
+  'equipos:certificaciones-otro:view',
+  // Documentación (solo lectura): listas de equipos y de empresa, privados y la ficha del documento
+  'documentacion:documentos-de-equipos:view',
+  'documentacion:documentos-de-equipos:view_private',
+  'documentacion:docs-equipos-permanentes:view',
+  'documentacion:docs-equipos-mensuales:view',
+  'documentacion:documentos-de-empresa:view',
+  'documentacion:documentos-de-empresa:view_private',
+  'documentacion:docs-empresa-permanentes:view',
+  'documentacion:docs-empresa-mensuales:view',
+  'documentacion:detalle-de-documento:view',
 ] as const satisfies readonly PermissionOverrideKey[];
 
 export type MobilePermissionKey = (typeof MOBILE_PERMISSION_KEYS)[number];

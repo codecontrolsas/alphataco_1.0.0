@@ -311,6 +311,7 @@ export const MODULE_CATALOG: Readonly<Record<ModuleKey, ModuleDef>> = {
     jobs: [],
     buckets: [],
     externalResources: ['vehicles', 'other-equipment'],
+    mobile: ['equipos.equipment'],
     tables: [
       'vehicles',
       'other_equipment',
@@ -345,6 +346,7 @@ export const MODULE_CATALOG: Readonly<Record<ModuleKey, ModuleDef>> = {
     routes: ['/dashboard/document'],
     jobs: ['documents-status', 'documents-expiry'],
     buckets: ['document-files', 'document-files-expired'],
+    mobile: ['documentacion.documents'],
     tables: [
       'documents_company',
       'documents_employees',
