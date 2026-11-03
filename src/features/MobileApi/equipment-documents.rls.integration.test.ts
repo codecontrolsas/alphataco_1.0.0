@@ -100,6 +100,8 @@ const ACTIVE_VEHICLES_A = [V_AA111AA, V_NULL_1, V_AA111AB, V_SPACES, V_NULL_2];
 
 let owner: PrismaClient;
 const catalog = emptyCatalogRows();
+/** La categoría 1 («vehículos», perímetro del listado web) la crea el test si la base no la trae; solo entonces la borra. */
+let createdVehicleCategory = false;
 
 const FULL_KEYS = [
   'equipos:vehicles:view',
@@ -206,6 +208,11 @@ describe.skipIf(!RUN_RLS)('API móvil de equipos y documentación bajo RLS (rol 
     await createTestCompany(owner, { id: COMPANY_A, name: '__rls_movil_eq_A__', cuit: 'RLS-MOVEQ-A', cityId: city.id });
     await createTestCompany(owner, { id: COMPANY_B, name: '__rls_movil_eq_B__', cuit: 'RLS-MOVEQ-B', cityId: city.id });
 
+    // Catálogo global: la base de CI (solo migraciones) no tiene categorías de vehículo.
+    if (!(await owner.types_of_vehicles.findUnique({ where: { id: BigInt(1) }, select: { id: true } }))) {
+      await owner.types_of_vehicles.create({ data: { id: BigInt(1), name: 'Vehículos' } });
+      createdVehicleCategory = true;
+    }
     await owner.type.createMany({
       data: [
         { id: TYPE_V, name: 'Camioneta prueba', company_id: COMPANY_A, applies_to: 'vehicle' },
@@ -311,6 +318,7 @@ describe.skipIf(!RUN_RLS)('API móvil de equipos y documentación bajo RLS (rol 
     vi.unstubAllEnvs();
     await cleanup();
     await dropCatalogRows(owner, catalog);
+    if (createdVehicleCategory) await owner.types_of_vehicles.deleteMany({ where: { id: BigInt(1) } });
     await owner.$disconnect();
   });
 
