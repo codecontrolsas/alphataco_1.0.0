@@ -87,6 +87,10 @@ describe('mobileModulesFor', () => {
       'operaciones.daily-reports',
       'operaciones.resources',
     ]);
+    expect(mobileModulesFor(new Set(['nucleo', 'equipos', 'documentacion']))).toEqual([
+      'equipos.equipment',
+      'documentacion.documents',
+    ]);
     expect(mobileModulesFor(new Set(['nucleo']))).toEqual([]);
   });
 });
