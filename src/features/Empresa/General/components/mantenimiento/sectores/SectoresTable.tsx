@@ -12,8 +12,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { Building2, Check, Pencil, X } from 'lucide-react';
 import { use, useMemo, type ReactNode } from 'react';
 import type { WorkshopSector } from '../../../actions/workshops.server';
-
-const TABLE_ID = 'workshop-sectors';
+import { WORKSHOP_SECTORS_TABLE_ID as TABLE_ID } from '../../../lib/sectors-admin-href';
 
 const ACTIVE_LABELS: Record<'true' | 'false', string> = { true: 'Activo', false: 'Inactivo' };
 

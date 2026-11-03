@@ -942,10 +942,10 @@ export const PERMISSIONS = {
     name: 'Mantenimiento',
     moduleId: '421e96da-5235-4857-bf81-e63336447f13',
     tabs: {
-      // Vista Taller (COD-394) — agrupada por sector de taller
+      // Sectores (ex Vista Taller, COD-394; renombrada en el 778) — trabajo del taller agrupado por sector
       workshop_view: {
         slug: 'workshop_view',
-        name: 'Vista taller',
+        name: 'Sectores',
         tabId: '60000000-0000-0000-0000-000000000071',
         parent: null,
         allowedActions: ['view'],

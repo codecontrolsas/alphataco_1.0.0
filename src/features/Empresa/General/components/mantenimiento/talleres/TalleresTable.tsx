@@ -8,11 +8,12 @@ import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE, type TablePreferences } from '@/shared/components/common/DataTable/helpers';
 import { inMemoryFacetedFilterFn, inMemoryTextFilterFn } from '@/shared/components/common/DataTable/in-memory';
 import { type DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable/types';
-import { useDataTableFilter } from '@/shared/components/common/DataTable/useDataTableFilter';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import { Building2, Check, CircleOff, Layers, MapPin, Pencil, Truck, X } from 'lucide-react';
-import { use, useCallback, useMemo, type ReactNode } from 'react';
+import Link from 'next/link';
+import { use, useMemo, type ReactNode } from 'react';
 import type { Workshop } from '../../../actions/workshops.server';
+import { buildSectorsAdminHref } from '../../../lib/sectors-admin-href';
 
 const TABLE_ID = 'workshops';
 
@@ -30,7 +31,8 @@ function nullableFacetedFilterFn(row: Row<Workshop>, id: string, value: unknown)
 export function getTalleresColumns(
   onEdit: (workshop: Workshop) => void,
   canEdit: boolean,
-  onViewSectors?: (workshop: Workshop) => void
+  /** Con permiso sobre los sectores: enlace a Mantenimiento > Sectores filtrado por el taller. */
+  showSectorsLink = false
 ): ColumnDef<Workshop>[] {
   const columns: ColumnDef<Workshop>[] = [
     {
@@ -127,7 +129,7 @@ export function getTalleresColumns(
     },
   ];
 
-  if (canEdit || onViewSectors) {
+  if (canEdit || showSectorsLink) {
     columns.push({
       id: 'actions',
       meta: { title: 'Acciones', excludeFromExport: true },
@@ -136,16 +138,15 @@ export function getTalleresColumns(
       header: () => <span className="sr-only">Acciones</span>,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          {onViewSectors && row.original.type === 'interno' ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              aria-label={`Ver sectores del taller ${row.original.name}`}
-              onClick={() => onViewSectors(row.original)}
-            >
-              <Layers className="h-4 w-4" aria-hidden="true" />
-              Ver sectores
+          {showSectorsLink && row.original.type === 'interno' ? (
+            <Button asChild size="sm" variant="ghost">
+              <Link
+                href={buildSectorsAdminHref(row.original.name)}
+                aria-label={`Ver sectores del taller ${row.original.name} en Mantenimiento`}
+              >
+                <Layers className="h-4 w-4" aria-hidden="true" />
+                Ver sectores
+              </Link>
             </Button>
           ) : null}
           {canEdit ? (
@@ -172,10 +173,6 @@ function uniqueSorted(values: (string | null | undefined)[]): string[] {
   return Array.from(new Set(values.filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
 }
 
-/** Id (ancla) del bloque de sectores y `tableId` de su tabla, para el atajo "Ver sectores". */
-const SECTORS_ANCHOR_ID = 'sectores-taller';
-const SECTORS_TABLE_ID = 'workshop-sectors';
-
 function TalleresTable({
   workshops,
   preferences,
@@ -195,25 +192,12 @@ function TalleresTable({
   const canEdit = hasPermission('configuracion', 'talleres', 'update');
   const canViewSectors = hasPermission('configuracion', 'sectores_taller', 'view');
 
-  // "Ver sectores": filtra la tabla de sectores (mismo bloque apilado) por este taller y baja hasta ella.
-  const [, setSectorsWorkshop] = useDataTableFilter(SECTORS_TABLE_ID, 'workshop');
-  const handleViewSectors = useCallback(
-    (workshop: Workshop) => {
-      setSectorsWorkshop(workshop.name);
-      document.getElementById(SECTORS_ANCHOR_ID)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    },
-    [setSectorsWorkshop]
-  );
-
   // Los inactivos siempre al final; la lista se DERIVA de la prop para que un alta + refresh la muestre.
   const data = useMemo(
     () => [...workshopsData].sort((a, b) => Number(b.is_active) - Number(a.is_active)),
     [workshopsData]
   );
-  const columns = useMemo(
-    () => getTalleresColumns(onEdit, canEdit, canViewSectors ? handleViewSectors : undefined),
-    [onEdit, canEdit, canViewSectors, handleViewSectors]
-  );
+  const columns = useMemo(() => getTalleresColumns(onEdit, canEdit, canViewSectors), [onEdit, canEdit, canViewSectors]);
 
   const facetedFilters = useMemo<DataTableFacetedFilterConfig[]>(() => {
     const provinces = uniqueSorted(data.map((w) => w.provinces?.name));

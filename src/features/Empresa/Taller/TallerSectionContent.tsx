@@ -4,14 +4,16 @@ import RepairTypeFormWrapper from '@/features/Mantenimiento/TiposReparaciones/Re
 import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
 import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
 import { CatalogTableSurface } from '@/shared/components/common/CatalogFormSheet';
+import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import TalleresTab from '../General/components/mantenimiento/TalleresTab';
+import { buildSectorsAdminHref } from '../General/lib/sectors-admin-href';
 
 /**
- * Sección Taller de Configuración: las cuatro pantallas que definen cómo trabaja el taller
+ * Sección Taller de Configuración: las pantallas que definen cómo trabaja el taller
  * (talleres, los tipos de reparación y los grupos de mantenimiento), reagrupadas en dos vistas.
- * Los sectores de taller se administran desde Mantenimiento > Sectores; los enlaces viejos
- * `?subtab=sectores_taller|maintenance_groups` caen en la vista de su grupo.
+ * Los sectores de taller se administran desde Mantenimiento > Sectores: un enlace viejo
+ * `?subtab=sectores_taller` redirige ahí; `?subtab=maintenance_groups` cae en la vista de su grupo.
  */
 export default function TallerSectionContent({
   searchParams,
@@ -22,6 +24,13 @@ export default function TallerSectionContent({
 }) {
   // Cada bloque de una vista fusionada conserva su propio guard: sin permiso sobre una pestaña, no se monta su bloque.
   const isTabVisible = createTabVisibilityChecker(permissions);
+
+  // Los sectores se mudaron a Mantenimiento > Sectores (778): el enlace viejo va ahí, y también quien solo
+  // tenía permiso sobre los sectores (acá ya no vería nada).
+  const onlySectors =
+    isTabVisible('configuracion', 'sectores_taller') &&
+    !['talleres', 'type_of_repair', 'maintenance_groups'].some((tab) => isTabVisible('configuracion', tab));
+  if (searchParams.subtab === 'sectores_taller' || onlySectors) redirect(buildSectorsAdminHref());
 
   return (
     <ViewManagerServer
@@ -35,7 +44,6 @@ export default function TallerSectionContent({
       views={[
         {
           value: 'talleres',
-          aliases: ['sectores_taller'],
           label: 'Talleres',
           description: 'Talleres propios y externos. Los sectores se administran en Mantenimiento > Sectores',
           moduleSlug: 'configuracion',

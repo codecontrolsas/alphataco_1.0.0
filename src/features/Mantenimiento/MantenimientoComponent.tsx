@@ -3,10 +3,10 @@ import SectoresTab from '@/features/Empresa/General/components/mantenimiento/Sec
 import { EquiposConDesviosTabContent } from '@/features/Mantenimiento/EquiposConDesvios/EquiposConDesviosTabContent';
 import { EquipmentsWithDeviationsSkeleton } from '@/features/Mantenimiento/EquiposConDesvios/fallback/EquipmentsWithDeviationsSkeleton';
 import GomeriaTabContent from '@/features/Mantenimiento/Gomeria/GomeriaTabContent';
-import { NuevoPedidoSkeleton } from '@/features/Mantenimiento/NuevoPedido/fallback/NuevoPedidoSkeleton';
 import { NuevoPedidoTabContent } from '@/features/Mantenimiento/NuevoPedido/NuevoPedidoTabContent';
-import { WorkshopSectorsSkeleton } from '@/features/Mantenimiento/WorkshopView/fallback/WorkshopSectorsSkeleton';
+import { NuevoPedidoSkeleton } from '@/features/Mantenimiento/NuevoPedido/fallback/NuevoPedidoSkeleton';
 import { WorkshopViewTabContent } from '@/features/Mantenimiento/WorkshopView/WorkshopViewTabContent';
+import { WorkshopSectorsSkeleton } from '@/features/Mantenimiento/WorkshopView/fallback/WorkshopSectorsSkeleton';
 import { SectionManagerServer } from '@/features/TabsManager/SectionManagerServer';
 import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
 import { CatalogTableSurface } from '@/shared/components/common/CatalogFormSheet';
@@ -110,7 +110,12 @@ export default async function MantenimientoComponent({ searchParams, permissions
             </span>
           ),
           moduleSlug: 'mantenimiento',
-          tabSlug: 'workshop_view',
+          // La administración de sectores se mudó acá desde Configuración (778): quien solo tenía permiso
+          // sobre los sectores de taller sigue llegando a ellos aunque no vea el tablero.
+          visibleWhenAny: [
+            { moduleSlug: 'mantenimiento', tabSlug: 'workshop_view' },
+            { moduleSlug: 'configuracion', tabSlug: 'sectores_taller' },
+          ],
           content: (
             <ViewManagerServer
               paramName="vista"
@@ -124,6 +129,8 @@ export default async function MantenimientoComponent({ searchParams, permissions
                   value: 'tablero',
                   label: 'Tablero',
                   description: 'Carga de trabajo y órdenes de cada sector',
+                  moduleSlug: 'mantenimiento',
+                  tabSlug: 'workshop_view',
                   content: (
                     <Suspense fallback={<WorkshopSectorsSkeleton />}>
                       <WorkshopViewTabContent searchParams={searchParams} />

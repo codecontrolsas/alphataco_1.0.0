@@ -5,7 +5,7 @@ import { WorkshopSectorTasksSkeleton } from '../WorkshopSectorTasksTable/fallbac
 /** Misma forma que la Vista Taller: grilla de tarjetas de sector y la tarjeta de la tabla de OT. */
 export function WorkshopSectorsSkeleton() {
   return (
-    <div className="space-y-4" aria-busy="true" aria-label="Cargando la Vista Taller">
+    <div className="space-y-4" aria-busy="true" aria-label="Cargando los sectores del taller">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         {Array.from({ length: 5 }).map((_, i) => (
           <Skeleton key={i} className="h-[148px] rounded-xl" />
