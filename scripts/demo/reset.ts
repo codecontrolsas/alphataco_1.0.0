@@ -35,6 +35,7 @@ import { seedMaintenance } from './domains/maintenance.ts';
 import { seedOperations } from './domains/operations.ts';
 import { seedOrgChart } from './domains/org-chart.ts';
 import { seedOwnChecks } from './domains/own-checks.ts';
+import { seedDemoPortal } from './domains/portal.ts';
 import { SUPPLIER_DOCUMENTS_BUCKET, seedPurchases } from './domains/purchases.ts';
 import { seedThirdPartyChecks } from './domains/third-party-checks.ts';
 import { seedTires } from './domains/tires.ts';
@@ -146,6 +147,8 @@ async function main(): Promise<void> {
           await seedKpis(ctx);
           await seedUsers(ctx, employees);
           await seedHse(ctx, employees);
+          // Portal de empleados: el usuario demo es también el chofer del legajo 1006 (después de usuarios y HSE).
+          await seedDemoPortal(ctx, employees);
           await seedIndicators(ctx);
           // La demo muestra TODOS los módulos (F3): se encienden cada noche, incluidos HSE y el portal, que la
           // migración de línea de base deja apagados. Dentro de la misma transacción: si algo falla, queda la de ayer.
