@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { labeledStatusSchema } from './employees';
+import { documentSummarySchema, labeledStatusSchema } from './employees';
 
 /**
  * Contrato de Equipos de `/api/mobile/v1` (solo lectura). Módulo sin directivas: lo usan las rutas y sirve de fuente
@@ -48,6 +48,36 @@ export const equipmentKindParamSchema = z.enum(EQUIPMENT_KINDS);
 
 // ─── Listado ──────────────────────────────────────────────────────────────────
 
+/** Chofer del equipo (derivado de los partes diarios; ver el doc del contrato). */
+export const equipmentDriverSchema = z.object({
+  id: uuid,
+  fileNumber: z.string(),
+  name: z.string(),
+  /** Fecha del último parte en que figura como chofer de este equipo. */
+  lastDate: z.string(),
+  /** Tiene documentos vencidos, por vencer, rechazados o faltantes; null si el rol no ve los documentos de empleados. */
+  alert: z.boolean().nullable(),
+});
+
+const orderStatusSchema = z.object({ code: z.string(), label: z.string(), tone: z.enum(['ok', 'warn', 'danger', 'neutral']) });
+
+export const equipmentMaintenanceSchema = z.object({
+  /** Orden abierta con la fecha programada más cercana desde hoy. */
+  nextService: z
+    .object({ orderId: uuid, orderNumber: nullableText, date: z.string(), status: orderStatusSchema })
+    .nullable(),
+  /** Orden más recientemente creada, en cualquier estado. */
+  lastOrder: z
+    .object({
+      orderId: uuid,
+      orderNumber: nullableText,
+      createdAt: z.string(),
+      status: orderStatusSchema,
+      description: nullableText,
+    })
+    .nullable(),
+});
+
 export const equipmentListItemSchema = z.object({
   id: uuid,
   kind: z.enum(EQUIPMENT_KINDS),
@@ -64,6 +94,24 @@ export const equipmentListItemSchema = z.object({
   isActive: z.boolean(),
   /** null si el módulo Documentación está apagado para la empresa. */
   docStatus: labeledStatusSchema.nullable(),
+  /**
+   * Revisión 2, todos opcionales. Patente = dominio del vehículo; null en el equipamiento (su `identifier` es el
+   * interno o el n° de serie).
+   */
+  plate: nullableText.optional(),
+  /** Kilómetros (vehículo) / horas de motor (vehículo) u horómetro (equipamiento), tal cual están cargados. */
+  mileage: nullableText.optional(),
+  engineHours: nullableText.optional(),
+  /** Clientes afectados (la lista web ya muestra esta columna); `customer` es el primero. */
+  customers: z.array(z.object({ id: uuid, name: z.string() })).optional(),
+  customer: nullableText.optional(),
+  costCenter: nullableText.optional(),
+  /** Solo con ver los partes diarios; ausente si no hay chofer reciente. */
+  driver: equipmentDriverSchema.nullable().optional(),
+  /** Solo con permiso sobre los documentos del equipo; null para bajas o con Documentación apagada. */
+  documentSummary: documentSummarySchema.nullable().optional(),
+  /** Solo vehículos y con ver el historial de mantenimiento de la ficha. */
+  maintenance: equipmentMaintenanceSchema.nullable().optional(),
 });
 
 export const equipmentListResponseSchema = z.object({
@@ -71,6 +119,19 @@ export const equipmentListResponseSchema = z.object({
   nextCursor: z.string().nullable(),
   /** Total con los filtros aplicados; solo en la primera página (sin `cursor`). */
   total: z.number().int().nullable(),
+  /**
+   * Revisión 2, primera página: conteos del universo de la lista (clase, estado, tipo y búsqueda; sin `condition` ni
+   * `docStatus`, para que sirvan de tarjetas-filtro). `withExpiry` = con documentación vencida (null con Documentación apagada).
+   */
+  totals: z
+    .object({
+      all: z.number().int(),
+      operative: z.number().int(),
+      inWorkshop: z.number().int(),
+      withExpiry: z.number().int().nullable(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export const equipmentFiltersResponseSchema = z.object({
@@ -128,6 +189,11 @@ export const equipmentDetailResponseSchema = z.object({
   condition: labeledStatusSchema.nullable(),
   docStatus: labeledStatusSchema.nullable(),
   termination: z.object({ date: nullableText, reason: nullableText }).nullable(),
+  /** Revisión 2 (opcionales): patente (dominio del vehículo; null en equipamiento), chofer, resumen documental y mantenimiento. */
+  plate: nullableText.optional(),
+  driver: equipmentDriverSchema.nullable().optional(),
+  documentSummary: documentSummarySchema.nullable().optional(),
+  maintenance: equipmentMaintenanceSchema.nullable().optional(),
   /** Bloques incluidos según permisos: un bloque sin permiso NO viaja (ni vacío). */
   technical: z
     .object({

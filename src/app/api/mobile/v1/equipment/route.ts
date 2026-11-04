@@ -1,6 +1,6 @@
 import { equipmentListQuerySchema, equipmentListResponseSchema } from '@/features/MobileApi/contracts/equipment';
 import { listEquipment } from '@/features/MobileApi/equipment/queries.server';
-import { loadEquipmentAccess } from '@/features/MobileApi/lib/access.server';
+import { loadMobileAccess } from '@/features/MobileApi/lib/access.server';
 import { mobileRoute } from '@/features/MobileApi/lib/handler';
 import { mobileError, mobileReadJson } from '@/features/MobileApi/lib/http';
 import { InvalidCursorError } from '@/features/MobileApi/lib/labels';
@@ -17,11 +17,12 @@ export const GET = mobileRoute({
     if (!parsed.success) {
       return mobileError(422, 'INVALID_INPUT', `Parámetros inválidos: ${parsed.error.issues[0]?.path.join('.') ?? ''}`);
     }
-    const access = (await loadEquipmentAccess(ctx))[parsed.data.kind];
+    const full = await loadMobileAccess(ctx);
+    const access = full.equipment[parsed.data.kind];
     const allowed = parsed.data.status === 'active' ? access.listActive : access.listInactive;
     if (!allowed) return mobileError(403, 'FORBIDDEN', 'No tenés permiso para ver estos equipos.');
     try {
-      return mobileReadJson(req, equipmentListResponseSchema, await listEquipment(ctx, parsed.data));
+      return mobileReadJson(req, equipmentListResponseSchema, await listEquipment(ctx, parsed.data, full.equipment, full.employees));
     } catch (error) {
       if (error instanceof InvalidCursorError)
         return mobileError(422, 'INVALID_INPUT', 'El cursor no es válido: volvé a la primera página.');

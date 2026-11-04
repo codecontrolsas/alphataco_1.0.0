@@ -1,12 +1,12 @@
 import 'server-only';
 
 import { canViewDashboard, type DashboardTab } from '@/features/Dashboard/lib/permissions.server';
-import { arToday, daysUntil, parseValidity } from '@/features/Documentacion/shared/compliance/dates';
+import { arToday } from '@/features/Documentacion/shared/compliance/dates';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { cache } from 'react';
 import type { DocumentResourceKind } from './document-list-links';
-import { bucketExpiringDays, type ExpiringSeries } from './expiring-buckets';
+import { seriesFromRows, type ExpiringSeries } from './expiring-buckets';
 import { loadEmployeeExpiringRows, loadVehicleExpiringRows } from './expiring-rows.server';
 
 const logger = new Logger('features/Dashboard/Documentacion/expiring-overview');
@@ -40,11 +40,7 @@ async function loadSource(kind: DocumentResourceKind, today: string): Promise<Ex
 
   try {
     const rows = await source.load();
-    const daysLeft = rows.flatMap((row) => {
-      const day = parseValidity(row.validity);
-      return day === null ? [] : [daysUntil(day, today)];
-    });
-    return { status: 'ok', series: bucketExpiringDays(daysLeft) };
+    return { status: 'ok', series: seriesFromRows(rows, today) };
   } catch (error) {
     logger.error('Error al calcular los próximos vencimientos', { data: { error, kind } });
     return { status: 'error' };

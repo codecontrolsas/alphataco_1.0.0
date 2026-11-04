@@ -2,7 +2,7 @@ import 'server-only';
 
 import { clothingDeliveryTypeLabels } from '@/features/Clothing/utils/mappers';
 import { loadEmployeeDocumentRows } from '@/features/Documentacion/DocumentosEmpleados/lib/employee-document-rows.server';
-import { isModuleEnabledForCompany } from '@/features/Modules/server/modules.server';
+import { getEnabledModulesFor, isModuleEnabledForCompany } from '@/features/Modules/server/modules.server';
 import type { Prisma } from '@/generated/prisma/client';
 import { argentinaDate } from '@/shared/lib/argentina-time';
 import { prismaBase } from '@/shared/lib/prisma';
@@ -23,7 +23,9 @@ import type { EmployeeListQuery } from '../contracts/employees';
 import { DOCUMENT_STATE_LABELS, DOCUMENT_STATE_TONE } from '../documents/rows';
 import { docStatusOf, isoDay } from '../lib/labels';
 import type { EmployeeAccess } from './access';
+import { hasAlert, loadEmployeeDocumentCounts } from './document-summary.server';
 import { buildPhotoUrls } from './photo';
+import { loadAbsences, loadActivity, loadAssignedEquipment, loadTrainings } from './sections.server';
 
 /**
  * Consultas de Empleados para la API móvil. Todas corren con el contexto de la petición (RLS por empresa con el rol
@@ -121,7 +123,12 @@ function searchWhere(q: string | undefined): Prisma.employeesWhereInput | null {
   };
 }
 
-function listWhere(companyId: string, query: EmployeeListQuery, showDocStatus: boolean): Prisma.employeesWhereInput {
+function listWhere(
+  companyId: string,
+  query: EmployeeListQuery,
+  showDocStatus: boolean,
+  alertIds: string[] | null
+): Prisma.employeesWhereInput {
   const conditions: Prisma.employeesWhereInput[] = [
     { company_id: companyId },
     { is_active: query.status === 'active' },
@@ -133,18 +140,54 @@ function listWhere(companyId: string, query: EmployeeListQuery, showDocStatus: b
   if (query.customerId) conditions.push({ contractor_employee: { some: { contractor_id: query.customerId } } });
   // Con `documentacion` apagado el `status` (caché del cumplimiento documental) está congelado: no se filtra por él.
   if (query.docStatus && showDocStatus) conditions.push({ status: query.docStatus });
+  if (alertIds) conditions.push({ id: { in: alertIds } });
   return { AND: conditions };
 }
 
+export class InvalidListQueryError extends Error {}
+
+/**
+ * Condición de arranque del índice alfabético (`startsWith`): desde el primer apellido que empieza con la letra, con
+ * el mismo orden y la misma colación que el listado. Sin apellidos con esa letra, desde el primero que la sigue.
+ */
+async function startsWithWhere(
+  tx: Prisma.TransactionClient,
+  where: Prisma.employeesWhereInput,
+  letter: string
+): Promise<Prisma.employeesWhereInput> {
+  const first = await tx.employees.findFirst({
+    where: { AND: [where, { lastname: { startsWith: letter, mode: 'insensitive' } }] },
+    orderBy: ORDER_BY.name,
+    select: { lastname: true },
+  });
+  return { lastname: { gte: first?.lastname ?? letter.toUpperCase() } };
+}
+
 /** Página del listado con paginación por cursor y respuesta liviana (sin foto: solo sus URLs prefirmadas). */
-export async function listEmployees(ctx: TenantContext, query: EmployeeListQuery) {
+export async function listEmployees(ctx: TenantContext, query: EmployeeListQuery, access: EmployeeAccess) {
   const cursor = decodeCursor(query.cursor, query.sort);
   const showDocStatus = await isModuleEnabledForCompany('documentacion', ctx.companyId);
-  const where = listWhere(ctx.companyId, query, showDocStatus);
-  const pageWhere = cursor ? { AND: [where, afterCursor(cursor)] } : where;
+  if (query.startsWith && query.sort !== 'name') {
+    throw new InvalidListQueryError('`startsWith` solo se combina con `sort=name`.');
+  }
+  if (query.alerts && query.status !== 'active') {
+    throw new InvalidListQueryError('`alerts` solo aplica a los empleados activos.');
+  }
+
+  // Resumen documental: solo activos, con Documentación encendida y permiso sobre la lista de documentos de empleados.
+  const wantsSummary = query.status === 'active' && showDocStatus && access.documentList.visible;
+  const counts = wantsSummary ? await loadEmployeeDocumentCounts(ctx, access) : null;
+  const alertIds = counts ? [...counts.entries()].flatMap(([id, item]) => (hasAlert(item) ? [id] : [])) : null;
+
+  if (query.alerts && !alertIds) throw new InvalidListQueryError('`alerts` requiere el módulo Documentación encendido.');
+  const where = listWhere(ctx.companyId, query, showDocStatus, query.alerts ? alertIds : null);
 
   return runWithTenantContext(prismaBase, ctx, async (tx) => {
-    const [rows, total] = await Promise.all([
+    // El índice alfabético solo fija dónde arranca la primera página: con cursor manda el cursor.
+    const start = !cursor && query.startsWith ? await startsWithWhere(tx, where, query.startsWith) : null;
+    const pageWhere = cursor ? { AND: [where, afterCursor(cursor)] } : start ? { AND: [where, start] } : where;
+    const firstPage = !cursor;
+    const [rows, total, withAlerts] = await Promise.all([
       tx.employees.findMany({
         where: pageWhere,
         orderBy: ORDER_BY[query.sort],
@@ -161,7 +204,13 @@ export async function listEmployees(ctx: TenantContext, query: EmployeeListQuery
           hierarchy: { select: { name: true } },
         },
       }),
-      cursor ? Promise.resolve(null) : tx.employees.count({ where }),
+      firstPage ? tx.employees.count({ where }) : Promise.resolve(null),
+      // `withAlerts` cuenta sobre los mismos filtros pero sin `alerts` (con `alerts=1` es el propio total).
+      firstPage && alertIds
+        ? query.alerts
+          ? Promise.resolve(null)
+          : tx.employees.count({ where: { AND: [where, { id: { in: alertIds } }] } })
+        : Promise.resolve(null),
     ]);
 
     const page = rows.slice(0, query.limit);
@@ -188,6 +237,12 @@ export async function listEmployees(ctx: TenantContext, query: EmployeeListQuery
         id: row.id,
         fileNumber: row.file,
         fullName: `${row.lastname} ${row.firstname}`,
+        lastName: row.lastname,
+        firstName: row.firstname,
+        // Sin entrada en el motor (activo sin documentos que apliquen): todo en cero, no «desconocido».
+        documentSummary: counts
+          ? counts.get(row.id) ?? { valid: 0, expiring: 0, expired: 0, missing: 0, rejected: 0 }
+          : null,
         position: row.company_positions?.name ?? null,
         sector: row.hierarchy?.name ?? null,
         isActive: row.is_active !== false,
@@ -195,7 +250,12 @@ export async function listEmployees(ctx: TenantContext, query: EmployeeListQuery
         photo: buildPhotoUrls(ctx.companyId, row.id, versions.get(row.id) ?? null),
       })),
       nextCursor,
-      total,
+      total: firstPage ? total : null,
+      // Con `alerts=1` el total ya es el de las alertas; sin permiso, no se informa.
+      totals:
+        firstPage && alertIds && total !== null
+          ? { all: total, withAlerts: query.alerts ? total : withAlerts ?? 0 }
+          : null,
     };
   });
 }
@@ -240,7 +300,8 @@ export async function getEmployeeFilterOptions(ctx: TenantContext, access: Emplo
 
 /** Legajo de un empleado de la empresa, con los bloques que el usuario puede ver. null = no existe en la empresa. */
 export async function getEmployeeDetail(ctx: TenantContext, employeeId: string, access: EmployeeAccess) {
-  const showDocStatus = await isModuleEnabledForCompany('documentacion', ctx.companyId);
+  const enabled = await getEnabledModulesFor(ctx.companyId);
+  const showDocStatus = enabled.has('documentacion');
   return runWithTenantContext(prismaBase, ctx, async (tx) => {
     const employee = await tx.employees.findFirst({
       where: { id: employeeId, company_id: ctx.companyId },
@@ -286,8 +347,24 @@ export async function getEmployeeDetail(ctx: TenantContext, employeeId: string, 
       },
     });
     if (!employee) return null;
-    const versions = await photoVersions(tx, [employee.id]);
     const e = employee;
+    // Secciones de la revisión 2: solo las que el rol puede ver y cuyo módulo está encendido (si no, no viajan).
+    const withHistory = access.reports && enabled.has('operaciones');
+    const [versions, absences, trainings, assignedEquipment, activity] = await Promise.all([
+      photoVersions(tx, [e.id]),
+      access.absences ? loadAbsences(tx, ctx.companyId, e.id) : undefined,
+      access.trainings && enabled.has('hse') ? loadTrainings(tx, ctx.companyId, e.id) : undefined,
+      withHistory && enabled.has('equipos') && (access.equipmentLists.vehicle || access.equipmentLists.other)
+        ? loadAssignedEquipment(tx, ctx.companyId, e.id, access)
+        : undefined,
+      (access.documents.visible && showDocStatus) || withHistory
+        ? loadActivity(tx, ctx.companyId, e.id, {
+            ...access,
+            reports: withHistory,
+            documents: showDocStatus ? access.documents : { ...access.documents, permanent: false, monthly: false },
+          })
+        : undefined,
+    ]);
 
     return {
       id: e.id,
@@ -354,6 +431,10 @@ export async function getEmployeeDetail(ctx: TenantContext, employeeId: string, 
             },
           }
         : {}),
+      ...(absences ? { absences } : {}),
+      ...(trainings ? { trainings } : {}),
+      ...(assignedEquipment ? { assignedEquipment } : {}),
+      ...(activity ? { activity } : {}),
       sections: { documents: access.documents.visible, diagram: access.diagram, clothing: access.clothing },
     };
   });

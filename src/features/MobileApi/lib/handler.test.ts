@@ -79,18 +79,24 @@ describe('mobileRoute con módulos', () => {
 });
 
 describe('mobileModulesFor', () => {
+  // `nucleo` siempre está encendido: sus entradas (tableros, avisos y búsqueda) se informan en toda empresa.
+  const NUCLEO = ['nucleo.dashboards', 'nucleo.notifications', 'nucleo.search'];
+
   it('informa solo las entradas cuya clave dueña está encendida', async () => {
     const { mobileModulesFor } = await import('./config');
-    expect(mobileModulesFor(new Set(['nucleo', 'empleados']))).toEqual(['empleados.employees']);
+    expect(mobileModulesFor(new Set(['nucleo', 'empleados']))).toEqual(['empleados.employees', ...NUCLEO]);
     expect(mobileModulesFor(new Set(['nucleo', 'operaciones']))).toEqual([
       'operaciones.daily-report-rows',
       'operaciones.daily-reports',
       'operaciones.resources',
+      ...NUCLEO,
     ]);
     expect(mobileModulesFor(new Set(['nucleo', 'equipos', 'documentacion']))).toEqual([
       'equipos.equipment',
       'documentacion.documents',
+      ...NUCLEO,
     ]);
-    expect(mobileModulesFor(new Set(['nucleo']))).toEqual([]);
+    expect(mobileModulesFor(new Set(['nucleo', 'empleados', 'hse']))).toContain('hse.trainings');
+    expect(mobileModulesFor(new Set(['nucleo']))).toEqual(NUCLEO);
   });
 });

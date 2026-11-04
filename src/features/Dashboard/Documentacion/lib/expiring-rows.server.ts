@@ -20,8 +20,13 @@ export const loadEmployeeExpiringRows = cache(async () => {
     getActiveCompanyId(),
     checkPermissionServer('documentacion', 'documentos-de-empleados', 'view_private'),
   ]);
-  return selectExpiringRows(await loadEmployeeDocumentRows(companyId, false, canViewPrivate, ''));
+  return loadEmployeeExpiringRowsFor(companyId, canViewPrivate);
 });
+
+/** Las mismas filas para quien ya validó permisos y empresa sin la sesión web (la API móvil). */
+export async function loadEmployeeExpiringRowsFor(companyId: string, canViewPrivate: boolean) {
+  return selectExpiringRows(await loadEmployeeDocumentRows(companyId, false, canViewPrivate, ''));
+}
 
 /** Ídem para equipos (vista "Vencimientos > Equipos"). */
 export const loadVehicleExpiringRows = cache(async () => {
@@ -30,5 +35,10 @@ export const loadVehicleExpiringRows = cache(async () => {
     getActiveCompanyId(),
     checkPermissionServer('documentacion', 'documentos-de-equipos', 'view_private'),
   ]);
-  return selectExpiringRows(await loadEquipmentDocumentRows(companyId, false, canViewPrivate, ''));
+  return loadVehicleExpiringRowsFor(companyId, canViewPrivate);
 });
+
+/** Las mismas filas para quien ya validó permisos y empresa sin la sesión web (la API móvil). */
+export async function loadVehicleExpiringRowsFor(companyId: string, canViewPrivate: boolean) {
+  return selectExpiringRows(await loadEquipmentDocumentRows(companyId, false, canViewPrivate, ''));
+}

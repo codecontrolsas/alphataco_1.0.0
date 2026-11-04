@@ -98,3 +98,38 @@ export function describeRequirementReason(type: ComplianceType, resource: Compli
   });
   return parts.join(' · ');
 }
+
+/** Criterio estructurado por el que se pide un tipo de documento (para la API móvil). */
+export interface TypeRequirement {
+  /** `all`: a todo el recurso de su clase; `conditions`: solo a quien cumple los criterios; `none`: a nadie (condiciones ilegibles). */
+  scope: 'all' | 'conditions' | 'none';
+  /** Texto del alcance general («Todo el personal»); null con condiciones. */
+  allText: string | null;
+  /** Un criterio por condición: etiqueta («Puesto», «Clientes», «Sector»...) y los nombres elegidos. */
+  criteria: { key: string; label: string; values: string[] }[];
+}
+
+/**
+ * A quién y por qué se pide `type`, sin tomar un recurso: lista cada condición del tipo con TODOS sus valores (no solo
+ * los que cumple un recurso). Usa las mismas lecturas que `describeRequirementReason`. Los valores sin nombre guardado
+ * se omiten (un id no le sirve a quien lee).
+ */
+export function describeTypeRequirement(type: ComplianceType): TypeRequirement {
+  const scope = resolveTypeScope(type);
+  if (scope.kind === 'none') return { scope: 'none', allText: null, criteria: [] };
+  if (scope.kind === 'all') return { scope: 'all', allText: allScopeText(type), criteria: [] };
+
+  const labels = readRawLabels(type.scope.conditions);
+  const criteria = parseDocumentConditions(type.scope.conditions).map((condition) => {
+    const raw = labels.get(condition.propertyKey);
+    return {
+      key: condition.propertyKey,
+      label: LABEL_OVERRIDES[condition.propertyKey] ?? raw?.label ?? condition.propertyKey,
+      values: condition.ids.flatMap((id) => {
+        const name = raw?.namesById.get(id);
+        return name ? [name] : [];
+      }),
+    };
+  });
+  return { scope: 'conditions', allText: null, criteria };
+}

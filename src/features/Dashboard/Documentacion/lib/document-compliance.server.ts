@@ -72,6 +72,17 @@ const PERMISSIONS = {
   vehicles: { dashboardTab: 'vehiculos', documentTab: 'documentos-de-equipos' },
 } as const;
 
+/**
+ * Conteos de una fuente para una empresa, sin la sesión ni los permisos: la API móvil valida los permisos con su propio
+ * contexto y llama acá. Corre con el cliente contextual (el llamador fija el contexto de la empresa).
+ */
+export async function loadComplianceCountsForCompany(
+  kind: DocumentResourceKind,
+  companyId: string
+): Promise<ComplianceCounts> {
+  return toCounts(await GROUP_BY[kind](companyId));
+}
+
 export const loadComplianceCounts = cache(async (kind: DocumentResourceKind): Promise<ComplianceSource> => {
   const { dashboardTab, documentTab } = PERMISSIONS[kind];
   const [canDashboard, canDocuments] = await Promise.all([

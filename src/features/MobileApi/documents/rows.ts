@@ -1,7 +1,8 @@
 import { documentStateLabels } from '@/shared/utils/mappers';
 import { z } from 'zod';
 import type { DocumentListQuery, DocumentResource } from '../contracts/documents';
-import { decodeCursor, encodeCursor, type Tone } from '../lib/labels';
+import moment from 'moment';
+import { InvalidCursorError, decodeCursor, encodeCursor, type Tone } from '../lib/labels';
 
 /**
  * Filas de documentos de la API móvil (módulo puro: sin base ni `server-only`). Las filas llegan ya calculadas por el
@@ -163,5 +164,63 @@ export function toListItem(row: MobileDocumentRow) {
     validity: row.validity,
     period: row.period,
     hasDetail: !row.isMissing,
+  };
+}
+
+// ─── Resumen y agrupación por vencimiento (revisión 2) ────────────────────────
+
+export function summarize(rows: Pick<MobileDocumentRow, 'status'>[]) {
+  const summary = { valid: 0, expiring: 0, expired: 0, missing: 0, rejected: 0, total: rows.length };
+  for (const row of rows) summary[row.status] += 1;
+  return summary;
+}
+
+export type ExpiryBucket = 'overdue' | 'thisWeek' | 'thisMonth' | 'later';
+
+export const EXPIRY_BUCKET_LABELS: Record<ExpiryBucket, string> = {
+  overdue: 'Vencidos',
+  thisWeek: 'Esta semana',
+  thisMonth: 'Este mes',
+  later: 'Más adelante',
+};
+
+/**
+ * Agrupación por vencimiento (`today` = día argentino `YYYY-MM-DD`):
+ * - `overdue`: vencido (estado vencido o fecha anterior a hoy).
+ * - `thisWeek`: vence hoy o en los próximos 6 días.
+ * - `thisMonth`: vence después de esa semana y hasta el último día del mes calendario de hoy.
+ * - `later`: vence después.
+ * `null` = no entra en ninguna: faltante, o documento sin vencimiento (que no está vencido).
+ */
+export function expiryBucket(row: Pick<MobileDocumentRow, 'status' | 'validity'>, today: string): ExpiryBucket | null {
+  if (row.status === 'missing') return null;
+  if (row.status === 'expired') return 'overdue';
+  if (!row.validity) return null;
+  if (row.validity < today) return 'overdue';
+  const weekEnd = moment.utc(today).add(6, 'days').format('YYYY-MM-DD');
+  if (row.validity <= weekEnd) return 'thisWeek';
+  const monthEnd = moment.utc(today).endOf('month').format('YYYY-MM-DD');
+  return row.validity <= monthEnd ? 'thisMonth' : 'later';
+}
+
+const bucketCursorSchema = z.object({ b: z.enum(['overdue', 'thisWeek', 'thisMonth', 'later']), k: z.string().min(1).max(900) });
+
+/** Orden dentro de una agrupación: el que vence antes primero; después tipo, recurso e id (desempate estable). */
+function bucketKey(row: MobileDocumentRow): string {
+  return [row.validity ?? '0000-00-00', normalizeText(row.type.name), normalizeText(row.resource.name), row.id].join(SEP);
+}
+
+/** Página de UNA agrupación por cursor. Un cursor de otra agrupación es inválido. */
+export function pageBucket(rows: MobileDocumentRow[], bucket: ExpiryBucket, query: Pick<DocumentListQuery, 'cursor' | 'limit'>) {
+  const cursor = decodeCursor(query.cursor, bucketCursorSchema);
+  if (cursor && cursor.b !== bucket) throw new InvalidCursorError('El cursor es de otra agrupación');
+  const keyed = rows.map((row) => ({ row, key: bucketKey(row) })).sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  const start = cursor ? keyed.findIndex((item) => item.key > cursor.k) : 0;
+  const rest = start < 0 ? [] : keyed.slice(start);
+  const page = rest.slice(0, query.limit);
+  const last = page.at(-1);
+  return {
+    items: page.map((item) => toListItem(item.row)),
+    nextCursor: rest.length > query.limit && last ? encodeCursor({ b: bucket, k: last.key }) : null,
   };
 }

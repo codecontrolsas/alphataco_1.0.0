@@ -18,20 +18,20 @@ import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { cache } from 'react';
 
+import {
+  ERROR,
+  FORBIDDEN,
+  TONE_ORDER,
+  overdueDocumentSources,
+  toneFor,
+  type AttentionItem,
+  type AttentionTone,
+  type Source,
+} from './attention-items';
+
+export type { AttentionItem, AttentionTone };
+
 const logger = new Logger('features/Dashboard/Resumen/attention');
-
-/** Qué tan urgente es un pendiente: ordena la bandeja y elige el color. */
-export type AttentionTone = 'danger' | 'warn' | 'info';
-
-export interface AttentionItem {
-  key: string;
-  module: string;
-  /** Lo que se cuenta, en minúscula y plural («solicitudes pendientes de aprobación»). */
-  label: string;
-  count: number;
-  href: string;
-  tone: AttentionTone;
-}
 
 export interface AttentionInbox {
   /** Pendientes con al menos un caso, ya ordenados. */
@@ -40,35 +40,6 @@ export interface AttentionInbox {
   checked: number;
   /** Fuentes que el usuario puede ver pero fallaron: se avisa, nunca se cuentan como «nada pendiente». */
   failed: number;
-}
-
-/** Una fuente de la bandeja: el pendiente, sin permiso, o error al calcularlo. */
-type Source = { status: 'ok'; item: AttentionItem } | { status: 'forbidden' } | { status: 'error' };
-const FORBIDDEN: Source = { status: 'forbidden' };
-const ERROR: Source = { status: 'error' };
-
-/** Lo vencido va primero: es lo que ya está fuera de término. */
-const DANGER_KEYS = new Set([
-  'documentacion:empleados',
-  'documentacion:equipos',
-  'compras:pagos',
-  'tesoreria:cobranzas',
-]);
-/** Lo que espera una decisión de alguien. */
-const WARN_KEYS = new Set([
-  'mantenimiento:maint_operaciones',
-  'almacenes:pedidos',
-  'compras:solicitudes',
-  'compras:ordenes',
-  'compras:facturas',
-  'comercial:certificaciones-borrador',
-]);
-const TONE_ORDER: Record<AttentionTone, number> = { danger: 0, warn: 1, info: 2 };
-
-function toneFor(key: string): AttentionTone {
-  if (DANGER_KEYS.has(key)) return 'danger';
-  if (WARN_KEYS.has(key)) return 'warn';
-  return 'info';
 }
 
 /** Href y nombre del módulo salen del mismo menú lateral: la bandeja lleva exactamente a la sección del badge. */
@@ -102,30 +73,7 @@ async function loadSectionItems(): Promise<Source[]> {
 
 /** Documentos ya vencidos de personal y de equipos (misma carga que los widgets de Vencimientos). */
 async function loadOverdueDocumentItems(): Promise<Source[]> {
-  const overview = await loadExpiringOverview();
-  const build = (key: string, source: typeof overview.employees, label: string, href: string): Source =>
-    source.status === 'ok'
-      ? {
-          status: 'ok',
-          item: { key, module: 'Documentación', label, count: source.series.overdue, href, tone: toneFor(key) },
-        }
-      : source.status === 'error'
-        ? ERROR
-        : FORBIDDEN;
-  return [
-    build(
-      'documentacion:empleados',
-      overview.employees,
-      'documentos de personal vencidos',
-      '/dashboard/document?tab=documentos-de-empleados'
-    ),
-    build(
-      'documentacion:equipos',
-      overview.vehicles,
-      'documentos de equipos vencidos',
-      '/dashboard/document?tab=documentos-de-equipos'
-    ),
-  ];
+  return overdueDocumentSources(await loadExpiringOverview());
 }
 
 /** Certificaciones que todavía no se emitieron y confirmadas que falta facturar. */

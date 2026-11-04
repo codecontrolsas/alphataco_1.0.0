@@ -1,3 +1,5 @@
+import { daysUntil, parseValidity } from '@/features/Documentacion/shared/compliance/dates';
+
 /**
  * Agrupación de los próximos vencimientos para la línea de tiempo y las barras por semana.
  * Módulo puro (sin directiva ni servidor): trabaja con "días que faltan" ya calculados en hora argentina.
@@ -27,6 +29,15 @@ export function bucketExpiringDays(daysLeft: readonly number[]): ExpiringSeries 
     else if (days <= TIMELINE_DAYS) byDay[days] += 1;
   }
   return { overdue, byDay };
+}
+
+/** Serie de vencimientos a partir de las filas con vencimiento (días que faltan respecto de `today`, hora argentina). */
+export function seriesFromRows(rows: ReadonlyArray<{ validity: Date | null }>, today: string): ExpiringSeries {
+  const daysLeft = rows.flatMap((row) => {
+    const day = parseValidity(row.validity);
+    return day === null ? [] : [daysUntil(day, today)];
+  });
+  return bucketExpiringDays(daysLeft);
 }
 
 export interface WeekBucket {

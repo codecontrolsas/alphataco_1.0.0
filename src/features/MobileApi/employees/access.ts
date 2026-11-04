@@ -27,6 +27,17 @@ export function resolveEmployeeAccess(perms: MobilePermissions) {
     personal: canViewRecord && personal,
     contact: canViewRecord && personal && perms.isTabVisible('empleados:datos-contacto:view'),
     work: canViewRecord && perms.isTabVisible('empleados:datos-laborales:view'),
+    /**
+     * Resumen documental en la lista (`documentSummary`, `alerts`, `totals.withAlerts`): revela el estado de los
+     * documentos, así que exige la lista de documentos de empleados (pestaña + permanentes o mensuales), no solo la
+     * lista de empleados. Los tipos privados cuentan solo con `view_private`.
+     */
+    documentList: {
+      visible: documentsTab && (permanent || monthly),
+      permanent: documentsTab && permanent,
+      monthly: documentsTab && monthly,
+      privateTypes: perms.has('documentacion:documentos-de-empleados:view_private'),
+    },
     documents: {
       visible: canViewRecord && (permanent || monthly),
       permanent: canViewRecord && permanent,
@@ -37,6 +48,19 @@ export function resolveEmployeeAccess(perms: MobilePermissions) {
       canViewRecord &&
       (perms.isTabVisible('empleados:diagramas-empleado:view') || perms.isTabVisible('empleados:new:view')),
     clothing: canViewRecord && perms.isTabVisible('empleados:indumentaria_empleado:view'),
+    /** Licencias y ausencias: salen de las novedades del diagrama, así que llevan el mismo permiso que `diagram`. */
+    absences:
+      canViewRecord &&
+      (perms.isTabVisible('empleados:diagramas-empleado:view') || perms.isTabVisible('empleados:new:view')),
+    /** Capacitaciones (HSE): `view` de la pestaña Capacitaciones; además, el módulo `hse` encendido. */
+    trainings: canViewRecord && perms.has('hse:capacitaciones:view'),
+    /** Partes diarios: de ahí salen los equipos asignados y la actividad de asignaciones. */
+    reports: canViewRecord && perms.has('operaciones:detalle-parte-diario:view'),
+    /** Clases de equipo que puede ver en lista (los equipos asignados solo muestran las que puede listar). */
+    equipmentLists: {
+      vehicle: perms.has('equipos:vehicles:view'),
+      other: perms.has('equipos:others:view'),
+    },
   };
 }
 
