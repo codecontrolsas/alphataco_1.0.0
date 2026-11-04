@@ -17,7 +17,16 @@ import { EQUIPMENT_CONDITIONS, type EquipmentKind, type EquipmentListQuery } fro
 import { loadMobileDocumentRows } from '../documents/queries.server';
 import { labeledState, type MobileDocumentRow } from '../documents/rows';
 import { InvalidCursorError, conditionOf, decodeCursor, docStatusOf, encodeCursor, isoDay } from '../lib/labels';
+import { getEnabledModulesFor } from '@/features/Modules/server/modules.server';
+import type { EmployeeAccess } from '../employees/access';
 import type { EquipmentAccess, EquipmentKindAccess } from './access';
+import {
+  documentCountsOrEmpty,
+  loadDrivers,
+  loadMaintenance,
+  loadOtherCertificationCounts,
+  loadVehicleDocumentCounts,
+} from './enrichment.server';
 
 /**
  * Consultas de Equipos para la API móvil. Corren con el contexto de la petición (RLS por empresa con el rol de
@@ -114,12 +123,72 @@ function otherWhere(
 }
 
 const LIST_NAME = { select: { name: true } } as const;
+/** Clientes afectados: la lista completa y el primero (`customer`). */
+function customersOf(customers: ({ id: string; name: string } | null)[]) {
+  const list = customers.flatMap((customer) => (customer ? [customer] : []));
+  return { customers: list, customer: list[0]?.name ?? null };
+}
+
+/**
+ * Tarjetas de la lista (primera página): sobre el universo de la clase, el estado, el tipo y la búsqueda; sin
+ * `condition` ni `docStatus`, para que cada tarjeta pueda usarse de filtro. Dos conteos agrupados por consulta.
+ */
+async function equipmentTotals(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  query: EquipmentListQuery,
+  showDocStatus: boolean
+) {
+  const universe = { ...query, condition: undefined, docStatus: undefined };
+  const where = query.kind === 'vehicle' ? vehicleWhere(companyId, universe, false) : otherWhere(companyId, universe, false);
+  const [byCondition, withExpiry] =
+    query.kind === 'vehicle'
+      ? await Promise.all([
+          tx.vehicles.groupBy({ by: ['condition'], where: where as Prisma.vehiclesWhereInput, _count: { _all: true } }),
+          showDocStatus
+            ? tx.vehicles.count({ where: { AND: [where as Prisma.vehiclesWhereInput, { status: 'Completo_con_doc_vencida' }] } })
+            : Promise.resolve(null),
+        ])
+      : await Promise.all([
+          tx.other_equipment.groupBy({
+            by: ['condition'],
+            where: where as Prisma.other_equipmentWhereInput,
+            _count: { _all: true },
+          }),
+          showDocStatus
+            ? tx.other_equipment.count({
+                where: { AND: [where as Prisma.other_equipmentWhereInput, { status: 'Completo_con_doc_vencida' }] },
+              })
+            : Promise.resolve(null),
+        ]);
+  const count = (condition: string) => byCondition.find((row) => row.condition === condition)?._count._all ?? 0;
+  return {
+    all: byCondition.reduce((sum, row) => sum + row._count._all, 0),
+    operative: count('operativo'),
+    inWorkshop: count('en_reparacion'),
+    withExpiry,
+  };
+}
 
 /** Página del listado de UNA clase de equipo, paginada por cursor (dominio o interno, nulls al final, id). */
-export async function listEquipment(ctx: TenantContext, query: EquipmentListQuery) {
+export async function listEquipment(
+  ctx: TenantContext,
+  query: EquipmentListQuery,
+  access: EquipmentAccess,
+  employees: EmployeeAccess
+) {
   const cursor = decodeCursor(query.cursor, cursorSchema);
   if (cursor && cursor.k !== query.kind) throw new InvalidCursorError('El cursor es de otra clase de equipo');
-  const showDocStatus = await isModuleEnabledForCompany('documentacion', ctx.companyId);
+  const enabled = await getEnabledModulesFor(ctx.companyId);
+  const showDocStatus = enabled.has('documentacion');
+  // Resumen documental de vehículos activos (motor de la web): una pasada para toda la página, solo con permiso.
+  const vehicleCounts =
+    query.kind === 'vehicle' && query.status === 'active' && showDocStatus
+      ? await loadVehicleDocumentCounts(ctx, access)
+      : null;
+  const withDrivers = query.kind === 'vehicle' && query.status === 'active' && access.reports && enabled.has('operaciones');
+  const withMaintenance = query.kind === 'vehicle' && access.vehicle.maintenance && enabled.has('mantenimiento');
+  const withCertificationCounts = query.kind === 'other' && access.other.certifications;
 
   return runWithTenantContext(prismaBase, ctx, async (tx) => {
     if (query.kind === 'vehicle') {
@@ -139,16 +208,27 @@ export async function listEquipment(ctx: TenantContext, query: EquipmentListQuer
             condition: true,
             is_active: true,
             status: true,
+            kilometer: true,
+            engine_hours: true,
             type_vehicles_typeTotype: LIST_NAME,
             brand_vehicles: LIST_NAME,
             model_vehicles: LIST_NAME,
+            cost_center: LIST_NAME,
+            contractor_equipment: CUSTOMERS,
           },
         }),
         cursor ? Promise.resolve(null) : tx.vehicles.count({ where }),
       ]);
       const page = rows.slice(0, query.limit);
       const last = page.at(-1);
+      const ids = page.map((row) => row.id);
+      const [drivers, maintenance, totals] = await Promise.all([
+        withDrivers ? loadDrivers(tx, ctx, ids, employees) : null,
+        withMaintenance ? loadMaintenance(tx, ctx.companyId, ids) : null,
+        cursor ? Promise.resolve(null) : equipmentTotals(tx, ctx.companyId, query, showDocStatus),
+      ]);
       return {
+        totals,
         items: page.map((row) => ({
           id: row.id,
           kind: 'vehicle' as const,
@@ -163,6 +243,14 @@ export async function listEquipment(ctx: TenantContext, query: EquipmentListQuer
           condition: conditionOf(row.condition),
           isActive: row.is_active !== false,
           docStatus: showDocStatus ? docStatusOf(row.status) : null,
+          plate: row.domain,
+          mileage: blank(row.kilometer),
+          engineHours: blank(row.engine_hours),
+          ...customersOf(row.contractor_equipment.map((item) => item.customers)),
+          costCenter: row.cost_center?.name ?? null,
+          ...(drivers ? { driver: drivers.get(row.id) ?? null } : {}),
+          ...(vehicleCounts ? { documentSummary: documentCountsOrEmpty(vehicleCounts, row.id) } : {}),
+          ...(maintenance ? { maintenance: maintenance.get(row.id) ?? null } : {}),
         })),
         nextCursor:
           rows.length > query.limit && last ? encodeCursor({ k: 'vehicle', v: last.domain, id: last.id }) : null,
@@ -185,16 +273,24 @@ export async function listEquipment(ctx: TenantContext, query: EquipmentListQuer
           condition: true,
           is_active: true,
           status: true,
+          horometer: true,
           type: LIST_NAME,
           brand_vehicles: LIST_NAME,
           model_vehicles: LIST_NAME,
+          cost_center: LIST_NAME,
+          contractor_other_equipment: CUSTOMERS,
         },
       }),
       cursor ? Promise.resolve(null) : tx.other_equipment.count({ where }),
     ]);
     const page = rows.slice(0, query.limit);
     const last = page.at(-1);
+    const [certificationCounts, totals] = await Promise.all([
+      withCertificationCounts ? loadOtherCertificationCounts(tx, ctx.companyId, page.map((row) => row.id)) : null,
+      cursor ? Promise.resolve(null) : equipmentTotals(tx, ctx.companyId, query, showDocStatus),
+    ]);
     return {
+      totals,
       items: page.map((row) => ({
         id: row.id,
         kind: 'other' as const,
@@ -209,6 +305,13 @@ export async function listEquipment(ctx: TenantContext, query: EquipmentListQuer
         condition: conditionOf(row.condition),
         isActive: row.is_active,
         docStatus: showDocStatus ? docStatusOf(row.status) : null,
+        // Equipamiento sin patente: se lo nombra por interno o n° de serie.
+        plate: null,
+        mileage: null,
+        engineHours: row.horometer === null ? null : row.horometer.toString(),
+        ...customersOf(row.contractor_other_equipment.map((item) => item.customers)),
+        costCenter: row.cost_center?.name ?? null,
+        ...(certificationCounts ? { documentSummary: documentCountsOrEmpty(certificationCounts, row.id) } : {}),
       })),
       nextCursor:
         rows.length > query.limit && last ? encodeCursor({ k: 'other', v: last.intern_number, id: last.id }) : null,
@@ -314,6 +417,18 @@ function certificationStatus(expiration: string | null): 'valid' | 'expiring' | 
   return days <= EXPIRING_SOON_DAYS ? 'expiring' : 'valid';
 }
 
+/** Conteo por estado de los documentos de la ficha (`missing`/`rejected` solo existen en los vehículos). */
+const countsOf = (docs: { status: string }[]) => {
+  const count = (status: string) => docs.filter((doc) => doc.status === status).length;
+  return {
+    valid: count('valid'),
+    expiring: count('expiring'),
+    expired: count('expired'),
+    missing: count('missing'),
+    rejected: count('rejected'),
+  };
+};
+
 const contractOf = (row: {
   type_of_contract: string | null;
   contract_number: string | null;
@@ -337,9 +452,16 @@ const certificationOf = (row: {
 });
 
 /** Ficha de un equipo de la empresa con los bloques que el usuario puede ver. null = no existe en la empresa. */
-export async function getEquipmentDetail(ctx: TenantContext, kind: EquipmentKind, id: string, access: EquipmentAccess) {
+export async function getEquipmentDetail(
+  ctx: TenantContext,
+  kind: EquipmentKind,
+  id: string,
+  access: EquipmentAccess,
+  employees: EmployeeAccess
+) {
   const kindAccess = access[kind];
-  const documentacion = await isModuleEnabledForCompany('documentacion', ctx.companyId);
+  const enabled = await getEnabledModulesFor(ctx.companyId);
+  const documentacion = enabled.has('documentacion');
 
   if (kind === 'vehicle') {
     const v = await runWithTenantContext(prismaBase, ctx, (tx) =>
@@ -380,9 +502,22 @@ export async function getEquipmentDetail(ctx: TenantContext, kind: EquipmentKind
     );
     if (!v) return null;
     const isActive = v.is_active !== false;
+    const documents =
+      documentacion && kindAccess.documents.visible ? await vehicleDocuments(ctx, v.id, kindAccess.documents) : null;
+    // Revisión 2: chofer (partes diarios) y mantenimiento, solo con permiso y módulo.
+    const [driver, maintenance] = await runWithTenantContext(prismaBase, ctx, (tx) =>
+      Promise.all([
+        isActive && access.reports && enabled.has('operaciones') ? loadDrivers(tx, ctx, [v.id], employees) : null,
+        access.vehicle.maintenance && enabled.has('mantenimiento') ? loadMaintenance(tx, ctx.companyId, [v.id]) : null,
+      ])
+    );
     return {
       id: v.id,
       kind,
+      plate: v.domain,
+      ...(driver ? { driver: driver.get(v.id) ?? null } : {}),
+      ...(maintenance ? { maintenance: maintenance.get(v.id) ?? null } : {}),
+      ...(documents ? { documentSummary: countsOf([...(documents.permanent ?? []), ...(documents.monthly ?? [])]) } : {}),
       identifier: v.domain ?? v.serie ?? v.intern_number ?? v.id,
       isActive,
       condition: conditionOf(v.condition),
@@ -423,8 +558,7 @@ export async function getEquipmentDetail(ctx: TenantContext, kind: EquipmentKind
             },
           }
         : {}),
-      documents:
-        documentacion && kindAccess.documents.visible ? await vehicleDocuments(ctx, v.id, kindAccess.documents) : null,
+      documents,
       certifications: null,
     };
   }
@@ -468,9 +602,18 @@ export async function getEquipmentDetail(ctx: TenantContext, kind: EquipmentKind
     })
   );
   if (!e) return null;
+  const certifications = kindAccess.certifications
+    ? e.other_equipment_certifications.map((cert) => {
+        const expirationDate = isoDay(cert.expiration_date);
+        return { id: cert.id, name: cert.name, expirationDate, status: certificationStatus(expirationDate) };
+      })
+    : null;
   return {
     id: e.id,
     kind,
+    // Equipamiento sin patente: se lo nombra por `identifier` (interno o n° de serie).
+    plate: null,
+    ...(certifications ? { documentSummary: countsOf(certifications) } : {}),
     identifier: e.intern_number ?? e.serial_number ?? e.id,
     isActive: e.is_active,
     condition: conditionOf(e.condition),
@@ -512,11 +655,6 @@ export async function getEquipmentDetail(ctx: TenantContext, kind: EquipmentKind
         }
       : {}),
     documents: null,
-    certifications: kindAccess.certifications
-      ? e.other_equipment_certifications.map((cert) => {
-          const expirationDate = isoDay(cert.expiration_date);
-          return { id: cert.id, name: cert.name, expirationDate, status: certificationStatus(expirationDate) };
-        })
-      : null,
+    certifications,
   };
 }

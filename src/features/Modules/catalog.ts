@@ -215,6 +215,7 @@ export const MODULE_CATALOG: Readonly<Record<ModuleKey, ModuleDef>> = {
       // Contenedor estructural: si fuera de `clientes`, apagar Clientes apagaría Certificación y Facturación por herencia.
       'comercial',
     ],
+    mobile: ['nucleo.dashboards', 'nucleo.notifications', 'nucleo.search'],
     routes: ['/dashboard', '/dashboard/configuration', '/dashboard/notifications', '/dashboard/help', '/manual'],
     jobs: ['processed-commands-purge', 'daily-indicators'],
     buckets: ['logo', 'avatar'],
@@ -699,6 +700,7 @@ export const MODULE_CATALOG: Readonly<Record<ModuleKey, ModuleDef>> = {
     softDeps: ['documentacion'],
     softImpactMessages: { documentacion: 'Las constancias dejan de verse en el legajo.' },
     tabs: ['hse'],
+    mobile: ['hse.trainings'],
     routes: ['/dashboard/hse'],
     jobs: ['hse-expiry', 'hse-expired-attempts'],
     buckets: ['hse-files'],

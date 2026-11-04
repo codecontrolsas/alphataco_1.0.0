@@ -1,3 +1,4 @@
+import { percentageOrNull } from '@/features/Dashboard/lib/metric';
 import type {
   DiagramIndicatorResult,
   EquipmentIndicatorResult,
@@ -84,6 +85,22 @@ export function aggregateEquipmentIndicators(
       cancelled_units: counts.cancelled,
     }))
     .sort((a, b) => b.available_units + b.not_available_units - (a.available_units + a.not_available_units));
+}
+
+/**
+ * KPIs de flota a partir de los equipos activos y el indicador por tipo.
+ * - `operativeVehicles`: activos que NO están fuera de servicio. `fleetMinusRepair` es la misma cifra como activos −
+ *   fuera de servicio. `operativityPercentage`: operativos / flota total; `null` si no hay flota.
+ */
+export function buildFleetKpis(activeVehicles: number, equipmentData: readonly EquipmentIndicatorResult[]) {
+  const fleet = summarizeFleet(equipmentData);
+  return {
+    activeVehicles,
+    operativeVehicles: fleet.operative,
+    totalFleet: fleet.total,
+    fleetMinusRepair: activeVehicles - fleet.notAvailable,
+    operativityPercentage: percentageOrNull(fleet.operative, fleet.total),
+  };
 }
 
 /** Totales de flota que alimentan las tarjetas de KPIs. */

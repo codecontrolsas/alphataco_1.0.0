@@ -382,6 +382,20 @@ export const MOBILE_PERMISSION_KEYS = [
   'documentacion:docs-empresa-permanentes:view',
   'documentacion:docs-empresa-mensuales:view',
   'documentacion:detalle-de-documento:view',
+  // Legajo (revisión 2): capacitaciones del empleado (HSE)
+  'hse:capacitaciones:view',
+  // Equipos (revisión 2): historial de mantenimiento del vehículo (próximo service y última orden)
+  'equipos:historial-mantenimiento-equipo:view',
+  // Capacitaciones (revisión 3): las actas (sesiones presenciales) cuelgan de su propia pestaña de HSE
+  'hse:actas:view',
+  // Tableros (revisión 3): claves de los widgets que la app calcula (mismas que exige el registro de widgets de la web)
+  'dashboard:principal:view',
+  'dashboard:empleados:view',
+  'dashboard:vehiculos:view',
+  'dashboard:rrhh:view',
+  'empleados:diagrams:view',
+  'equipos:equipos:view',
+  'operaciones:dailyreportstable:view',
 ] as const satisfies readonly PermissionOverrideKey[];
 
 export type MobilePermissionKey = (typeof MOBILE_PERMISSION_KEYS)[number];

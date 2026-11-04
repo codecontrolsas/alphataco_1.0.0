@@ -10,6 +10,7 @@ import {
   isActiveBoardTemplate,
   isWidgetGranted,
   type BoardTemplateKey,
+  type PermissionKey,
   type WidgetId,
 } from '@/features/Dashboard/lib/widget-registry';
 import { checkMultiplePermissionsServer } from '@/features/Permissions/actions/permissions.server';
@@ -34,14 +35,20 @@ export const getVisibleWidgetIds = cache(async (): Promise<ReadonlySet<WidgetId>
       return { moduleSlug, tabSlug, actionSlug };
     })
   );
-  const granted = new Set(keys.filter((key) => result.get(key) === true));
-  // #802: los widgets de las secciones ocultas no se ven aunque el usuario tenga el permiso.
+  return visibleWidgetIdsFor(new Set(keys.filter((key) => result.get(key) === true)));
+});
+
+/**
+ * Widgets visibles dadas las claves concedidas. #802: los widgets de las secciones ocultas no se ven aunque el usuario
+ * tenga el permiso. Lo comparten la web (`getVisibleWidgetIds`) y la API móvil.
+ */
+export function visibleWidgetIdsFor(granted: ReadonlySet<PermissionKey>): ReadonlySet<WidgetId> {
   return new Set(
     WIDGETS.filter((widget) => ACTIVE_WIDGET_SECTIONS.includes(widget.section) && isWidgetGranted(widget, granted)).map(
       (widget) => widget.id
     )
   );
-});
+}
 
 export interface DashboardBoard {
   /** uuid de la base, o `tpl-<clave>` si es un tablero por defecto sin guardar. */
@@ -121,7 +128,17 @@ export const getBoardOwner = cache(async (): Promise<{ userId: string; companyId
 export const getUserBoards = cache(async (): Promise<DashboardBoard[]> => {
   const [owner, visible] = await Promise.all([getBoardOwner(), getVisibleWidgetIds()]);
   if (!owner) return [];
+  return loadUserBoards(owner, visible);
+});
 
+/**
+ * Cuerpo de `getUserBoards` para quien ya resolvió usuario, empresa y widgets visibles sin la sesión web (la API
+ * móvil). Corre con el cliente contextual: el llamador fija el contexto de la empresa (`runInTenantScope`).
+ */
+export async function loadUserBoards(
+  owner: { userId: string; companyId: string },
+  visible: ReadonlySet<WidgetId>
+): Promise<DashboardBoard[]> {
   try {
     const rows = await prisma.user_dashboards.findMany({
       where: {
@@ -183,4 +200,4 @@ export const getUserBoards = cache(async (): Promise<DashboardBoard[]> => {
     logger.error('Error al obtener los tableros del usuario', { data: { error } });
     throw error;
   }
-});
+}

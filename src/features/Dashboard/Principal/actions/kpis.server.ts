@@ -1,13 +1,10 @@
 'use server';
 
-import { percentageOrNull } from '@/features/Dashboard/lib/metric';
 import { requireDashboardView } from '@/features/Dashboard/lib/permissions.server';
 import { Logger } from '@/lib/logger';
-import { prisma } from '@/shared/lib/prisma';
-import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { buildTodayServicesWhere } from '../lib/dashboard-dates';
-import { summarizeFleet } from '../lib/indicators';
+import { buildFleetKpis } from '../lib/indicators';
+import { countActiveEmployees, countActiveVehicles, countTodayServices } from '../lib/services-data.server';
 import { getEquipmentIndicators } from './fleet.server';
 
 const logger = new Logger('features/Dashboard/Principal/kpis');
@@ -24,8 +21,7 @@ export async function getActiveEmployeesKpi() {
   logger.debug('Obteniendo KPI de empleados activos');
 
   try {
-    const companyId = await getActiveCompanyId();
-    const activeEmployees = await prisma.employees.count({ where: withCompany({ is_active: true }, companyId) });
+    const activeEmployees = await countActiveEmployees(await getActiveCompanyId());
     return { activeEmployees };
   } catch (error) {
     logger.error('Error al obtener KPI de empleados activos', { data: { error } });
@@ -48,20 +44,9 @@ export async function getFleetKpis() {
   try {
     const companyId = await getActiveCompanyId();
 
-    const [activeVehicles, equipmentData] = await Promise.all([
-      prisma.vehicles.count({ where: withCompany({ is_active: true }, companyId) }),
-      getEquipmentIndicators(),
-    ]);
+    const [activeVehicles, equipmentData] = await Promise.all([countActiveVehicles(companyId), getEquipmentIndicators()]);
 
-    const fleet = summarizeFleet(equipmentData);
-
-    return {
-      activeVehicles,
-      operativeVehicles: fleet.operative,
-      totalFleet: fleet.total,
-      fleetMinusRepair: activeVehicles - fleet.notAvailable,
-      operativityPercentage: percentageOrNull(fleet.operative, fleet.total),
-    };
+    return buildFleetKpis(activeVehicles, equipmentData);
   } catch (error) {
     logger.error('Error al obtener KPIs de flota', { data: { error } });
     throw error;
@@ -77,10 +62,7 @@ export async function getTodayServicesKpi() {
   logger.debug('Obteniendo KPI de servicios del día');
 
   try {
-    const companyId = await getActiveCompanyId();
-    const totalServices = await prisma.dailyreportrows.count({
-      where: buildTodayServicesWhere(companyId),
-    });
+    const totalServices = await countTodayServices(await getActiveCompanyId());
     return { totalServices };
   } catch (error) {
     logger.error('Error al obtener KPI de servicios del día', { data: { error } });

@@ -16,13 +16,22 @@ export interface MobilePermissions {
   isTabVisible: (key: MobilePermissionKey) => boolean;
 }
 
+/** Lo que devuelve `loadMobilePermissions`: además de `MobilePermissions`, `hasKey` para claves fuera de la lista móvil. */
+export interface MobileKeyPermissions extends MobilePermissions {
+  /**
+   * Igual que `has` para una clave `modulo:tab:accion` cualquiera del mapa. Lo usan los tableros, que evalúan el
+   * catálogo completo de widgets de la web (incluidos los que la app no calcula) con la regla de la web.
+   */
+  hasKey: (key: string) => boolean;
+}
+
 /**
  * Lee TODOS los permisos del usuario en la empresa con la misma función de la base que usa la web
  * (`get_user_permissions`, que es la que consulta `user_has_permission`) y arma el mapa `modulo:tab:accion`.
  * Una sola consulta por petición en vez de una por clave.
  */
-export async function loadMobilePermissions(ctx: TenantContext): Promise<MobilePermissions> {
-  if (!ctx.userId) return { has: () => false, isTabVisible: () => false };
+export async function loadMobilePermissions(ctx: TenantContext): Promise<MobileKeyPermissions> {
+  if (!ctx.userId) return { has: () => false, hasKey: () => false, isTabVisible: () => false };
   const rows = await runWithTenantContext(
     prismaBase,
     ctx,
@@ -42,6 +51,7 @@ export async function loadMobilePermissions(ctx: TenantContext): Promise<MobileP
 
   return {
     has: (key) => map[key] === true,
+    hasKey: (key) => map[key] === true,
     isTabVisible: (key) => {
       const [moduleSlug, tabSlug] = key.split(':');
       return isVisible(moduleSlug, tabSlug);

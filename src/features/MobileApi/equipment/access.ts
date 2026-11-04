@@ -33,6 +33,15 @@ export function resolveEquipmentAccess(perms: MobilePermissions) {
         privateTypes: perms.has('documentacion:documentos-de-equipos:view_private'),
       },
       certifications: false,
+      /** Resumen documental en la lista: pestaña de documentos de equipos + permanentes o mensuales (sin exigir la ficha). */
+      documentList: {
+        visible: documentsTab && (permanent || monthly),
+        permanent: documentsTab && permanent,
+        monthly: documentsTab && monthly,
+        privateTypes: perms.has('documentacion:documentos-de-equipos:view_private'),
+      },
+      /** Próximo service y última orden: `view` del historial de mantenimiento de la ficha (solo vehículos). */
+      maintenance: vehicleRecord && perms.has('equipos:historial-mantenimiento-equipo:view'),
     },
     other: {
       listActive: perms.has('equipos:others:view'),
@@ -42,9 +51,14 @@ export function resolveEquipmentAccess(perms: MobilePermissions) {
       assignment: otherRecord && perms.isTabVisible('equipos:asignacion-otro:view'),
       documents: { visible: false, permanent: false, monthly: false, privateTypes: false },
       certifications: otherRecord && perms.isTabVisible('equipos:certificaciones-otro:view'),
+      documentList: { visible: false, permanent: false, monthly: false, privateTypes: false },
+      maintenance: false,
     },
+    /** Parte diario: de ahí sale el chofer del equipo (el alerta documental del chofer exige además ver sus documentos). */
+    reports: perms.has('operaciones:detalle-parte-diario:view'),
   };
 }
 
 export type EquipmentAccess = ReturnType<typeof resolveEquipmentAccess>;
 export type EquipmentKindAccess = EquipmentAccess['vehicle'];
+export type OtherEquipmentKindAccess = EquipmentAccess['other'];

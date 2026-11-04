@@ -2,10 +2,8 @@
 
 import { requireDashboardView } from '@/features/Dashboard/lib/permissions.server';
 import { Logger } from '@/lib/logger';
-import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { buildTodayServicesWhere } from '../lib/dashboard-dates';
-import { groupServicesByClient, summarizeServicesByType } from '../lib/indicators';
+import { computeServicesDetailByClient, computeServicesSummary } from '../lib/services-data.server';
 import type { ServiceDetailByClient, ServicesSummaryResult } from './types';
 
 const logger = new Logger('features/Dashboard/Principal/services');
@@ -25,15 +23,7 @@ export async function getServicesSummary(): Promise<ServicesSummaryResult[]> {
   logger.debug('Obteniendo resumen de servicios por tipo');
 
   try {
-    const companyId = await getActiveCompanyId();
-
-    const grouped = await prisma.dailyreportrows.groupBy({
-      by: ['type_service'],
-      where: buildTodayServicesWhere(companyId),
-      _count: { id: true },
-    });
-
-    return summarizeServicesByType(grouped);
+    return await computeServicesSummary(await getActiveCompanyId());
   } catch (error) {
     logger.error('Error al obtener resumen de servicios', { data: { error } });
     // Sin dato no hay []: "sin servicios" se leería como un día sin actividad.
@@ -52,18 +42,7 @@ export async function getServicesDetailByClient(date?: string): Promise<ServiceD
   if (date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Fecha inválida');
 
   try {
-    const companyId = await getActiveCompanyId();
-
-    const rows = await prisma.dailyreportrows.findMany({
-      where: buildTodayServicesWhere(companyId, date),
-      select: {
-        type_service: true,
-        status: true,
-        customers: { select: { id: true, name: true } },
-      },
-    });
-
-    return groupServicesByClient(rows);
+    return await computeServicesDetailByClient(await getActiveCompanyId(), date);
   } catch (error) {
     logger.error('Error al obtener detalle de servicios por cliente', { data: { error } });
     throw error;

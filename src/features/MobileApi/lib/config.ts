@@ -6,6 +6,14 @@ import { moduleForMobileEntry } from '../../Modules/catalog.ts';
  */
 export const MOBILE_API_VERSION = '1';
 
+/**
+ * Revisión del contrato dentro de la versión 1 (solo agregados compatibles: campos nuevos opcionales y parámetros
+ * nuevos). 1 = Empleados, Operaciones, Equipos y Documentación; 2 = rediseño de la app (lote W1); 3 = Capacitaciones,
+ * tableros, avisos y búsqueda global (lote W2). Ver
+ * `docs/api-movil/equipos-y-documentacion.md`.
+ */
+export const MOBILE_CONTRACT_REVISION = 3;
+
 export function isMobileApiEnabled(): boolean {
   return process.env.MOBILE_API_ENABLED === 'true';
 }
@@ -18,6 +26,10 @@ export const MOBILE_MODULES = [
   'empleados.employees',
   'equipos.equipment',
   'documentacion.documents',
+  'hse.trainings',
+  'nucleo.dashboards',
+  'nucleo.notifications',
+  'nucleo.search',
 ] as const;
 
 /**

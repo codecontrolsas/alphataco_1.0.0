@@ -1,5 +1,9 @@
-import { documentListQuerySchema, documentListResponseSchema } from '@/features/MobileApi/contracts/documents';
-import { DocumentQueryError, listDocuments } from '@/features/MobileApi/documents/queries.server';
+import {
+  documentGroupedListResponseSchema,
+  documentListQuerySchema,
+  documentListResponseSchema,
+} from '@/features/MobileApi/contracts/documents';
+import { DocumentQueryError, listDocuments, listDocumentsByExpiry } from '@/features/MobileApi/documents/queries.server';
 import { loadDocumentAccess } from '@/features/MobileApi/lib/access.server';
 import { mobileRoute } from '@/features/MobileApi/lib/handler';
 import { mobileError, mobileReadJson } from '@/features/MobileApi/lib/http';
@@ -20,6 +24,13 @@ export const GET = mobileRoute({
     }
     const [access, enabled] = await Promise.all([loadDocumentAccess(ctx), getEnabledModulesFor(ctx.companyId)]);
     try {
+      if (parsed.data.group === 'expiry') {
+        return mobileReadJson(
+          req,
+          documentGroupedListResponseSchema,
+          await listDocumentsByExpiry(ctx, parsed.data, access, enabled)
+        );
+      }
       return mobileReadJson(req, documentListResponseSchema, await listDocuments(ctx, parsed.data, access, enabled));
     } catch (error) {
       if (error instanceof InvalidCursorError)

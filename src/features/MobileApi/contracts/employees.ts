@@ -21,6 +21,17 @@ export const employeeListQuerySchema = z.object({
   customerId: uuid.optional(),
   docStatus: z.enum(['Completo', 'Completo_con_doc_vencida', 'Incompleto', 'Avalado', 'No_avalado']).optional(),
   sort: z.enum(EMPLOYEE_SORTS).default('name'),
+  /** Índice alfabético: la primera página arranca en el primer apellido que empieza con esta letra (solo `sort=name`). */
+  startsWith: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-zÑñ]$/)
+    .optional(),
+  /** `alerts=1`: solo empleados activos con documentos vencidos, por vencer, rechazados o faltantes. */
+  alerts: z
+    .enum(['0', '1'])
+    .optional()
+    .transform((value) => value === '1'),
   cursor: z.string().max(512).optional(),
   limit: z.coerce.number().int().min(1).max(EMPLOYEE_LIST_MAX).default(30),
 });
@@ -46,10 +57,25 @@ export const employeePhotoSchema = z
 
 // ─── Listado ──────────────────────────────────────────────────────────────────
 
+/** Conteo de documentos de un empleado (motor de cumplimiento de la web: sin los que ya no aplican ni los archivados). */
+export const documentSummarySchema = z.object({
+  valid: z.number().int(),
+  expiring: z.number().int(),
+  expired: z.number().int(),
+  missing: z.number().int(),
+  /** Rechazados: la web los cuenta junto con los faltantes; acá van aparte (también cuentan como alerta). */
+  rejected: z.number().int(),
+});
+
 export const employeeListItemSchema = z.object({
   id: uuid,
   fileNumber: z.string(),
   fullName: z.string(),
+  /** Revisión 2: apellido y nombre por separado (`fullName` sigue siendo «Apellido Nombre»). */
+  lastName: z.string().optional(),
+  firstName: z.string().optional(),
+  /** Revisión 2: null o ausente si el usuario no puede ver la lista de documentos, Documentación está apagada o es una baja. */
+  documentSummary: documentSummarySchema.nullable().optional(),
   position: z.string().nullable(),
   sector: z.string().nullable(),
   isActive: z.boolean(),
@@ -62,6 +88,11 @@ export const employeeListResponseSchema = z.object({
   nextCursor: z.string().nullable(),
   /** Total con los filtros aplicados; solo en la primera página (sin `cursor`). */
   total: z.number().int().nullable(),
+  /**
+   * Revisión 2, solo en la primera página y solo con permiso sobre la lista de documentos de empleados (activos):
+   * `all` = empleados con los filtros aplicados (sin `alerts`); `withAlerts` = los que tienen alguna alerta.
+   */
+  totals: z.object({ all: z.number().int(), withAlerts: z.number().int() }).nullable().optional(),
 });
 
 export const employeeFiltersResponseSchema = z.object({
@@ -127,6 +158,69 @@ export const employeeDetailResponseSchema = z.object({
       aptitudes: z.array(z.string()),
       workshopSectors: z.array(z.string()),
     })
+    .optional(),
+  /**
+   * Revisión 2, todas opcionales: cada sección viaja SOLO si el rol puede ver su fuente (un bloque sin permiso no
+   * viaja, ni vacío; vacío significa «no tiene»).
+   */
+  absences: z
+    .object({
+      /** Total de licencias/ausencias (tramos de días seguidos del mismo tipo); `items` trae las 20 más recientes. */
+      total: z.number().int(),
+      items: z.array(
+        z.object({
+          type: z.string(),
+          shortName: nullableText,
+          /** Comentario cargado en el diagrama (primero no vacío del tramo). */
+          reason: nullableText,
+          from: z.string(),
+          to: z.string(),
+          days: z.number().int(),
+          status: labeledStatusSchema,
+        })
+      ),
+    })
+    .optional(),
+  trainings: z
+    .array(
+      z.object({
+        id: uuid,
+        course: z.string(),
+        /** `valid` | `expiring` | `expired` | `pending` (hora argentina; por vencer = ≤ 30 días). */
+        status: labeledStatusSchema,
+        /** Resultado guardado: pending | in_progress | passed | failed | expired. */
+        result: z.string(),
+        approvedAt: nullableText,
+        expiresAt: nullableText,
+        /** Nota (% del último intento). */
+        score: z.number().nullable(),
+      })
+    )
+    .optional(),
+  assignedEquipment: z
+    .array(
+      z.object({
+        id: uuid,
+        kind: z.enum(['vehicle', 'other']),
+        identifier: z.string(),
+        domain: nullableText,
+        internNumber: nullableText,
+        type: nullableText,
+        /** Primer día de la racha de partes (consecutivos del empleado) en que figura con este equipo. */
+        since: z.string(),
+      })
+    )
+    .optional(),
+  activity: z
+    .array(
+      z.object({
+        kind: z.enum(['document_uploaded', 'document_expired', 'report_assignment']),
+        /** Fecha y hora argentina con desfase (`2026-11-04T21:30:00-03:00`); vencimientos: inicio del día. */
+        at: z.string(),
+        title: z.string(),
+        detail: nullableText,
+      })
+    )
     .optional(),
   /** Secciones que se piden aparte (`/documents`, `/diagram`, `/clothing`): `true` si el usuario puede verlas. */
   sections: z.object({ documents: z.boolean(), diagram: z.boolean(), clothing: z.boolean() }),

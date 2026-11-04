@@ -30,6 +30,12 @@ export const documentListQuerySchema = z.object({
   q: z.string().trim().max(60).optional(),
   /** Documentos de UN recurso (empleado o equipo). Exige `resource`. */
   resourceId: z.string().uuid().optional(),
+  /** Revisión 2: solo recursos afectados a este cliente (los documentos de la empresa quedan afuera). */
+  customerId: z.string().uuid().optional(),
+  /** Revisión 2: `expiry` agrupa por vencimiento (vencidos, esta semana, este mes, más adelante). */
+  group: z.literal('expiry').optional(),
+  /** Con `group=expiry`: pide UNA sola agrupación para seguir paginándola con su `cursor`. */
+  bucket: z.enum(['overdue', 'thisWeek', 'thisMonth', 'later']).optional(),
   cursor: z.string().max(1024).optional(),
   limit: z.coerce.number().int().min(1).max(DOCUMENT_LIST_MAX).default(30),
 });
@@ -80,11 +86,41 @@ export const documentListItemSchema = z.object({
   hasDetail: z.boolean(),
 });
 
+/** Conteo por estado de los documentos del listado (antes de filtrar por `status`); `total` = suma de todos. */
+export const documentsSummarySchema = z.object({
+  valid: z.number().int(),
+  expiring: z.number().int(),
+  expired: z.number().int(),
+  missing: z.number().int(),
+  rejected: z.number().int(),
+  total: z.number().int(),
+});
+
 export const documentListResponseSchema = z.object({
   items: z.array(documentListItemSchema),
   nextCursor: z.string().nullable(),
   /** Total con los filtros aplicados; solo en la primera página (sin `cursor`). */
   total: z.number().int().nullable(),
+  /** Revisión 2: solo en la primera página. */
+  summary: documentsSummarySchema.nullable().optional(),
+});
+
+export const EXPIRY_BUCKETS = ['overdue', 'thisWeek', 'thisMonth', 'later'] as const;
+
+/** Respuesta de `group=expiry`: cada agrupación con su conteo y su página; `nextCursor` sigue DENTRO de la agrupación. */
+export const documentGroupedListResponseSchema = z.object({
+  groups: z.array(
+    z.object({
+      key: z.enum(EXPIRY_BUCKETS),
+      label: z.string(),
+      count: z.number().int(),
+      items: z.array(documentListItemSchema),
+      nextCursor: z.string().nullable(),
+    })
+  ),
+  /** Filas que no entran en ninguna agrupación: faltantes y documentos sin vencimiento. */
+  excluded: z.object({ missing: z.number().int(), noExpiry: z.number().int() }),
+  summary: documentsSummarySchema.nullable().optional(),
 });
 
 export const documentFiltersResponseSchema = z.object({
@@ -100,6 +136,8 @@ export const documentFiltersResponseSchema = z.object({
   types: z.array(
     z.object({ id: z.string().uuid(), name: z.string(), resource: z.enum(DOCUMENT_RESOURCES), monthly: z.boolean() })
   ),
+  /** Revisión 2: clientes de la empresa, para el filtro `customerId`. */
+  customers: z.array(z.object({ id: z.string().uuid(), name: z.string() })).optional(),
 });
 
 // ─── Ficha ────────────────────────────────────────────────────────────────────
@@ -119,6 +157,27 @@ export const documentDetailResponseSchema = z.object({
   policyNumber: nullableText,
   /** Hay archivo: se pide el enlace firmado con `GET /documents/{resource}/{id}/file`. */
   hasFile: z.boolean(),
+  /** Revisión 2 (opcionales). Quién subió el documento (null si no se guardó). */
+  uploadedBy: nullableText.optional(),
+  /** Estado de revisión guardado (pendiente / presentado / aprobado / rechazado) con el motivo del rechazo. La web NO guarda quién aprobó. */
+  review: z.object({ code: z.string(), label: z.string(), tone: z.enum(['ok', 'warn', 'danger', 'neutral']), reason: nullableText }).optional(),
+  /** A cuántos recursos aplica el tipo de este documento y cuántos están al día (vigentes o por vencer). */
+  appliesTo: z.object({ total: z.number().int(), upToDate: z.number().int() }).optional(),
+  /** Por qué se pide el tipo de documento. */
+  conditions: z
+    .object({
+      scope: z.enum(['all', 'conditions', 'none']),
+      /** «Todo el personal», «Todos los equipos»...; null cuando hay condiciones. */
+      allText: nullableText,
+      criteria: z.array(z.object({ key: z.string(), label: z.string(), values: z.array(z.string()) })),
+      multiresource: z.boolean(),
+      mandatory: z.boolean(),
+      /** Documento de baja (solo se pide a recursos dados de baja). */
+      downDocument: z.boolean(),
+    })
+    .optional(),
+  /** Historial de movimientos del documento (más nuevo primero, hasta 20). Vacío en documentos de la empresa (no se registra). */
+  versions: z.array(z.object({ at: z.string(), by: nullableText })).optional(),
 });
 
 /** Enlace de descarga del archivo: URL relativa al servidor, firmada y de vida corta. */

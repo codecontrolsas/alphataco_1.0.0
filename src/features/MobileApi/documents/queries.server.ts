@@ -3,20 +3,29 @@ import 'server-only';
 import { loadEmployeeDocumentRows } from '@/features/Documentacion/DocumentosEmpleados/lib/employee-document-rows.server';
 import { loadCompanyDocumentRows } from '@/features/Documentacion/DocumentosEmpresa/lib/company-document-rows.server';
 import { loadEquipmentDocumentRows } from '@/features/Documentacion/DocumentosEquipos/lib/equipment-document-rows.server';
-import { parseValidity } from '@/features/Documentacion/shared/compliance/dates';
+import { arToday, parseValidity } from '@/features/Documentacion/shared/compliance/dates';
+import { describeTypeRequirement } from '@/features/Documentacion/shared/compliance/requirement-reason';
 import { argentinaDate } from '@/shared/lib/argentina-time';
 import { prisma } from '@/shared/lib/prisma';
 import { runInTenantScope, type TenantContext } from '@/shared/lib/tenant-context';
 import type { DocumentListQuery, DocumentResource } from '../contracts/documents';
+import { InvalidCursorError, argentinaDateTime } from '../lib/labels';
 import { allowedResources, canListPeriod, type DocumentAccess } from './access';
 import {
+  DOCUMENT_STATE_LABELS,
+  DOCUMENT_STATE_TONE,
   DOCUMENT_STATUS_LABELS,
+  EXPIRY_BUCKET_LABELS,
   documentStatus,
+  expiryBucket,
   filterRows,
   labeledState,
+  pageBucket,
   pageRows,
   searchVariants,
+  summarize,
   toListItem,
+  type ExpiryBucket,
   type EngineState,
   type MobileDocumentRow,
 } from './rows';
@@ -166,11 +175,21 @@ export class DocumentQueryError extends Error {
   }
 }
 
+/** Ids de empleados y equipos afectados a un cliente (`contractor_employee` / `contractor_equipment`). */
+async function customerResourceIds(customerId: string) {
+  const [employees, equipment] = await Promise.all([
+    prisma.contractor_employee.findMany({ where: { contractor_id: customerId }, select: { employee_id: true } }),
+    prisma.contractor_equipment.findMany({ where: { contractor_id: customerId }, select: { equipment_id: true } }),
+  ]);
+  return new Set([...employees.map((row) => row.employee_id), ...equipment.map((row) => row.equipment_id)]);
+}
+
 /**
- * Listado paginado. Sin `resource` ni `period`, junta todo lo que el usuario puede ver (como recorrer las pestañas
- * de la web). Pedir explícitamente una clase o un período sin permiso es 403.
+ * Filas del listado ya cargadas y filtradas. Sin `resource` ni `period`, junta todo lo que el usuario puede ver (como
+ * recorrer las pestañas de la web). Pedir explícitamente una clase o un período sin permiso es 403. Devuelve las filas
+ * ANTES de filtrar por `status` (`scoped`, base del `summary`) y DESPUÉS (`filtered`).
  */
-export async function listDocuments(
+async function loadListRows(
   ctx: TenantContext,
   query: DocumentListQuery,
   access: DocumentAccess,
@@ -179,6 +198,9 @@ export async function listDocuments(
   const visible = allowedResources(access, enabledModules);
   if (query.resourceId && (!query.resource || query.resource === 'company')) {
     throw new DocumentQueryError(422, '`resourceId` exige `resource` = employee o equipment.');
+  }
+  if (query.bucket && query.group !== 'expiry') {
+    throw new DocumentQueryError(422, '`bucket` exige `group=expiry`.');
   }
   if (query.resource && !visible.includes(query.resource)) {
     throw new DocumentQueryError(403, 'No tenés permiso para ver esos documentos.');
@@ -194,11 +216,70 @@ export async function listDocuments(
   }
   if (loads.length === 0) throw new DocumentQueryError(403, 'No tenés permiso para ver esos documentos.');
 
+  const companyName = loads.some((load) => load.resource === 'company') ? await companyNameOf(ctx.companyId) : '';
+  const [loaded, customerIds] = await Promise.all([
+    Promise.all(loads.map((load) => loadMobileDocumentRows(ctx, load, companyName))),
+    query.customerId ? customerResourceIds(query.customerId) : Promise.resolve(null),
+  ]);
+  const rows = loaded
+    .flat()
+    // Con cliente, solo recursos afectados a él: los documentos de la empresa no pertenecen a ningún cliente.
+    .filter((row) => !customerIds || (row.resource.kind !== 'company' && customerIds.has(row.resource.id)));
+  const scoped = filterRows(rows, { ...query, status: undefined });
+  const filtered = query.status ? scoped.filter((row) => row.status === query.status) : scoped;
+  return { scoped, filtered };
+}
+
+export async function listDocuments(
+  ctx: TenantContext,
+  query: DocumentListQuery,
+  access: DocumentAccess,
+  enabledModules: ReadonlySet<string>
+) {
   return runInTenantScope(ctx, async () => {
-    const companyName = loads.some((load) => load.resource === 'company') ? await companyNameOf(ctx.companyId) : '';
-    const rows = (await Promise.all(loads.map((load) => loadMobileDocumentRows(ctx, load, companyName)))).flat();
-    const { page, nextCursor, total } = pageRows(filterRows(rows, query), query);
-    return { items: page.map(toListItem), nextCursor, total };
+    const { scoped, filtered } = await loadListRows(ctx, query, access, enabledModules);
+    const { page, nextCursor, total } = pageRows(filtered, query);
+    return { items: page.map(toListItem), nextCursor, total, summary: query.cursor ? null : summarize(scoped) };
+  });
+}
+
+/**
+ * `group=expiry`: vencidos / esta semana / este mes / más adelante, cada uno con su conteo (de todo lo que cumple los
+ * filtros) y su primera página; con `bucket` + `cursor` se sigue paginando UNA agrupación. Ver `expiryBucket`.
+ */
+export async function listDocumentsByExpiry(
+  ctx: TenantContext,
+  query: DocumentListQuery,
+  access: DocumentAccess,
+  enabledModules: ReadonlySet<string>
+) {
+  return runInTenantScope(ctx, async () => {
+    const { scoped, filtered } = await loadListRows(ctx, query, access, enabledModules);
+    if (query.cursor && !query.bucket) throw new InvalidCursorError('El cursor es de una agrupación: indicá `bucket`.');
+    const today = arToday();
+    const byBucket = new Map<ExpiryBucket, MobileDocumentRow[]>();
+    let missing = 0;
+    let noExpiry = 0;
+    for (const row of filtered) {
+      const bucket = expiryBucket(row, today);
+      if (!bucket) {
+        if (row.status === 'missing') missing += 1;
+        else noExpiry += 1;
+        continue;
+      }
+      byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), row]);
+    }
+    const keys = (query.bucket ? [query.bucket] : (Object.keys(EXPIRY_BUCKET_LABELS) as ExpiryBucket[]));
+    return {
+      groups: keys.map((key) => ({
+        key,
+        label: EXPIRY_BUCKET_LABELS[key],
+        count: byBucket.get(key)?.length ?? 0,
+        ...pageBucket(byBucket.get(key) ?? [], key, query),
+      })),
+      excluded: { missing, noExpiry },
+      summary: query.cursor ? null : summarize(scoped),
+    };
   });
 }
 
@@ -211,20 +292,31 @@ export async function getDocumentFilterOptions(
   const visible = allowedResources(access, enabledModules);
   const APPLIES = { employee: 'Persona', equipment: 'Equipos', company: 'Empresa' } as const;
   const LABELS = { employee: 'Empleados', equipment: 'Equipos', company: 'Empresa' } as const;
-  const types = await runInTenantScope(ctx, () =>
-    prisma.document_types.findMany({
-      where: {
-        company_id: ctx.companyId,
-        is_active: true,
-        applies: { in: visible.map((resource) => APPLIES[resource]) },
-      },
-      select: { id: true, name: true, applies: true, is_it_montlhy: true, private: true },
-      orderBy: { name: 'asc' },
-    })
+  const [types, customers] = await runInTenantScope(ctx, () =>
+    Promise.all([
+      prisma.document_types.findMany({
+        where: {
+          company_id: ctx.companyId,
+          is_active: true,
+          applies: { in: visible.map((resource) => APPLIES[resource]) },
+        },
+        select: { id: true, name: true, applies: true, is_it_montlhy: true, private: true },
+        orderBy: { name: 'asc' },
+      }),
+      // Filtro por cliente: los clientes solo se ofrecen si hay clases afectables a un cliente (personal o equipos).
+      visible.some((resource) => resource !== 'company')
+        ? prisma.customers.findMany({
+            where: { company_id: ctx.companyId },
+            select: { id: true, name: true },
+            orderBy: { name: 'asc' },
+          })
+        : Promise.resolve([]),
+    ])
   );
   const resourceOf = (applies: string) =>
     (Object.keys(APPLIES) as DocumentResource[]).find((resource) => APPLIES[resource] === applies) ?? null;
   return {
+    customers,
     resources: visible.map((resource) => ({
       value: resource,
       label: LABELS[resource],
@@ -253,7 +345,23 @@ export async function getDocumentFilterOptions(
 /** Referencia mínima de un documento REAL de la empresa (no archivado y con archivo), o null. */
 export async function findDocumentRef(companyId: string, resource: DocumentResource, documentId: string) {
   const withFile = { document_path: { not: null }, NOT: { document_path: '' } };
-  const typeSelect = { select: { name: true, is_it_montlhy: true, private: true } } as const;
+  const typeSelect = {
+    select: {
+      id: true,
+      name: true,
+      is_it_montlhy: true,
+      private: true,
+      applies: true,
+      special: true,
+      conditions: true,
+      multiresource: true,
+      mandatory: true,
+      explired: true,
+      down_document: true,
+      is_active: true,
+      company_id: true,
+    },
+  } as const;
   if (resource === 'employee') {
     const row = await prisma.documents_employees.findFirst({
       where: { id: documentId, archived_at: null, ...withFile, employees: { company_id: companyId } },
@@ -262,6 +370,8 @@ export async function findDocumentRef(companyId: string, resource: DocumentResou
         document_path: true,
         created_at: true,
         deny_reason: true,
+        state: true,
+        user_id: true,
         document_types: typeSelect,
       },
     });
@@ -276,6 +386,8 @@ export async function findDocumentRef(companyId: string, resource: DocumentResou
         created_at: true,
         deny_reason: true,
         policy_number: true,
+        state: true,
+        user_id: true,
         document_types: typeSelect,
       },
     });
@@ -283,7 +395,15 @@ export async function findDocumentRef(companyId: string, resource: DocumentResou
   }
   const row = await prisma.documents_company.findFirst({
     where: { id: documentId, applies: companyId, ...withFile },
-    select: { applies: true, document_path: true, created_at: true, deny_reason: true, document_types: typeSelect },
+    select: {
+      applies: true,
+      document_path: true,
+      created_at: true,
+      deny_reason: true,
+      state: true,
+      user_id: true,
+      document_types: typeSelect,
+    },
   });
   return row ? { ...row, resourceId: row.applies, policyNumber: null } : null;
 }
@@ -328,6 +448,38 @@ export async function resolveVisibleDocument(
   });
 }
 
+/** Nombre de quien subió o movió documentos (`profile.id` guardado en `user_id` / `modified_by`). */
+async function profileNames(ids: (string | null)[]): Promise<Map<string, string>> {
+  const unique = [...new Set(ids.flatMap((id) => (id ? [id] : [])))];
+  if (unique.length === 0) return new Map();
+  const profiles = await prisma.profile.findMany({
+    where: { id: { in: unique } },
+    select: { id: true, fullname: true, email: true },
+  });
+  return new Map(profiles.flatMap((profile) => (profile.fullname || profile.email ? [[profile.id, (profile.fullname || profile.email)!] as const] : [])));
+}
+
+/** Historial de movimientos del documento (empleados y equipos; la empresa no registra movimientos). */
+async function documentVersions(resource: DocumentResource, documentId: string) {
+  if (resource === 'company') return [];
+  const logs =
+    resource === 'employee'
+      ? await prisma.documents_employees_logs.findMany({
+          where: { documents_employees_id: documentId },
+          orderBy: { updated_at: 'desc' },
+          take: 20,
+          select: { updated_at: true, modified_by: true },
+        })
+      : await prisma.documents_equipment_logs.findMany({
+          where: { documents_equipment_id: documentId },
+          orderBy: { updated_at: 'desc' },
+          take: 20,
+          select: { updated_at: true, modified_by: true },
+        });
+  const names = await profileNames(logs.map((log) => log.modified_by));
+  return logs.map((log) => ({ at: argentinaDateTime(log.updated_at), by: names.get(log.modified_by) ?? null }));
+}
+
 export async function getDocumentDetail(
   ctx: TenantContext,
   resource: DocumentResource,
@@ -335,6 +487,38 @@ export async function getDocumentDetail(
   access: DocumentAccess
 ) {
   const { ref, row } = await resolveVisibleDocument(ctx, resource, documentId, access);
+  const type = ref.document_types;
+  const monthly = type?.is_it_montlhy === true;
+
+  const [classRows, versions, names] = await runInTenantScope(ctx, () =>
+    Promise.all([
+      // A cuántos recursos aplica el tipo: el mismo motor, de toda la clase y el período del documento.
+      loadMobileDocumentRows(
+        ctx,
+        { resource, monthly, privateTypes: access[resource].privateTypes },
+        resource === 'company' ? row.resource.name : ''
+      ),
+      documentVersions(resource, documentId),
+      profileNames([ref.user_id]),
+    ])
+  );
+  const sameType = classRows.filter((item) => item.type.id === row.type.id);
+  const requirement = type
+    ? describeTypeRequirement({
+        id: type.id,
+        companyId: type.company_id,
+        applies: type.applies,
+        mandatory: type.mandatory,
+        isActive: type.is_active,
+        monthly,
+        hasExpiry: type.explired,
+        downDocument: type.down_document === true,
+        isPrivate: type.private === true,
+        multiresource: type.multiresource,
+        scope: { special: type.special, conditions: type.conditions },
+      })
+    : null;
+
   return {
     id: row.id,
     resource: row.resource,
@@ -347,5 +531,27 @@ export async function getDocumentDetail(
     denyReason: ref.deny_reason ?? null,
     policyNumber: ref.policyNumber ?? null,
     hasFile: Boolean(ref.document_path),
+    uploadedBy: ref.user_id ? names.get(ref.user_id) ?? null : null,
+    review: {
+      code: ref.state ?? 'pendiente',
+      label: DOCUMENT_STATE_LABELS[ref.state ?? 'pendiente'] ?? ref.state ?? 'pendiente',
+      tone: DOCUMENT_STATE_TONE[ref.state ?? 'pendiente'] ?? ('neutral' as const),
+      reason: ref.state === 'rechazado' ? ref.deny_reason ?? null : null,
+    },
+    appliesTo: {
+      total: sameType.length,
+      upToDate: sameType.filter((item) => item.status === 'valid' || item.status === 'expiring').length,
+    },
+    ...(requirement
+      ? {
+          conditions: {
+            ...requirement,
+            multiresource: type!.multiresource,
+            mandatory: type!.mandatory,
+            downDocument: type!.down_document === true,
+          },
+        }
+      : {}),
+    versions,
   };
 }

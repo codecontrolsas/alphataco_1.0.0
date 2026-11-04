@@ -1,5 +1,5 @@
 import { employeeListQuerySchema, employeeListResponseSchema } from '@/features/MobileApi/contracts/employees';
-import { InvalidCursorError, listEmployees } from '@/features/MobileApi/employees/queries.server';
+import { InvalidCursorError, InvalidListQueryError, listEmployees } from '@/features/MobileApi/employees/queries.server';
 import { loadEmployeeAccess } from '@/features/MobileApi/employees/routes';
 import { mobileRoute } from '@/features/MobileApi/lib/handler';
 import { mobileError, mobileReadJson } from '@/features/MobileApi/lib/http';
@@ -26,11 +26,15 @@ export const GET = mobileRoute({
           : 'No tenés permiso para ver las bajas.'
       );
     }
+    // `alerts` revela el estado documental: exige la lista de documentos de empleados, no solo la de empleados.
+    if (parsed.data.alerts && !access.documentList.visible)
+      return mobileError(403, 'FORBIDDEN', 'No tenés permiso para ver los documentos de los empleados.');
     try {
-      return mobileReadJson(req, employeeListResponseSchema, await listEmployees(ctx, parsed.data));
+      return mobileReadJson(req, employeeListResponseSchema, await listEmployees(ctx, parsed.data, access));
     } catch (error) {
       if (error instanceof InvalidCursorError)
         return mobileError(422, 'INVALID_INPUT', 'El cursor no es válido: volvé a la primera página.');
+      if (error instanceof InvalidListQueryError) return mobileError(422, 'INVALID_INPUT', error.message);
       throw error;
     }
   },

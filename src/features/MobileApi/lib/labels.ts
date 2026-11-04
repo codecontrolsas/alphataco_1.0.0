@@ -38,6 +38,13 @@ export function conditionOf(condition: string | null | undefined) {
 /** Columnas `@db.Date`: llegan como medianoche UTC y se leen en UTC (en hora argentina caerían el día anterior). */
 export const isoDay = (value: Date | null | undefined) => (value ? moment.utc(value).format('YYYY-MM-DD') : null);
 
+/**
+ * Fecha y hora en hora argentina con el desfase explícito (`2026-11-04T21:30:00-03:00`): la app no tiene que adivinar
+ * la zona. Argentina no tiene horario de verano, así que el desfase es siempre -03:00.
+ */
+export const argentinaDateTime = (value: Date | string) =>
+  moment.utc(value).utcOffset(-180).format('YYYY-MM-DDTHH:mm:ssZ');
+
 export class InvalidCursorError extends Error {}
 
 /** Cursor opaco (base64url de JSON) validado con su schema al volver. */

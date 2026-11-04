@@ -1,4 +1,4 @@
-import { MOBILE_API_VERSION, mobileModulesFor } from '@/features/MobileApi/lib/config';
+import { MOBILE_API_VERSION, MOBILE_CONTRACT_REVISION, mobileModulesFor } from '@/features/MobileApi/lib/config';
 import { mobileRoute } from '@/features/MobileApi/lib/handler';
 import { mobileJson } from '@/features/MobileApi/lib/http';
 import { getEnabledModulesFor } from '@/features/Modules/server/modules.server';
@@ -12,6 +12,7 @@ export const GET = mobileRoute({
   run: async () =>
     mobileJson({
       apiVersion: MOBILE_API_VERSION,
+      contractRevision: MOBILE_CONTRACT_REVISION,
       serverSha: process.env.GIT_SHA || null,
       modules: mobileModulesFor(await getEnabledModulesFor(null)),
     }),
