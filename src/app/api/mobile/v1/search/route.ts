@@ -11,6 +11,7 @@ import { getEnabledModulesFor } from '@/features/Modules/server/modules.server';
  * por grupo y el `total` de cada uno; un grupo sin permiso no aparece.
  */
 export const GET = mobileRoute({
+  module: 'nucleo',
   run: async ({ req, ctx }) => {
     const parsed = searchQuerySchema.safeParse(Object.fromEntries(new URL(req.url).searchParams));
     if (!parsed.success) return mobileError(422, 'INVALID_INPUT', parsed.error.issues[0]?.message ?? 'Búsqueda inválida.');
