@@ -36,6 +36,7 @@ export const WIDGET_SIZE_LABELS: Record<WidgetSize, string> = {
 /** Secciones del catálogo (agrupan el panel "Agregar widget"). */
 export const WIDGET_SECTIONS = {
   resumen: 'Resumen',
+  disponibilidad: 'Disponibilidad',
   dia: 'Operación del día',
   vencimientos: 'Vencimientos',
   operacion: 'Operación',
@@ -71,6 +72,18 @@ const EMPLOYEE_DOCS_SOURCE = ['dashboard:empleados:view', 'documentacion:documen
 const VEHICLE_DOCS_SOURCE = ['dashboard:vehiculos:view', 'documentacion:documentos-de-equipos:view'] as const;
 
 export const WIDGETS = [
+  // ── Disponibilidad (dashboard:principal + documentación) ────────────────
+  {
+    id: 'customer-availability',
+    title: 'Disponibilidad por cliente',
+    description: 'Personas y equipos que podés asignar hoy a cada cliente sin incumplir la documentación que pide',
+    section: 'disponibilidad',
+    requires: [DASH_PRINCIPAL],
+    requiresAny: [['documentacion:documentos-de-empleados:view'], ['documentacion:documentos-de-equipos:view']],
+    defaultSize: 'full',
+    minSize: 'lg',
+    maxSize: 'full',
+  },
   // ── Resumen (dashboard:principal) ───────────────────────────────────────
   {
     id: 'attention-inbox',
@@ -440,6 +453,22 @@ export function clampWidgetSize(widget: WidgetDefinition, size: WidgetSize): Wid
  */
 export const BOARD_TEMPLATES = [
   {
+    key: 'disponibilidad',
+    name: 'Disponibilidad',
+    description:
+      'Qué personas y equipos podés asignar hoy a cada cliente sin poner en riesgo el cumplimiento ni la operación',
+    widgets: [
+      'customer-availability',
+      'kpi-employees',
+      'kpi-operative-fleet',
+      'kpi-today-services',
+      'services-today',
+      'hr-today',
+      'equipment-operation',
+      'expiring-weeks',
+    ],
+  },
+  {
     key: 'resumen',
     name: 'Resumen',
     description: 'Lo que hay que atender hoy y la plata de la empresa',
@@ -523,6 +552,8 @@ export type BoardTemplateKey = (typeof BOARD_TEMPLATES)[number]['key'];
  * descomenta su clave (y su sección en `ACTIVE_WIDGET_SECTIONS`). `BOARD_TEMPLATES` sigue completo: es el catálogo.
  */
 export const ACTIVE_BOARD_TEMPLATE_KEYS: readonly BoardTemplateKey[] = [
+  // #841: primero, así es el tablero por defecto de quien todavía no personalizó los suyos.
+  'disponibilidad',
   'resumen',
   'dia',
   'vencimientos',
@@ -547,6 +578,7 @@ export function isActiveBoardTemplate(key: string | null | undefined): key is Bo
  * filtrado por los permisos del usuario). Los tableros predefinidos activos son los de `ACTIVE_BOARD_TEMPLATE_KEYS`.
  */
 export const ACTIVE_WIDGET_SECTIONS: readonly WidgetSection[] = [
+  'disponibilidad',
   'resumen',
   'dia',
   'vencimientos',

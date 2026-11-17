@@ -224,6 +224,8 @@ interface DocumentRowActionsProps {
   documentName: string | null | undefined;
   state: string | null | undefined;
   archived?: boolean;
+  /** Vigente pero por vencer: el botón contextual ofrece "Renovar" (opt-in, lo usa la bandeja de pendientes). */
+  expiringSoon?: boolean;
   /** Valor de `?resource=` del detalle del documento. */
   resource: 'Persona' | 'Equipos' | 'Empresa';
   /** Tab que otorga el permiso `view` para abrir el detalle. */
@@ -247,6 +249,7 @@ export function DocumentRowActions({
   documentName,
   state,
   archived = false,
+  expiringSoon = false,
   resource,
   viewTab,
   upload,
@@ -285,7 +288,7 @@ export function DocumentRowActions({
 
   const contextualLabel = archived
     ? null
-    : state === 'vencido'
+    : state === 'vencido' || expiringSoon
       ? 'Renovar'
       : state === 'rechazado'
         ? 'Volver a subir'

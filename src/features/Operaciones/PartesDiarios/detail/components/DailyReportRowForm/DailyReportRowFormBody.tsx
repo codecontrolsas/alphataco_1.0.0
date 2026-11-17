@@ -11,8 +11,6 @@ import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { employeeDeviations, equipmentDeviations } from '../../../lib/resource-deviations';
-import { useDailyReportDetailInvalidation } from '../../hooks/useDailyReportDetail';
-import { useValidationData } from '../../hooks/useValidationData';
 import type {
   CustomerForForm,
   DailyReportRowForForm,
@@ -20,11 +18,15 @@ import type {
   OtherEquipmentItem,
   VehicleForForm,
 } from '../../form-data.server';
+import { useDailyReportDetailInvalidation } from '../../hooks/useDailyReportDetail';
+import { useValidationData } from '../../hooks/useValidationData';
 import { bulkUpdateRowStatus, createDailyReportRowPrisma, updateDailyReportRowPrisma } from '../../mutations.server';
 import { CustomerServiceSection } from './CustomerServiceSection';
 import { EmployeeSection } from './EmployeeSection';
 import { EquipmentSection } from './EquipmentSection';
 import { JornadaSection } from './JornadaSection';
+import { ResourceDocumentsNotice } from './ResourceDocumentsNotice';
+import { ScheduleSection } from './ScheduleSection';
 import {
   EMPTY_FORM_VALUES,
   buildRowFormValues,
@@ -32,7 +34,6 @@ import {
   collectFormEmployeeIds,
   hasResourceReassignment,
 } from './lib/row-form-values';
-import { ScheduleSection } from './ScheduleSection';
 import { DailyReportRowFormValues, dailyReportRowSchema } from './schema';
 
 const logger = new Logger('DailyReportRowForm');
@@ -197,21 +198,18 @@ export function DailyReportRowFormBody({
 
   // Visibilidad del campo "Motivo de reasignación" (replicado de prod):
   // solo visible en edición cuando se quitaron/reemplazaron empleados o equipos vs el original.
+  const currentEmployeeIds = collectFormEmployeeIds({
+    working_day: form.watch('working_day'),
+    employees: form.watch('employees'),
+    chofer_dia: form.watch('chofer_dia'),
+    chofer_noche: form.watch('chofer_noche'),
+    ayudante_dia: form.watch('ayudante_dia'),
+    ayudante_noche: form.watch('ayudante_noche'),
+  });
+  const currentEquipmentIds = form.watch('equipment') ?? [];
   const showReasigmentReason =
     isEditMode &&
-    hasResourceReassignment({
-      originalEmployeeIds,
-      originalEquipmentIds,
-      currentEmployeeIds: collectFormEmployeeIds({
-        working_day: form.watch('working_day'),
-        employees: form.watch('employees'),
-        chofer_dia: form.watch('chofer_dia'),
-        chofer_noche: form.watch('chofer_noche'),
-        ayudante_dia: form.watch('ayudante_dia'),
-        ayudante_noche: form.watch('ayudante_noche'),
-      }),
-      currentEquipmentIds: form.watch('equipment') ?? [],
-    });
+    hasResourceReassignment({ originalEmployeeIds, originalEquipmentIds, currentEmployeeIds, currentEquipmentIds });
 
   // Avisos de desvío de los recursos YA guardados en la fila (misma queryKey que la tabla: no repite consulta).
   const { getEmployeeDeviation, getEquipmentDeviation } = useValidationData(dailyReportId, reportDate ?? '');
@@ -280,6 +278,14 @@ export function DailyReportRowFormBody({
             selectedCustomerId={watchedCustomerId || null}
             itemNeedsEquipment={itemNeedsEquipment}
             selectedItemName={selectedItemName}
+          />
+
+          <ResourceDocumentsNotice
+            customerId={watchedCustomerId || null}
+            customerName={selectedCustomer?.name ?? null}
+            date={reportDate}
+            employeeIds={itemNeedsPersonnel ? currentEmployeeIds : []}
+            equipmentIds={itemNeedsEquipment ? currentEquipmentIds : []}
           />
 
           <ScheduleSection

@@ -45,6 +45,7 @@ export function findActiveBoardIndex(
  * Los tableros personalizados (sin `template`) no marcan ningún acceso.
  */
 export const DASHBOARD_NAV_TAB_BY_TEMPLATE: Record<BoardTemplateKey, string> = {
+  disponibilidad: 'principal',
   resumen: 'principal',
   dia: 'principal',
   vencimientos: 'documentacion',

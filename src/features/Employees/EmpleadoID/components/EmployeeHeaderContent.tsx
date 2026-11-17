@@ -1,5 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { ResourceCustomerFit } from '@/features/Documentacion/CumplimientoClientes/components/ResourceCustomerFit';
 import { EmployeeDocumentStatus } from '@/features/Documentacion/DocumentosEmpleados/components/EmployeeDocumentStatus';
 import { DocumentStatusChip } from '@/features/Documentacion/shared/components/DocumentStatusChip';
 import { isDocumentStatusKey } from '@/features/Documentacion/shared/lib/document-status-ui';
@@ -76,6 +77,14 @@ export function EmployeeHeaderContent({ employee, canViewDocuments }: EmployeeHe
             </span>
           )}
         </div>
+        {/* Estado frente a cada cliente al que está afectado (solo con permiso de documentación de personal). */}
+        {canViewDocuments && (
+          <Suspense fallback={null}>
+            <ModuleGate module="documentacion">
+              <ResourceCustomerFit kind="Persona" resourceId={employee.id} />
+            </ModuleGate>
+          </Suspense>
+        )}
       </div>
     </div>
   );

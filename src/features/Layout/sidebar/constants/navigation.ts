@@ -191,6 +191,11 @@ export const navigationLinks: NavigationLink[] = [
       { name: 'Empleados', tabSlug: 'documentos-de-empleados' },
       { name: 'Equipos', tabSlug: 'documentos-de-equipos' },
       { name: 'Empresa', tabSlug: 'documentos-de-empresa' },
+      {
+        name: 'Cumplimiento',
+        tabSlug: 'cumplimiento-por-cliente',
+        visibleWhenAny: ['documentos-de-empleados', 'documentos-de-equipos', 'documentos-de-empresa'],
+      },
     ],
   },
   {
@@ -351,6 +356,7 @@ export const SUB_ITEM_ICONS: Record<string, NavIcon> = {
   'documentacion:documentos-de-empleados': Users,
   'documentacion:documentos-de-equipos': Truck,
   'documentacion:documentos-de-empresa': Building2,
+  'documentacion:cumplimiento-por-cliente': ShieldCheck,
   'operaciones:preparte': Package,
   'operaciones:dailyreportstable': ClipboardList,
   'mantenimiento:maint_operaciones': ClipboardList,

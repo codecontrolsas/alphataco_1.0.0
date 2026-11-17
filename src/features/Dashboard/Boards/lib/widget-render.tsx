@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { CustomerAvailabilityWidget } from '@/features/Dashboard/Disponibilidad/CustomerAvailabilityWidget';
 import { EmployeeExpiringDocsList } from '@/features/Dashboard/Documentacion/Empleados/EmployeeExpiringDocsList';
 import {
   EmployeeExpiringCounter,
@@ -94,6 +95,11 @@ const counterFallback = <span aria-hidden="true" className="bg-muted inline-bloc
 
 /** Cómo se dibuja cada widget del registro. Mismos componentes y cálculos que las secciones anteriores. */
 const RENDERERS: Record<WidgetId, WidgetRenderer> = {
+  'customer-availability': {
+    skeleton: <ExpiringDocsSkeleton />,
+    render: () => <CustomerAvailabilityWidget />,
+    frame: {},
+  },
   'attention-inbox': {
     skeleton: <AttentionInboxSkeleton />,
     render: () => <AttentionInboxWidget />,

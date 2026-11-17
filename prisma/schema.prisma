@@ -1187,6 +1187,120 @@ model documents_employees {
   @@index([company_id], map: "idx_documents_employees_company_id")
 }
 
+/// Auditoria de documentos de personal y equipos (ticket 842). La llenan los triggers `document_audit_*` (carga,
+/// reemplazo, aprobacion, rechazo, baja) y, con sus propios eventos, la carga con IA y la carga por link externo.
+/// Sin FK a propósito: el historial sobrevive al documento, al recurso y al tipo.
+model document_audit_events {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id       String   @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  resource_kind    String
+  document_id      String?  @db.Uuid
+  resource_id      String?  @db.Uuid
+  document_type_id String?  @db.Uuid
+  event            String
+  actor_id         String?  @db.Uuid
+  actor_kind       String?
+  detail           String?
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([company_id, created_at(sort: Desc)], map: "idx_document_audit_events_company_created")
+  @@index([document_id], map: "idx_document_audit_events_document")
+  @@schema("public")
+}
+
+/// Ciclo mensual de la empresa (ticket 842): F.931, aporte sindical, plan de pago o recibos de sueldo de un período, con
+/// lo declarado, la boleta y el pago. Los montos tienen que coincidir; la validación vive en `monthly-cycle-check.ts`.
+model monthly_cycles {
+  id                 String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id         String                     @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  kind               String
+  label              String                     @default("")
+  period             String                     @db.Char(7)
+  declared_headcount Int?
+  declared_amount    Decimal?                   @db.Decimal(15, 2)
+  slip_amount        Decimal?                   @db.Decimal(15, 2)
+  paid_amount        Decimal?                   @db.Decimal(15, 2)
+  declaration_path   String?
+  slip_path          String?
+  payment_path       String?
+  notes              String?
+  created_by         String?                    @db.Uuid
+  created_at         DateTime                   @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime                   @default(now()) @db.Timestamptz(6)
+  rejections         monthly_cycle_rejections[]
+
+  @@unique([company_id, kind, label, period])
+  @@index([company_id, period(sort: Desc)], map: "idx_monthly_cycles_company_period")
+  @@schema("public")
+}
+
+/// Rechazo de un ciclo mensual por un cliente (la operadora): queda marcado hasta que se corrige. `customer_id` tiene FK
+/// en la base pero sin relación en Prisma: sumarla a `customers` pasa el límite de profundidad de tipos de TypeScript.
+model monthly_cycle_rejections {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id      String         @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  cycle_id        String         @db.Uuid
+  customer_id     String         @db.Uuid
+  reason          String
+  rejected_by     String?        @db.Uuid
+  rejected_at     DateTime       @default(now()) @db.Timestamptz(6)
+  resolved_at     DateTime?      @db.Timestamptz(6)
+  resolved_by     String?        @db.Uuid
+  resolution_note String?
+  cycle           monthly_cycles @relation(fields: [cycle_id], references: [id], onDelete: Cascade)
+
+  @@index([cycle_id], map: "idx_monthly_cycle_rejections_cycle")
+  @@index([company_id], map: "idx_monthly_cycle_rejections_company")
+  @@schema("public")
+}
+
+/// Link de carga externa (ticket 842): un estudio contable o una consultora sube documentos sin ser usuario. Se guarda
+/// solo el hash del token; vence y se puede revocar.
+model external_upload_links {
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id    String           @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  label         String
+  scope         String
+  token_hash    String           @unique
+  expires_at    DateTime         @db.Timestamptz(6)
+  revoked_at    DateTime?        @db.Timestamptz(6)
+  created_by    String?          @db.Uuid
+  created_at    DateTime         @default(now()) @db.Timestamptz(6)
+  last_used_at  DateTime?        @db.Timestamptz(6)
+  uploads_count Int              @default(0)
+  inbox         document_inbox[]
+
+  @@index([company_id], map: "idx_external_upload_links_company")
+  @@schema("public")
+}
+
+/// Bandeja de entrada de documentos (ticket 842): lo que suben los externos o lee la IA y queda pendiente de validar.
+model document_inbox {
+  id               String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id       String                 @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  source           String
+  link_id          String?                @db.Uuid
+  file_path        String
+  file_name        String
+  status           String                 @default("pending")
+  resource_kind    String?
+  resource_id      String?                @db.Uuid
+  document_type_id String?                @db.Uuid
+  validity         DateTime?              @db.Date
+  period           String?                @db.Char(7)
+  reason           String?
+  extracted        Json?
+  uploader_name    String?
+  document_id      String?                @db.Uuid
+  reviewed_by      String?                @db.Uuid
+  reviewed_at      DateTime?              @db.Timestamptz(6)
+  created_at       DateTime               @default(now()) @db.Timestamptz(6)
+  link             external_upload_links? @relation(fields: [link_id], references: [id], onDelete: SetNull)
+
+  @@index([company_id, status, created_at(sort: Desc)], map: "idx_document_inbox_company_status")
+  @@schema("public")
+}
+
 model documents_employees_logs {
   id                     Int                 @id @default(autoincrement())
   documents_employees_id String              @db.Uuid
