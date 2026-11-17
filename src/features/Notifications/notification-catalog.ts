@@ -50,6 +50,20 @@ export const NOTIFICATION_EVENTS = {
     legacyKind: 'documents_expiry',
     defaultChannels: ['in_app'],
   },
+  'documents.expiry_threshold': {
+    module: 'documentacion',
+    moduleLabel: 'Documentación',
+    label: 'Documentos por vencer (30, 15, 7 y 1 día)',
+    description:
+      'Cada día: los documentos de personal y equipos que vencen exactamente en 30, 15, 7 o 1 día. Cada documento avisa cuatro veces antes de vencer.',
+    audience: 'role',
+    requires: [
+      { module: 'documentacion', tab: 'documentos-de-empleados', action: 'view' },
+      { module: 'documentacion', tab: 'documentos-de-equipos', action: 'view' },
+    ],
+    requiresLabel: 'Ver documentos de empleados o de equipos',
+    defaultChannels: ['in_app', 'email'],
+  },
   'operations.daily_report_deviations': {
     module: 'operaciones',
     moduleLabel: 'Operaciones',

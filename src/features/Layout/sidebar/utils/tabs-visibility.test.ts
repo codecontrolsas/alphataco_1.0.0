@@ -16,7 +16,8 @@ describe('resolveVisibleTabs', () => {
   it('muestra la tab con view explícito', () => {
     const visible = resolveVisibleTabs({ 'documentacion:documentos-de-equipos:view': true });
 
-    expect(visible.documentacion).toEqual(['documentos-de-equipos']);
+    // «Cumplimiento» se ve con cualquiera de las listas de documentos (`visibleWhenAny`).
+    expect(visible.documentacion).toEqual(['documentos-de-equipos', 'cumplimiento-por-cliente']);
   });
 
   it('ubica en Configuración las secciones que se mudaron de otros módulos', () => {
@@ -71,7 +72,11 @@ describe('resolveVisibleTabs', () => {
       'documentacion:documentos-de-empleados:view': true,
     });
 
-    expect(visible.documentacion).toEqual(['documentos-de-empleados', 'documentos-de-empresa']);
+    expect(visible.documentacion).toEqual([
+      'documentos-de-empleados',
+      'documentos-de-empresa',
+      'cumplimiento-por-cliente',
+    ]);
   });
 
   it('no declara entradas para los módulos sin sub-items', () => {

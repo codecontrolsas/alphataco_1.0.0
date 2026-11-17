@@ -1,4 +1,5 @@
 import type { VehicleById } from '@/app/dashboard/equipment/action/page';
+import { ResourceCustomerFit } from '@/features/Documentacion/CumplimientoClientes/components/ResourceCustomerFit';
 import { EquipmentDocumentStatus } from '@/features/Documentacion/DocumentosEquipos/components/EquipmentDocumentStatus';
 import { DocumentStatusChip } from '@/features/Documentacion/shared/components/DocumentStatusChip';
 import { getCostCenterOptions } from '@/features/Empresa/General/actions/cost-centers.server';
@@ -93,6 +94,15 @@ export function VehicleReadView({
           </Suspense>
         }
       />
+
+      {/* Estado frente a cada cliente al que está afectado (solo con permiso de documentación de equipos). */}
+      {isTabVisible('documentacion', 'documentos-de-equipos') && (
+        <Suspense fallback={null}>
+          <ModuleGate module="documentacion">
+            <ResourceCustomerFit kind="Equipos" resourceId={vehicle.id} />
+          </ModuleGate>
+        </Suspense>
+      )}
 
       <RecordSectionsServer<'equipos' | 'documentacion' | 'mantenimiento'>
         paramName="tab"

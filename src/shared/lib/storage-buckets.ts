@@ -35,6 +35,8 @@ export const STORAGE_BUCKETS = [
   /** Documentos HSE (`<companyId>/documents/<documentId>/<versionId>.pdf`). El empleado del portal solo lee los publicados
    * que le aplican: lo decide la RLS de `hse_document_versions` (ver la ruta `/api/files`). */
   'hse-files',
+  /** Ciclos mensuales, carga externa y carga con IA de Documentación (`<companyId>/<carpeta>/<archivo>`, ticket 842). */
+  'compliance-files',
 ] as const;
 
 export type StorageBucket = (typeof STORAGE_BUCKETS)[number];
@@ -61,6 +63,7 @@ export const COMPANY_PREFIXED_BUCKETS: readonly StorageBucket[] = [
   'supplier-documents',
   'customer-documents',
   'hse-files',
+  'compliance-files',
 ];
 
 export function isCompanyPrefixedBucket(bucket: string): bucket is StorageBucket {

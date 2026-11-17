@@ -22,6 +22,7 @@ import { COMPANY_PROFILE } from './data/catalog.ts';
 import { seedBankReconciliation } from './domains/bank-reconciliation.ts';
 import { seedCatalogs } from './domains/catalogs.ts';
 import { seedCertifications } from './domains/commercial.ts';
+import { seedCustomerCompliance, seedDefaultRoleNotifications } from './domains/compliance.ts';
 import { CUSTOMER_DOCUMENTS_BUCKET, seedCustomerReceipts } from './domains/customer-receipts.ts';
 import { linkPriceRules, seedCustomers, seedPriceRules } from './domains/customers.ts';
 import { buildDiagramGrid, seedDiagrams } from './domains/diagrams.ts';
@@ -120,6 +121,8 @@ async function main(): Promise<void> {
           await seedOrgChart(ctx, employees);
           const { vehicles, others } = await seedVehicles(ctx);
           await seedDocuments(ctx, employees, vehicles);
+          await seedCustomerCompliance(ctx, employees);
+          await seedDefaultRoleNotifications(ctx);
           const grid = buildDiagramGrid(ctx, employees);
           await seedDiagrams(ctx, grid);
           // Mantenimiento antes que operaciones: define que equipos estan hoy en taller, y un
