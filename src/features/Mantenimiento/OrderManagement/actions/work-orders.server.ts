@@ -1,15 +1,12 @@
 'use server';
 
-import { buildWorkOrderNumber } from '@/features/Mantenimiento/lib/work-order-generation';
 import { ACTIVITY_LOG } from '@/features/Mantenimiento/shared/activity-log/action-types';
 import { logActivity } from '@/features/Mantenimiento/shared/activity-log/log-activity';
 import { withMaintenanceActor } from '@/features/Mantenimiento/shared/maintenance-actor';
 import {
   getResourceKind,
   getResourceLabel,
-  resourceIdFields,
 } from '@/features/Mantenimiento/shared/maintenance-resource';
-import { nextWorkOrderSequence } from '@/features/Mantenimiento/shared/order-numbering';
 import { getMaintenanceOrderCompanyId } from '@/features/Mantenimiento/shared/resource-company';
 import { Logger } from '@/lib/logger';
 import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
@@ -35,6 +32,7 @@ import {
   applyRepairTypeUpdates,
   requiredActionsForChanges,
 } from './item-changes';
+import { createSectorWorkOrder } from '../lib/sector-work-order.server';
 import { assertOrderInActiveCompany, assertSectorInCompany } from './perimeter';
 import { getOrderGenerationPreview } from './queries.server';
 
@@ -121,34 +119,19 @@ async function generateWorkOrdersCore(orderId: string, dates: { plannedStartDate
           );
         }
 
-        // El número de secuencia se toma DENTRO de la transacción y por empresa: el
-        // `max()+1` leído afuera repetía el número entre generaciones simultáneas.
-        const sequenceNumber = await nextWorkOrderSequence(tx, companyId);
-
-        // Formatear numero de OT: OT-{EQUIPO}-{SECTOR/TALLER}-{SECUENCIA}
-        // El identificador sale del recurso: patente/serie del vehiculo, o N° de serie
-        // (o interno) del equipamiento, que no tiene dominio.
-        const orderNumber = buildWorkOrderNumber({
+        // Número de secuencia y creación de la OT: mismo cuerpo que usa la reasignación de tareas.
+        const wo = await createSectorWorkOrder(tx, {
+          companyId,
+          resourceKind,
+          resourceId,
+          // El identificador sale del recurso: patente/serie del vehiculo, o N° de serie (o interno) del equipamiento.
           resourceLabel: getResourceLabel(resource),
+          workshopId: woWorkshopId,
+          sectorId: woSectorId,
           sectorName: sector.sectorName,
-          sequenceNumber,
-        });
-
-        // Crear la OT
-        const wo = await tx.work_orders.create({
-          data: {
-            order_number: orderNumber,
-            sequence_number: sequenceNumber,
-            company_id: companyId,
-            ...resourceIdFields(resourceKind, resourceId),
-            workshop_id: woWorkshopId,
-            sector_id: woSectorId ?? undefined,
-            status: 'pending',
-            priority: 'medium',
-            planned_start_date: new Date(dates.plannedStartDate),
-            planned_end_date: new Date(dates.plannedEndDate),
-            created_by: profile.id,
-          },
+          plannedStartDate: dates.plannedStartDate,
+          plannedEndDate: dates.plannedEndDate,
+          createdBy: profile.id,
         });
 
         // Crear work_order_items — usando create individual para obtener IDs

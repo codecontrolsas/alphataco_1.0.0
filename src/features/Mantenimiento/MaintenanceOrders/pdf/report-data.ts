@@ -319,6 +319,8 @@ export async function buildMaintenanceOrderReportData(
                   rejection_reason: true,
                   return_reason: true,
                   is_diagnostico: true,
+                  // Sector del que vino la tarea si se reasignó (Mi bandeja): se aclara en el detalle de la tarea
+                  workshop_sectors: { select: { name: true } },
                   types_of_repairs: { select: { name: true, type_of_maintenance: true } },
                   profile_work_order_item_repairs_completed_byToprofile: { select: { fullname: true } },
                 },
@@ -519,11 +521,24 @@ export async function buildMaintenanceOrderReportData(
 
         for (const repair of item.work_order_item_repairs) {
           const maintenanceType = repair.types_of_repairs.type_of_maintenance;
+          // Una tarea reasignada vive en la OT del sector destino (caso B: con un ítem propio): sin esta aclaración
+          // aparecería como una tarea suelta, sin contexto de por qué está en esta OT.
+          const reassignedFrom = clean(repair.workshop_sectors?.name);
+          const showReassigned = reassignedFrom != null && reassignedFrom !== clean(workOrder.workshop_sectors?.name);
+          // El motivo de la devolución es historia de la reasignación: se lee ahí, no como un "Rechazo" de una tarea que sigue viva.
+          const returnReason = clean(repair.return_reason);
+          const stillReturned = repair.status === 'reassignment_requested' || repair.status === 'rejected';
+          const reassignedNote = showReassigned
+            ? `Reasignada desde ${reassignedFrom}${returnReason && !stillReturned ? ` (motivo: ${returnReason})` : ''}`
+            : null;
+          const description = [clean(orderItem.description), reassignedNote]
+            .filter((part): part is string => part != null)
+            .join(' · ');
 
           tasks.push({
             code: `${workOrderIndex + 1}.${tasks.length + 1}`,
             repairType: repair.types_of_repairs.name,
-            description: clean(orderItem.description),
+            description: description || null,
             maintenanceType,
             isCritical: orderItem.is_critical ?? false,
             // El unico tipo de reparacion sin `type_of_maintenance` es "Diagnóstico":
@@ -537,7 +552,9 @@ export async function buildMaintenanceOrderReportData(
             technicianNotes: clean(repair.technician_notes),
             workshopChiefComment: clean(orderItem.workshop_chief_comment),
             rejectionReason:
-              clean(repair.rejection_reason) ?? clean(repair.return_reason) ?? clean(orderItem.rejection_reason),
+              clean(repair.rejection_reason) ??
+              (stillReturned ? returnReason : null) ??
+              clean(orderItem.rejection_reason),
           });
         }
       }

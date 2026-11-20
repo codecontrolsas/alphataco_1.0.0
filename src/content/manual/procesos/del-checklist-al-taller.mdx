@@ -86,16 +86,16 @@ En <GuideLink to="validar-solicitudes">Mantenimiento → Gestión → Supervisi�
 
 ## Paso 4: el pedido recorre el taller
 
-El taller trabaja en <GuideLink to="taller">Mantenimiento → Gestión → Taller</GuideLink>, organizado en cuatro pestañas:
+El taller trabaja en <GuideLink to="taller">Mantenimiento → Gestión → Taller</GuideLink>, organizado en tres pestañas y el paso Gomería:
 
 1. **Programación pendiente**: pedidos aprobados sin fecha. Con **Planificar Pedido de Mantenimiento** se fija la **Fecha de recepción en taller**. El taller también puede **Rechazar Pedido** con motivo; queda en el historial del equipo.
 2. **Para ingreso**: pedidos con fecha. Cuando el equipo llega, **Aprobar Entrada a Taller** pide el **Kilometraje actual del equipo** (no puede ser menor al registrado) y, si corresponde, el horómetro. Al confirmar, **el equipo pasa a No operativo** ("Entrada a taller aprobada. El equipo ahora está "No Operativo"").
 3. **En mantenimiento**: los equipos activos. Se reparten los trabajos por **sector** y se generan las **órdenes de trabajo** (OT), que los operarios ejecutan desde su <GuideLink to="panel-del-operario">panel</GuideLink>. Los trabajos de un taller externo se registran como OT externas. La sección <GuideLink to="vista-taller">Sectores</GuideLink> muestra lo mismo agrupado por sector. Si hacen falta **repuestos**, el operario (desde su OT) o el taller (desde el detalle de la orden) hacen un **pedido de materiales** al almacén, imputado a la orden (ver <GuideLink to="pedidos-de-materiales">Pedidos de materiales</GuideLink>).
-4. **Aprobaciones**: lo que necesita la autorización del jefe de taller (tareas a aprobar, reasignaciones de sector y pedidos con todas sus OT terminadas).
+Las aprobaciones del jefe de taller (tareas a autorizar, reasignaciones de sector y pedidos con todas sus OT terminadas) están en <GuideLink to="mi-bandeja">Mi bandeja</GuideLink>.
 
 <Figure
   name="taller-circuito"
-  caption="Las cuatro pestañas del taller como cuatro estaciones en fila: los pedidos esperan en la bandeja de Programación pendiente, pasan la barrera en Para ingreso, el equipo sube al elevador en En mantenimiento (ahí queda No operativo) y el cierre se firma en Aprobaciones."
+  caption="El circuito del taller como cuatro estaciones en fila: los pedidos esperan en la bandeja de Programación pendiente, pasan la barrera en Para ingreso, el equipo sube al elevador en En mantenimiento (ahí queda No operativo) y el cierre se firma en el escritorio de la última estación, que en el sistema es Validar cierre de Mi bandeja. Gomería es un circuito aparte y no figura."
 />
 
 Del lado de Supervisión, la pestaña **Seguimiento** muestra los equipos pendientes de ingreso y los que están en el taller.
@@ -126,7 +126,7 @@ Del lado de Supervisión, la pestaña **Seguimiento** muestra los equipos pendie
 
 ## Paso 5: el cierre y la vuelta a la calle
 
-Cuando todas las OT de un pedido están **Completada** o **Completada Parcial**, el pedido pasa a **Pend. Validación Taller** y aparece en **Aprobaciones**. No se puede cerrar mientras tenga **pedidos de materiales** sin terminar (pendientes de aprobación, aprobados o entregados en parte): hay que entregarlos, cerrarlos o cancelarlos en **Almacenes → Pedidos**. Al cerrarlo el jefe de taller:
+Cuando todas las OT de un pedido están **Completada** o **Completada Parcial**, el pedido pasa a **Pend. Validación Taller** y aparece en <GuideLink to="mi-bandeja">Mi bandeja</GuideLink>, en **Validar cierre**. No se puede cerrar mientras tenga **pedidos de materiales** sin terminar (pendientes de aprobación, aprobados o entregados en parte): hay que entregarlos, cerrarlos o cancelarlos en **Almacenes → Pedidos**. Al cerrarlo el jefe de taller:
 
 - El pedido queda **Completada**.
 - El equipo vuelve a **Operativo**, **salvo que tenga otro pedido todavía En Taller**: en ese caso sigue **No operativo** hasta que se cierre el último.
@@ -149,7 +149,7 @@ La **condición del equipo** se usa en otros dos lugares:
 
 ## Gomería
 
-Las cubiertas tienen su propio circuito en <GuideLink to="gomeria">Mantenimiento → Gomería</GuideLink>: catálogo de cubiertas, plantillas de disposición por tipo de equipo, marcas, tipos y **órdenes** de servicio de gomería. Las órdenes de gomería también se pueden iniciar desde el QR del equipo. Es independiente de los pedidos de taller. Cada cubierta es stock de Almacenes: montarla, desmontarla o descartarla en una orden de gomería mueve ese stock.
+Las cubiertas tienen su propio circuito en <GuideLink to="gomeria">Gomería</GuideLink>: las **órdenes** de servicio están en **Mantenimiento → Gestión → Taller → Gomería**, el catálogo de cubiertas en **Almacenes → Cubiertas** y las plantillas de disposición por tipo de equipo, las marcas y los tipos en **Configuración → Taller → Cubiertas**. Las órdenes de gomería también se pueden iniciar desde el QR del equipo. Es independiente de los pedidos de taller. Cada cubierta es stock de Almacenes: montarla, desmontarla o descartarla en una orden de gomería mueve ese stock.
 
 ## Permisos
 

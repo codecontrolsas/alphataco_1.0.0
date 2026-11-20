@@ -1,5 +1,6 @@
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { cache } from 'react';
+import { TALLER_VIEW_TABS } from './taller-visibility';
 import { getEquipmentsWithDeviationsMetrics } from '../EquiposConDesvios/actions.server';
 import { getOperacionesPipelineSummary } from '../Pipeline/OperacionesPipeline/actions/pipeline-summary.server';
 import { getTallerPipelineSummary } from '../Pipeline/TallerPipeline/actions/pipeline-summary.server';
@@ -20,7 +21,7 @@ const TALLER_STEP_TABS: Record<string, string> = {
   schedule: 'pedidos_pendientes',
   confirmed: 'pedidos_confirmados',
   in_workshop: 'ordenes_mantenimiento',
-  approvals: 'bandeja_aprobaciones',
+  gomeria: 'ordenes_gomeria',
 };
 
 /**
@@ -52,10 +53,12 @@ export const getOperacionesSectionCount = cache(async (): Promise<number | null>
  * el total es `null` (sería un número inventado).
  */
 export const getGestionSectionCount = cache(async (): Promise<number | null> => {
-  const [canOperaciones, canTaller] = await Promise.all([
+  const [canOperaciones, ...tallerSteps] = await Promise.all([
     checkPermissionServer('mantenimiento', 'maint_operaciones', 'view'),
-    checkPermissionServer('mantenimiento', 'maint_taller', 'view'),
+    ...TALLER_VIEW_TABS.map((tab) => checkPermissionServer('mantenimiento', tab, 'view')),
   ]);
+  // Taller cuenta si el usuario ve alguno de sus pasos (no por el padre `maint_taller`: ver `TALLER_VIEW_TABS`).
+  const canTaller = tallerSteps.some(Boolean);
   const [operaciones, taller] = await Promise.all([
     canOperaciones ? getOperacionesSectionCount() : 0,
     canTaller ? getTallerSectionCount() : 0,

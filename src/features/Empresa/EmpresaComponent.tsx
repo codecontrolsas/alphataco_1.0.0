@@ -93,9 +93,14 @@ export default async function EmpresaComponent({
         {
           value: 'mantenimiento',
           label: 'Taller',
-          description: 'Talleres, tipos de reparación y grupos de mantenimiento',
-          moduleSlug: 'configuracion',
-          tabSlug: 'mantenimiento',
+          description: 'Talleres, tipos de reparación, grupos de mantenimiento y catálogos de cubiertas',
+          // Quien solo tiene permisos de cubiertas (plantillas, marcas, tipos) también entra a Taller: su vista Cubiertas.
+          visibleWhenAny: [
+            { moduleSlug: 'configuracion', tabSlug: 'mantenimiento' },
+            { moduleSlug: 'mantenimiento', tabSlug: 'plantillas_cubiertas' },
+            { moduleSlug: 'mantenimiento', tabSlug: 'marcas_cubiertas' },
+            { moduleSlug: 'mantenimiento', tabSlug: 'tipos_cubiertas' },
+          ],
           content: <TallerSectionContent searchParams={searchParams} permissions={permissions} />,
         },
         {

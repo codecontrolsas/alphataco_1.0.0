@@ -83,6 +83,11 @@ export interface TabDefinition<M extends ModuleSlug = ModuleSlug> {
    * título (ej. el Centro de Ayuda del módulo de TaskApp). Sin esto quedaban dos títulos.
    */
   hideTitle?: boolean;
+  /**
+   * `SectionManagerServer`: la sección sigue declarada (se abre con `?<paramName>=<value>`) pero no se ofrece en el
+   * selector de secciones de móvil. Es para las que solo existen para redirigir enlaces viejos.
+   */
+  hidden?: boolean;
   /** Texto corto bajo el título de la sección (`PageHeader`). */
   description?: string;
   /**

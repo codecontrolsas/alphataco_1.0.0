@@ -3,7 +3,7 @@ import { defineSection, tab } from '../define.ts';
 export const mantenimientoSection = defineSection({
   key: 'mantenimiento',
   title: 'Mantenimiento',
-  description: 'Solicitudes, taller, órdenes de trabajo y gomería.',
+  description: 'Solicitudes, taller, Mi bandeja, órdenes de trabajo y gomería.',
   icon: 'maintenance',
   guides: [
     {
@@ -24,9 +24,12 @@ export const mantenimientoSection = defineSection({
         tab('mantenimiento', 'bandeja_aprobaciones'),
         tab('mantenimiento', 'ordenes_mantenimiento'),
       ],
-      // Pasos `?taller_step=schedule|confirmed|in_workshop|approvals`: misma limitación que arriba.
+      // Pasos `?taller_step=schedule|confirmed|in_workshop|gomeria`: misma limitación que arriba. `approvals` ya no
+      // existe: redirige a Mi bandeja.
       screens: [{ path: '/dashboard/maintenance', tab: 'maint_taller' }],
       related: [
+        'mi-bandeja',
+        'gomeria',
         'del-checklist-al-taller',
         'validar-solicitudes',
         'vista-taller',
@@ -34,6 +37,13 @@ export const mantenimientoSection = defineSection({
         'catalogos-de-mantenimiento',
         'pedidos-de-materiales',
       ],
+    },
+    {
+      slug: 'mi-bandeja',
+      // Sin tab propia: se ve con el permiso de la bandeja de aprobaciones o con el de las órdenes (Validar cierre).
+      access: [tab('mantenimiento', 'bandeja_aprobaciones'), tab('mantenimiento', 'ordenes_mantenimiento')],
+      screens: [{ path: '/dashboard/inbox' }],
+      related: ['taller', 'panel-del-operario', 'validar-solicitudes', 'vista-taller'],
     },
     {
       slug: 'vista-taller',
@@ -64,8 +74,14 @@ export const mantenimientoSection = defineSection({
         tab('mantenimiento', 'marcas_cubiertas'),
         tab('mantenimiento', 'tipos_cubiertas'),
       ],
-      // Las pestañas internas (`?gomeria_tab=...`) no se pueden declarar: abren esta misma guía.
-      screens: [{ path: '/dashboard/maintenance', tab: 'gomeria' }],
+      // Gomería se repartió por función (778): el catálogo vive en Almacenes > Cubiertas y plantillas, marcas y tipos en
+      // Configuración > Taller > Cubiertas. Las órdenes están en Gestión > Taller (paso `?taller_step=gomeria`), que el
+      // catálogo no puede declarar: abre la guía de Taller. La pantalla vieja (`tab=gomeria`) queda por los enlaces guardados.
+      screens: [
+        { path: '/dashboard/warehouse', tab: 'cubiertas' },
+        { path: '/dashboard/configuration', tab: 'mantenimiento', subtab: 'cubiertas' },
+        { path: '/dashboard/maintenance', tab: 'gomeria' },
+      ],
       related: [
         'ficha-del-vehiculo',
         'qr-del-equipo',

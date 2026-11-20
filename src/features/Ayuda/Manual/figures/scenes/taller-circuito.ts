@@ -1,8 +1,8 @@
 import { k, toolbox, type Scene } from './scene.ts';
 
 /**
- * Las cuatro pestañas del taller como cuatro estaciones sobre un mismo camino (guía "Del checklist
- * al taller", Paso 4): Por programar → Por ingresar → En taller → Aprobaciones. La pieza que se
+ * Cuatro estaciones del taller sobre un mismo camino (guía "Del checklist al taller"): Por programar →
+ * Por ingresar → En taller → cierre firmado (hoy «Validar cierre» de Mi bandeja, ex pestaña Aprobaciones). La pieza que se
  * mira (`lit`) es el equipo, que en la tercera estación entra al taller y pasa a No operativo.
  * Sentido de la línea: +x.
  */
@@ -161,7 +161,7 @@ export function buildTallerCircuito(): Scene {
     out.push(t.dots([t.at([cx + 17, 39, 33])], { size: 0.9, tone: 'hi' }));
   }
 
-  // ───────── 4. Aprobaciones: escritorio con sello y archivo
+  // ───────── 4. Cierre (ex Aprobaciones, hoy Validar cierre en Mi bandeja): escritorio con sello y archivo
   {
     const cx = CX[3];
     out.push(...base(cx));

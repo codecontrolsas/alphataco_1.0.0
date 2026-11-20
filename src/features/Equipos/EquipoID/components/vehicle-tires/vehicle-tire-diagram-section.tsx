@@ -23,6 +23,7 @@ import { ExternalLink, Pencil, RotateCcw } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useState } from 'react';
+import { GOMERIA_SETTINGS_HREF } from '@/features/Mantenimiento/Gomeria/lib/gomeria-locations';
 import { toast } from 'sonner';
 import { getVehicleTemplateInfo, getVehicleTirePositionsWithDetails } from './actions/positions.server';
 import { resetVehicleToSubTypeTemplate } from './actions/template.server';
@@ -208,7 +209,7 @@ export function VehicleTireDiagramSection({ vehicleId, canUpdate }: VehicleTireD
                 </Button>
               )}
               <Button variant="outline" size="sm" asChild>
-                <Link href="/dashboard/maintenance?tab=gomeria&subtab=plantillas">
+                <Link href={GOMERIA_SETTINGS_HREF}>
                   <ExternalLink className="h-4 w-4 mr-2" />
                   Ir a Plantillas
                 </Link>

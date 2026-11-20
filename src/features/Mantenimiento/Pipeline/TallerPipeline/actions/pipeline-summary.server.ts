@@ -17,8 +17,7 @@ import {
   resolveOrderListScope,
   scopeConditions,
 } from '../../../PedidosMantenimiento/lib/order-list-shared';
-import { visibleEquipmentTypeCondition } from '../../../shared/maintenance-resource';
-import { getHiddenEquipmentTypeIds } from '../../../utils/equipmentTypeVisibility';
+import { openServiceOrdersWhere } from '../../../Gomeria/shared/list-query';
 import type { PipelineSummary } from '../../types';
 
 const logger = new Logger('Pipeline/Taller/summary');
@@ -116,45 +115,15 @@ async function summarizeInWorkshop(): Promise<StepSummary> {
 }
 
 /**
- * Paso 4 — Aprobaciones: órdenes pendientes de validación + tareas por autorizar + tareas devueltas para
- * reasignar. Cada parte usa el MISMO `where` que su bloque de la bandeja (empresa y tipos ocultos, sin filtro de
- * supervisor), así el contador coincide con lo que se ve al entrar al paso.
+ * Paso Gomería: órdenes de gomería ABIERTAS de la empresa. Usa el mismo `where` que la banda «N órdenes abiertas»
+ * del listado (`openServiceOrdersWhere`). Sin tipos ocultos ni supervisor: el listado de gomería tampoco los aplica.
  */
-async function summarizeApprovals(companyId: string): Promise<StepSummary> {
-  if (!(await checkPermissionServer(MODULE_SLUG, 'bandeja_aprobaciones', 'view'))) return UNKNOWN_STEP;
+async function summarizeGomeria(companyId: string): Promise<StepSummary> {
+  if (!(await checkPermissionServer(MODULE_SLUG, 'ordenes_gomeria', 'view'))) return UNKNOWN_STEP;
 
-  const hiddenTypeIds = await getHiddenEquipmentTypeIds();
-  const equipmentCondition = visibleEquipmentTypeCondition(hiddenTypeIds);
-
-  const repairsWhere = (status: 'pending_approval' | 'reassignment_requested') => ({
-    status,
-    company_id: companyId,
-    ...(equipmentCondition
-      ? { work_order_items: { maintenance_order_items: { maintenance_orders: equipmentCondition } } }
-      : {}),
-  });
-
-  const [validation, authorizations, reassignments] = await Promise.all([
-    safeCount('approvals-validation', () =>
-      prisma.maintenance_orders.count({
-        where: {
-          status: 'pending_workshop_validation',
-          company_id: companyId,
-          ...(equipmentCondition ? { AND: [equipmentCondition] } : {}),
-        },
-      })
-    ),
-    safeCount('approvals-authorizations', () =>
-      prisma.work_order_item_repairs.count({ where: repairsWhere('pending_approval') })
-    ),
-    safeCount('approvals-reassignments', () =>
-      prisma.work_order_item_repairs.count({ where: repairsWhere('reassignment_requested') })
-    ),
-  ]);
-
-  // Si una de las tres partes falló el total sería un número inventado: se declara no calculable.
-  const parts = [validation, authorizations, reassignments];
-  const count = parts.every((part): part is number => part !== null) ? parts.reduce((sum, part) => sum + part, 0) : null;
+  const count = await safeCount('gomeria', () =>
+    prisma.tire_service_orders.count({ where: openServiceOrdersWhere(companyId) })
+  );
 
   return { count, attention: null };
 }
@@ -176,7 +145,7 @@ export async function getTallerPipelineSummary(): Promise<PipelineSummary> {
       ['schedule', () => summarizeSchedule(companyId)],
       ['confirmed', () => summarizeConfirmed(companyId)],
       ['in_workshop', () => summarizeInWorkshop()],
-      ['approvals', () => summarizeApprovals(companyId)],
+      ['gomeria', () => summarizeGomeria(companyId)],
     ] as const;
 
     const results = await Promise.allSettled(entries.map(([, run]) => run()));
@@ -193,7 +162,7 @@ export async function getTallerPipelineSummary(): Promise<PipelineSummary> {
     logger.error('Error al resolver el contexto del pipeline de Taller', { data: { error } });
   }
 
-  const stepIds = ['schedule', 'confirmed', 'in_workshop', 'approvals'];
+  const stepIds = ['schedule', 'confirmed', 'in_workshop', 'gomeria'];
   return {
     counts: Object.fromEntries(stepIds.map((id) => [id, steps[id]?.count ?? null])),
     attention: Object.fromEntries(stepIds.map((id) => [id, steps[id]?.attention ?? null])),

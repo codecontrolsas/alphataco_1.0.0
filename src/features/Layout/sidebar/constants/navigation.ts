@@ -1,3 +1,4 @@
+import { TALLER_VIEW_TABS } from '@/features/Mantenimiento/lib/taller-visibility';
 import type { ModuleSlug } from '@/features/Permissions/permissions-map';
 import { MODULE_ICONS, type ModuleIcon } from '@/shared/constants/module-icons';
 import {
@@ -47,6 +48,9 @@ import {
 /** Icono de un item del sidebar. Misma forma que la del mapa compartido de modulos. */
 export type NavIcon = ModuleIcon;
 
+/** Entrada de `visibleWhenAny`: tab del mismo módulo (`string`) o vista de otro módulo (`{ moduleSlug, tabSlug }`). */
+export type VisibleWhenAnyEntry = string | { moduleSlug: string; tabSlug: string };
+
 /**
  * Sub-item del sidebar: una tab de primer nivel del modulo.
  *
@@ -58,10 +62,12 @@ export type NavigationSubLink = {
   name: string;
   tabSlug: string;
   /**
-   * Otras tabs del mismo módulo que también habilitan este sub-item (una sección que junta varias tabs
-   * con permiso propio, ej. Mantenimiento > Gestión = Supervisión + Taller).
+   * Otras tabs que también habilitan este sub-item (una sección que junta varias tabs con permiso propio,
+   * ej. Mantenimiento > Gestión = Supervisión + Taller). Un `string` es una tab del mismo módulo; un objeto
+   * `{ moduleSlug, tabSlug }` es una vista de OTRO módulo (ej. Almacenes > Cubiertas se ve con el permiso
+   * `mantenimiento:catalogo_cubiertas`).
    */
-  visibleWhenAny?: string[];
+  visibleWhenAny?: VisibleWhenAnyEntry[];
   /**
    * Segundo nivel de la tab (`?subtab=<subTabSlug>`), para las secciones cuyas subtabs se
    * eligen desde el sidebar (hoy: Empleados > Activos / Bajas). Es también el slug de permiso.
@@ -216,11 +222,15 @@ export const navigationLinks: NavigationLink[] = [
     icon: MODULE_ICONS.mantenimiento,
     position: 8,
     items: [
-      { name: 'Gestión', tabSlug: 'maint_operaciones', visibleWhenAny: ['maint_taller'] },
+      {
+        name: 'Gestión',
+        tabSlug: 'maint_operaciones',
+        // Taller se habilita por sus pasos (no por el padre `maint_taller`, que hereda `bandeja_aprobaciones`: ver `TALLER_VIEW_TABS`).
+        visibleWhenAny: [...TALLER_VIEW_TABS],
+      },
       { name: 'Sectores', tabSlug: 'workshop_view' },
       { name: 'Nuevo pedido', tabSlug: 'nuevo_pedido' },
       { name: 'Equipos con desvíos', tabSlug: 'equipments_with_deviations' },
-      { name: 'Gomería', tabSlug: 'gomeria' },
     ],
   },
   {
@@ -235,6 +245,12 @@ export const navigationLinks: NavigationLink[] = [
       { name: 'Préstamos', tabSlug: 'prestamos' },
       { name: 'Pedidos', tabSlug: 'pedidos' },
       { name: 'Materiales', tabSlug: 'materiales' },
+      // Catálogo de cubiertas: vive en Almacenes pero su permiso sigue siendo `mantenimiento:catalogo_cubiertas`.
+      {
+        name: 'Cubiertas',
+        tabSlug: 'cubiertas',
+        visibleWhenAny: [{ moduleSlug: 'mantenimiento', tabSlug: 'catalogo_cubiertas' }],
+      },
       { name: 'Depósitos', tabSlug: 'depositos' },
       { name: 'Configuración', tabSlug: 'config-almacen' },
     ],
@@ -321,7 +337,16 @@ export const navigationLinks: NavigationLink[] = [
       { name: 'Usuarios y accesos', tabSlug: 'general', subTabSlug: 'users' },
       { name: 'Personal', tabSlug: 'rrhh' },
       { name: 'Flota', tabSlug: 'vehicles' },
-      { name: 'Taller', tabSlug: 'mantenimiento' },
+      {
+        name: 'Taller',
+        tabSlug: 'mantenimiento',
+        // Plantillas, marcas y tipos de cubiertas se configuran acá pero conservan su permiso de Mantenimiento.
+        visibleWhenAny: [
+          { moduleSlug: 'mantenimiento', tabSlug: 'plantillas_cubiertas' },
+          { moduleSlug: 'mantenimiento', tabSlug: 'marcas_cubiertas' },
+          { moduleSlug: 'mantenimiento', tabSlug: 'tipos_cubiertas' },
+        ],
+      },
       { name: 'Tipos de documento', tabSlug: 'documentos' },
     ],
   },
@@ -363,12 +388,12 @@ export const SUB_ITEM_ICONS: Record<string, NavIcon> = {
   'mantenimiento:workshop_view': Building2,
   'mantenimiento:nuevo_pedido': Plus,
   'mantenimiento:equipments_with_deviations': TriangleAlert,
-  'mantenimiento:gomeria': CircleDot,
   'almacenes:stock': Layers,
   'almacenes:movimientos': ArrowLeftRight,
   'almacenes:prestamos': HandHelping,
   'almacenes:pedidos': ClipboardList,
   'almacenes:materiales': Package,
+  'almacenes:cubiertas': CircleDot,
   'almacenes:depositos': Warehouse,
   'almacenes:config-almacen': Settings,
   'compras:solicitudes': ClipboardList,

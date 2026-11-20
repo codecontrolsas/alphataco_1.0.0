@@ -1,7 +1,7 @@
 'use server';
 
 import { requireGomeriaPermission } from '@/features/Mantenimiento/Gomeria/shared/access.server';
-import { composeAnd, GOMERIA_EXPORT_MAX_ROWS } from '@/features/Mantenimiento/Gomeria/shared/list-query';
+import { composeAnd, GOMERIA_EXPORT_MAX_ROWS, openServiceOrdersWhere } from '@/features/Mantenimiento/Gomeria/shared/list-query';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -147,7 +147,7 @@ export async function getOpenServiceOrdersSummary() {
   const companyId = await requireGomeriaPermission('ordenes_gomeria', 'view');
 
   try {
-    const where = composeAnd<Prisma.tire_service_ordersWhereInput>({ company_id: companyId }, { status: 'OPEN' });
+    const where = openServiceOrdersWhere(companyId);
 
     const [count, latest] = await Promise.all([
       prisma.tire_service_orders.count({ where }),

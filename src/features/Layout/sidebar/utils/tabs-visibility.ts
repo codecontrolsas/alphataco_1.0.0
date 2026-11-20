@@ -23,7 +23,9 @@ export function resolveVisibleTabs(permissions: Readonly<Record<string, boolean>
       .filter((item) =>
         item.subTabSlug
           ? isTabVisible(link.moduleSlug, item.subTabSlug)
-          : [item.tabSlug, ...(item.visibleWhenAny ?? [])].some((tab) => isTabVisible(link.moduleSlug, tab))
+          : [item.tabSlug, ...(item.visibleWhenAny ?? [])].some((tab) =>
+              typeof tab === 'string' ? isTabVisible(link.moduleSlug, tab) : isTabVisible(tab.moduleSlug, tab.tabSlug)
+            )
       )
       .map(subLinkKey);
   }

@@ -123,7 +123,7 @@ export const configuracionSection = defineSection({
         { path: CONFIG, tab: 'mantenimiento', subtab: 'type_of_repair' },
         { path: CONFIG, tab: 'mantenimiento', subtab: 'maintenance_groups' },
       ],
-      related: ['nuevo-pedido-de-mantenimiento', 'vista-taller', 'taller', 'del-checklist-al-taller'],
+      related: ['nuevo-pedido-de-mantenimiento', 'vista-taller', 'taller', 'del-checklist-al-taller', 'gomeria'],
     },
     {
       slug: 'tipos-de-documento',

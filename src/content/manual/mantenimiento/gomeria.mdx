@@ -2,18 +2,20 @@
 title: Gomería
 summary: Catálogo de cubiertas con su depósito y su costo, plantillas de ejes por tipo de vehículo, marcas y tipos, y las órdenes de gomería para calibrar, reparar, reemplazar o reportar cubiertas, con su efecto en el stock de Almacenes.
 keywords: gomería, cubiertas, neumáticos, stock, depósito, costo, almacenes, plantilla, ejes, posiciones, calibración, presión, reemplazo, reparación, extravío, descarte, precurado, marca, medida, montaje
-updated: 2026-10-08
+updated: 2026-11-20
 ---
 
-La pestaña **Gomería** del módulo **Mantenimiento** lleva el control de las cubiertas: cuántas hay, de qué marca y medida, dónde está montada cada una y qué se le hizo. Cada cubierta es además una **unidad de stock** en el módulo **Almacenes**, con su depósito y su costo: montarla, desmontarla o descartarla mueve ese stock solo (ver [Las cubiertas en el stock de Almacenes](#las-cubiertas-en-el-stock-de-almacenes)). Se organiza en cinco pestañas internas:
+**Gomería** lleva el control de las cubiertas: cuántas hay, de qué marca y medida, dónde está montada cada una y qué se le hizo. Ya no es una pestaña de **Mantenimiento**: cada parte vive donde se usa. Cada cubierta es además una **unidad de stock** en el módulo **Almacenes**, con su depósito y su costo: montarla, desmontarla o descartarla mueve ese stock solo (ver [Las cubiertas en el stock de Almacenes](#las-cubiertas-en-el-stock-de-almacenes)).
 
-| Pestaña        | Para qué sirve                                                                                    |
-| -------------- | ------------------------------------------------------------------------------------------------- |
-| **Catálogo**   | Cada cubierta con su número, marca, medida, estado, depósito y costo.                             |
-| **Plantillas** | La forma de los ejes de cada tipo de vehículo (cuántos ejes, simples o duales, auxilio).          |
-| **Órdenes**    | Cada intervención de gomería sobre un vehículo: calibrar, reparar, reemplazar, reportar extravío. |
-| **Marcas**     | Las marcas de cubiertas.                                                                          |
-| **Tipos**      | Los tipos de cubierta: medida y tipo de banda.                                                    |
+| Parte | Dónde está ahora | Para qué sirve |
+| ----- | ---------------- | -------------- |
+| **Órdenes** | **Mantenimiento → Gestión → Taller → Gomería** | Cada intervención de gomería sobre un vehículo: calibrar, reparar, reemplazar, reportar extravío. |
+| **Catálogo** | **Almacenes → Cubiertas** | Cada cubierta con su número, marca, medida, estado, depósito y costo. |
+| **Plantillas** | **Configuración → Taller → Cubiertas** | La forma de los ejes de cada tipo de vehículo (cuántos ejes, simples o duales, auxilio). |
+| **Marcas** | **Configuración → Taller → Cubiertas** | Las marcas de cubiertas. |
+| **Tipos** | **Configuración → Taller → Cubiertas** | Los tipos de cubierta: medida y tipo de banda. |
+
+Los permisos no cambiaron: cada parte se ve con el mismo permiso de siempre (ver [Permisos](#permisos)). Los enlaces viejos a la pestaña **Gomería** de Mantenimiento reenvían solos a la ubicación nueva.
 
 <OpenScreen />
 
@@ -31,19 +33,19 @@ La pestaña **Gomería** del módulo **Mantenimiento** lleva el control de las c
 
 ## Marcas
 
-Lista de marcas con **Nombre**, **Estado** (**Activa** o **Inactiva**), cantidad de **Cubiertas** y fecha de alta (**Creado**). **Nueva Marca** pide solo el **Nombre**. En cada fila podés **Editar** y **Desactivar** (o **Activar**). Una marca inactiva no se ofrece al cargar cubiertas nuevas, pero las cubiertas que ya la tienen no cambian.
+En **Configuración → Taller → Cubiertas**. Lista de marcas con **Nombre**, **Estado** (**Activa** o **Inactiva**), cantidad de **Cubiertas** y fecha de alta (**Creado**). **Nueva Marca** pide solo el **Nombre**. En cada fila podés **Editar** y **Desactivar** (o **Activar**). Una marca inactiva no se ofrece al cargar cubiertas nuevas, pero las cubiertas que ya la tienen no cambian.
 
 Cada combinación de **tipo** y **marca** es un **material** de Almacenes (por ejemplo **CUB-295/80R22.5-MIX-FIR**, "Cubierta 295/80R22.5 Mixto · Firestone"). El sistema lo crea y le actualiza el nombre al cargar o editar tipos y marcas, y lo deja inactivo si se desactiva el tipo o la marca. Ver <GuideLink to="materiales">Materiales</GuideLink>.
 
 ## Tipos
 
-Cada tipo de cubierta tiene **Nombre**, **Medida** (por ejemplo, 295/80R22.5) y **Tipo de banda** (**Liso**, **Mixto** o **Taco**). La tabla muestra además el **Estado**, la cantidad de **Cubiertas** y **Creado**. **Nuevo Tipo** crea uno; en cada fila podés **Editar** y **Desactivar** o **Activar**.
+En **Configuración → Taller → Cubiertas**. Cada tipo de cubierta tiene **Nombre**, **Medida** (por ejemplo, 295/80R22.5) y **Tipo de banda** (**Liso**, **Mixto** o **Taco**). La tabla muestra además el **Estado**, la cantidad de **Cubiertas** y **Creado**. **Nuevo Tipo** crea uno; en cada fila podés **Editar** y **Desactivar** o **Activar**.
 
 La medida de una cubierta sale de su tipo: por eso conviene tener un tipo por cada medida y banda que uses.
 
 ## Catálogo
 
-El stock completo de cubiertas.
+En **Almacenes → Cubiertas**. El stock completo de cubiertas.
 
 | Columna              | Qué muestra                                                                                                                                                                                         |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -105,7 +107,7 @@ Los cambios de estado de **Instalada** en adelante se hacen desde las **Órdenes
 
 ## Plantillas
 
-Una plantilla describe los ejes de un tipo de vehículo: con ella el sistema sabe cuántas posiciones de cubierta tiene cada unidad y las dibuja en las órdenes.
+En **Configuración → Taller → Cubiertas**. Una plantilla describe los ejes de un tipo de vehículo: con ella el sistema sabe cuántas posiciones de cubierta tiene cada unidad y las dibuja en las órdenes.
 
 | Columna                      | Qué muestra                                                                                                                                             |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -138,7 +140,7 @@ Una plantilla asignada a vehículos no se puede eliminar.
 
 ## Órdenes
 
-Cada orden de gomería es una visita de un vehículo a la gomería, con todas las intervenciones que se le hicieron.
+En **Mantenimiento → Gestión → Taller**, en el paso **Gomería** (sin número de etapa: es un circuito aparte, y su contador muestra las órdenes **Abiertas**). Cada orden de gomería es una visita de un vehículo a la gomería, con todas las intervenciones que se le hicieron.
 
 | Columna                     | Qué muestra                                              |
 | --------------------------- | -------------------------------------------------------- |
@@ -235,9 +237,9 @@ Las órdenes de gomería también se pueden hacer desde el campo, escaneando el 
 
 ## Permisos
 
-Cada pestaña interna tiene su propio permiso dentro de **Gomería**:
+Cada parte tiene su propio permiso dentro de **Gomería** (el mismo que antes de mudarse):
 
-| Pestaña                     | Ver                         | Crear                                       | Editar                                                              | Eliminar     |
+| Parte                       | Ver                         | Crear                                       | Editar                                                              | Eliminar     |
 | --------------------------- | --------------------------- | ------------------------------------------- | ------------------------------------------------------------------- | ------------ |
 | **Catálogo de Cubiertas**   | Ver la pestaña              | **Agregar cubierta** y **Alta masiva**      | **Editar**, **Marcar como reparada**, **Marcar como encontrada**    | **Eliminar** |
 | **Plantillas de Cubiertas** | Ver la pestaña              | **Nueva plantilla** y **Asignar a subtipo** | **Editar** y **Eliminar**                                           | —            |
@@ -245,7 +247,7 @@ Cada pestaña interna tiene su propio permiso dentro de **Gomería**:
 | **Marcas de Cubiertas**     | Ver la pestaña              | **Nueva Marca**                             | **Editar**, **Activar** y **Desactivar**                            | —            |
 | **Tipos de Cubierta**       | Ver la pestaña              | **Nuevo Tipo**                              | **Editar**, **Activar** y **Desactivar**                            | —            |
 
-Para entrar a la pestaña **Gomería** hace falta **Ver** en **Gomería**. La columna **Costo** del catálogo necesita además **Ver precios e importes** en **Almacenes → Movimientos**.
+Cada parte aparece donde corresponde con su propio **Ver**: quien solo puede ver el catálogo ve **Almacenes → Cubiertas**; quien solo puede ver las órdenes ve **Gestión → Taller → Gomería**; quien solo puede ver plantillas, marcas o tipos ve **Configuración → Taller → Cubiertas**. Si la empresa no tiene Gomería contratada, ninguna de las tres aparece. La columna **Costo** del catálogo necesita además **Ver precios e importes** en **Almacenes → Movimientos**.
 
 ## Problemas frecuentes
 

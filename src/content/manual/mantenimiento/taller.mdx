@@ -2,7 +2,7 @@
 title: Taller
 summary: Del pedido aprobado al equipo reparado: programar la fecha, registrar el ingreso, armar las órdenes de trabajo por sector, autorizar tareas y cerrar la orden.
 keywords: taller, pedido, programar, fecha, ingreso, kilometraje, orden de mantenimiento, orden de trabajo, OT, OM, sector, jefe de taller, aprobaciones, cerrar, no operativo, repuestos, materiales, pedido de materiales
-updated: 2026-11-03
+updated: 2026-11-20
 ---
 
 La vista **Taller** de **Mantenimiento → Gestión** es donde trabaja el jefe de taller. Recibe los pedidos que aprobó operaciones (o que cargó directamente un supervisor), les pone fecha, registra cuándo entra el equipo, reparte el trabajo entre los sectores del taller y, cuando los sectores terminan, revisa y cierra.
@@ -11,23 +11,36 @@ La vista **Taller** de **Mantenimiento → Gestión** es donde trabaja el jefe d
 
 ## Qué ves en la pantalla
 
-Entrá a **Mantenimiento → Gestión** y, en el selector de vista de arriba, elegí **Taller** (si solo tenés permiso sobre el taller, se abre directamente esa vista). Debajo hay pestañas, cada una con la cantidad de registros pendientes. Hacé clic en una pestaña (o movete con las flechas del teclado) para ver su tabla; la pestaña elegida queda en la dirección de la página.
+Entrá a **Mantenimiento → Gestión** y, en el selector de vista de arriba, elegí **Taller** (si solo tenés permiso sobre el taller, se abre directamente esa vista). Debajo hay pestañas, cada una con la cantidad de registros pendientes. Las aprobaciones (autorizar tareas, reasignarlas y cerrar órdenes) ya no son una pestaña de Taller: están en <GuideLink to="mi-bandeja">Mi bandeja</GuideLink>. Hacé clic en una pestaña (o movete con las flechas del teclado) para ver su tabla; la pestaña elegida queda en la dirección de la página.
 
 | Pestaña | Qué muestra | Qué hacés |
 |---|---|---|
 | **Programación pendiente** | Pedidos aprobados sin fecha. | Ponés la fecha de recepción o rechazás el pedido. |
 | **Para ingreso** | Pedidos con fecha asignada. | Registrás el ingreso del equipo al taller. |
 | **En mantenimiento** | Equipos dentro del taller. | Asignás tareas y sectores, y generás las órdenes de trabajo. |
-| **Aprobaciones** | Trabajos que requieren tu autorización. | Cerrás órdenes terminadas, autorizás tareas y reasignás las devueltas. |
+| **Gomería** | Órdenes de gomería, con la cantidad de **Abiertas**. | Calibrás, reparás, reemplazás o reportás cubiertas. Es un circuito aparte y no tiene número de etapa (ver <GuideLink to="gomeria">Gomería</GuideLink>). |
 
 Solo ves las pestañas sobre las que tenés permiso.
+
+### Lista o Tablero
+
+Arriba de las pestañas hay un selector **Lista / Tablero**. **Lista** son las pestañas de siempre. **Tablero** muestra las órdenes en columnas por etapa, para ver de un vistazo dónde está cada una (la dirección de la página queda con `modo=tablero`, así que se puede guardar o compartir):
+
+| Columna | Qué muestra | Se ve con |
+|---|---|---|
+| **Programación** | Pedidos aprobados que esperan fecha de taller (lo mismo que la pestaña Programación pendiente). | **Ver** en **Pendientes** |
+| **Para ingreso** | Pedidos con fecha asignada. | **Ver** en **Confirmados** |
+| **En taller** | Equipos dentro del taller. Las órdenes que se devolvieron al taller llevan el chip **Devuelta**. | **Ver** en **Órdenes de mantenimiento** |
+| **Esperan validación** | Órdenes con todas sus OT terminadas. | **Ver** en **Órdenes de mantenimiento** |
+
+Cada columna muestra su total y, si tiene más de 50, las 50 más antiguas ("Mostrando 50 de N"). Cada tarjeta trae el equipo, el número de orden, el estado, la fecha que corresponde a la columna, los días que lleva y los sectores. El tablero es **solo de consulta**: no se arrastra nada. Tocá una tarjeta para abrir la ficha de la orden, donde están las acciones de siempre con sus permisos. En el celular se ve una columna por vez, que elegís arriba. Gomería no figura: es un circuito aparte.
 
 <Flow title="El recorrido de un pedido en el taller">
   <FlowStep title="Programación pendiente" module="Taller">Fecha de recepción.</FlowStep>
   <FlowStep title="Para ingreso" module="Taller">Ingreso: el equipo pasa a No operativo.</FlowStep>
   <FlowStep title="En mantenimiento" module="Taller" tone="warning">Gestionar: tareas, sectores y OT.</FlowStep>
   <FlowStep title="Sectores" module="Panel del operario" to="panel-del-operario">Los operarios hacen las tareas.</FlowStep>
-  <FlowStep title="Aprobaciones" module="Taller" tone="info">Validar y cerrar la orden.</FlowStep>
+  <FlowStep title="Mi bandeja" module="Mi bandeja" to="mi-bandeja" tone="info">Validar y cerrar la orden.</FlowStep>
   <FlowStep title="Completada" tone="success">El equipo vuelve a Operativo.</FlowStep>
 </Flow>
 
@@ -207,20 +220,21 @@ Tocá **Enviar pedido**. Ves "**PED-000012 enviado: queda pendiente de aprobaci�
 
 Los operarios también piden materiales desde su OT, en el <GuideLink to="panel-del-operario">Panel del operario</GuideLink>. Esos pedidos aparecen acá con su OT.
 
-## Aprobaciones
+## Aprobaciones (en Mi bandeja)
 
-Es la bandeja del jefe de taller. Arriba hay dos indicadores que se habilitan cuando tienen pendientes:
+Lo que necesita tu decisión se junta en <GuideLink to="mi-bandeja">Mi bandeja</GuideLink> (el ícono al lado de la campana del encabezado, o **Mi bandeja** arriba del menú). Un enlace viejo a la pestaña Aprobaciones de Taller abre esa pantalla. Tiene estas categorías:
 
 - **Autorizaciones**: tareas que agregaron los operarios y que, por su tipo de reparación (marcado como **Autorizable**), necesitan tu visto bueno antes de hacerse. Para cada una ves el sector, el equipo, la descripción, el comentario del chofer y la nota del operario. **Aprobar** la deja pendiente para que el sector la haga; **Rechazar** pide un motivo.
 - **Reasignaciones**: tareas que un operario devolvió porque no le correspondían a su sector. Ves el **Motivo de devolucion**; elegí el **Nuevo sector** y tocá **Reasignar**.
 
-Debajo está la tabla de **órdenes pendientes de validación**: las OM cuyas OT ya terminaron todas. Columnas: **N° Orden**, **Equipo**, **Descripción**, **Sectores**, **Progreso** e **Ingreso a Taller**. El buscador dice **Buscar por N° orden o equipo...**.
+- **Validar cierre**: las órdenes cuyas OT ya terminaron todas. Cada fila muestra el equipo, el N° de orden y la descripción, con **Ver orden** y **Revisar y validar**. Para validar hace falta permiso de edición en **Órdenes de mantenimiento**; sin él, el botón queda deshabilitado y dice por qué.
+- **Para tu información**: órdenes que devolviste al taller y siguen abiertas. Es solo un aviso.
 
 ### Cómo cerrar una orden
 
 <Steps>
 <Step title="Abrí la orden">
-Tocá **Ver detalle y validar orden**. Arriba está el **Resumen de Ordenes de Trabajo** con lo que hizo cada sector.
+Tocá **Revisar y validar** en la orden. Arriba está el **Resumen de Ordenes de Trabajo** con lo que hizo cada sector.
 </Step>
 <Step title="Decidí">
 Abajo tenés **Notas de validacion (opcional)** y tres botones:
@@ -243,7 +257,7 @@ Una orden con pedidos de materiales **Pendientes de aprobación**, **Aprobados**
   <State name="Pendiente de ingreso a taller" tone="info" next="En Taller">Tiene fecha; está en Para ingreso. En el tablero de Sectores figura como Fecha confirmada.</State>
   <State name="En Taller" tone="info" next="Pend. Validación Taller, Rechazada por Taller">El equipo entró y está No operativo. Se gestiona y se generan las OT.</State>
   <State name="Rechazada por Taller" tone="danger" next="En Taller">Se rechazaron todos los desvíos en Gestionar. Restaurando alguno, vuelve a En Taller.</State>
-  <State name="Pend. Validación Taller" tone="warning" next="Completada, En Taller">Todas las OT terminaron; está en Aprobaciones esperando al jefe de taller.</State>
+  <State name="Pend. Validación Taller" tone="warning" next="Completada, En Taller">Todas las OT terminaron; está en Mi bandeja, en **Validar cierre**, esperando al jefe de taller.</State>
   <State name="Completada" tone="success">Cerrada. El equipo vuelve a Operativo si no tiene otra orden en el taller.</State>
 </States>
 
@@ -266,7 +280,7 @@ El recorrido completo está en <GuideLink to="del-checklist-al-taller">Del check
 
 | Para… | Hace falta |
 |---|---|
-| Ver la vista Taller en Gestión | **Ver** en **Taller** del módulo Mantenimiento; cada pestaña exige además **Ver** en la suya (**Pendientes**, **Confirmados**, **Órdenes de mantenimiento**, **Bandeja de aprobaciones**). |
+| Ver la vista Taller en Gestión | **Ver** en **Taller** del módulo Mantenimiento; cada pestaña exige además **Ver** en la suya (**Pendientes**, **Confirmados**, **Órdenes de mantenimiento** y, si la empresa tiene Gomería, **Órdenes de gomería**). Mi bandeja se ve con **Ver** en **Mi bandeja: decisiones de mantenimiento** (o, para validar cierres, también con **Ver** en **Órdenes de mantenimiento**). |
 | Ver todos los pedidos en Programación pendiente y Para ingreso | Igual que en Supervisión: sin **Ver Todas** en **Solicitudes de Mantenimiento** ves solo los pedidos de las solicitudes donde sos el supervisor. |
 | Rechazar un pedido en Programación pendiente | **Editar** en **Pendientes** (dentro de **Pedidos de Mantenimiento**). |
 | Registrar el ingreso al taller | **Editar** en **Confirmados** (dentro de **Pedidos de Mantenimiento**). |
@@ -286,7 +300,7 @@ Hay desvíos sin tipo de reparación: el aviso dice cuántos. Usá **Asignar tar
 El valor no puede ser menor que el último registrado (el que viene precargado). Si el último kilometraje estaba mal cargado, corregilo primero en la ficha del vehículo.
 </Callout>
 
-<Callout type="info" title="Una orden terminada no aparece en Aprobaciones">
+<Callout type="info" title="Una orden terminada no aparece en Mi bandeja">
 Aparece recién cuando **todas** sus OT están terminadas. Revisá en **Detalle** si queda alguna **Pendiente**, **En progreso** o **Pausada**, o si hay tareas esperando autorización en **Autorizaciones**.
 </Callout>
 

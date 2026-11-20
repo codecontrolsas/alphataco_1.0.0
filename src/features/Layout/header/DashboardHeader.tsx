@@ -1,3 +1,4 @@
+import { InboxBellAsync, InboxBellFallback } from '@/features/Inbox/components/InboxBellAsync';
 import { ContextualHelp } from '@/features/Ayuda/Manual/components/header/ContextualHelp';
 import {
   NotificationBellAsync,
@@ -13,7 +14,7 @@ import { ThemeToggle } from './components/ThemeToggle';
  *
  * Su trabajo es ubicar (módulo / sección activa) y mover (menú "Ir a…", Ctrl/⌘ K). La marca, el
  * selector de empresa y el menú de usuario viven en el sidebar. A la derecha quedan la ayuda
- * contextual ("?", abre la guía del manual de la pantalla actual), la campanita de avisos y el cambio de tema.
+ * contextual ("?", abre la guía del manual de la pantalla actual), el ícono de Mi bandeja (decisiones), la campanita de avisos y el cambio de tema.
  *
  * En md+ es una grilla de tres zonas para que el disparador quede centrado; en móvil, un flex
  * donde el contexto trunca. `HeaderNavAsync` lee `useSearchParams` (vía el cliente) y permisos:
@@ -29,6 +30,10 @@ export function DashboardHeader() {
         {/* Lee permisos y el manual: dinámico, necesita su propio límite de Suspense. */}
         <Suspense fallback={null}>
           <ContextualHelp />
+        </Suspense>
+        {/* Mi bandeja (decisiones): solo si algún proveedor está habilitado para el usuario. */}
+        <Suspense fallback={<InboxBellFallback />}>
+          <InboxBellAsync />
         </Suspense>
         {/* Lee la sesión y el contador: dinámico, con su propio límite de Suspense. */}
         <Suspense fallback={<NotificationBellFallback />}>
