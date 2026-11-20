@@ -1,3 +1,5 @@
+import type { Prisma } from '@/generated/prisma/client';
+
 /**
  * Armado de consultas compartido por los listados de Gomería (órdenes, catálogo, marcas, tipos, plantillas).
  * Módulo sin directiva: lo importan archivos `'use server'`, así que no puede exportar nada que no sea servidor-seguro.
@@ -14,4 +16,12 @@ export const GOMERIA_EXPORT_MAX_ROWS = 10_000;
 export function composeAnd<Where>(...parts: ReadonlyArray<object | null | undefined>): { AND: Where[] } {
   const conditions = parts.filter((part): part is object => part != null && Object.keys(part).length > 0);
   return { AND: conditions as Where[] };
+}
+
+/**
+ * Órdenes de gomería abiertas de la empresa: el MISMO `where` para la banda «N órdenes abiertas» del listado y para
+ * el contador del paso Gomería de Taller, así los dos números no se desfasan.
+ */
+export function openServiceOrdersWhere(companyId: string) {
+  return composeAnd<Prisma.tire_service_ordersWhereInput>({ company_id: companyId }, { status: 'OPEN' });
 }

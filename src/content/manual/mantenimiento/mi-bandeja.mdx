@@ -1,0 +1,48 @@
+---
+title: Mi bandeja
+summary: Lo que necesita tu decisión en un solo lugar: autorizar o rechazar tareas que agregaron los operarios, reasignar las que un sector devolvió, validar el cierre de las órdenes terminadas y ver las órdenes que devolviste al taller.
+keywords: mi bandeja, bandeja, aprobaciones, autorizar, rechazar, aprobar, reasignar, validar cierre, órdenes devueltas, decisiones, pendientes, jefe de taller, contador, campana
+updated: 2026-11-20
+---
+
+**Mi bandeja** junta lo que está esperando que **vos decidas**. Hoy trae las decisiones de **Mantenimiento** (antes eran la pestaña **Aprobaciones** de Taller); está pensada para sumar las de otros módulos. Se abre con el ícono de la bandeja del encabezado (al lado de la campana de avisos, con la cantidad de pendientes) o con **Mi bandeja**, arriba de los módulos del menú. Un enlace viejo a **Aprobaciones** abre esta pantalla.
+
+<OpenScreen />
+
+La campana es para **avisos**; la bandeja, para **decisiones**. El número del ícono cuenta solo las decisiones (autorizar, reasignar y validar cierre): **Para tu información** no suma.
+
+## Qué hay en cada categoría
+
+| Categoría | Qué es | Qué hacés |
+| --------- | ------ | --------- |
+| **Autorizaciones** | Tareas que agregó un operario con un tipo de reparación **Autorizable**. | **Aprobar tarea** la deja pendiente para el operario; **Rechazar tarea** pide el motivo ahí mismo, en la fila, y el operario lo ve en su panel. |
+| **Reasignaciones** | Tareas que un sector devolvió porque no le corresponden. | Elegí el **Nuevo sector** y tocá **Reasignar**: la tarea pasa a la orden de trabajo de ese sector y el operario la ve en su panel. |
+| **Validar cierre** | Órdenes con todas sus OT terminadas. | **Ver orden** abre el detalle; **Revisar y validar** abre el mismo panel para validar y cerrar, rechazar ítems o devolver la orden (ver <GuideLink to="taller">Taller</GuideLink>). |
+| **Para tu información** | Órdenes que devolviste al taller y siguen abiertas. | Solo **Ver orden**. No requiere ninguna decisión. |
+
+Cada categoría muestra hasta 50 filas. Si hay más, **Ver todo** abre la categoría completa.
+
+<Callout type="info" title="Reasignar mueve la tarea de verdad">
+Si el ítem tenía una sola tarea, pasa entero a la orden de trabajo del sector elegido. Si tenía varias, solo se mueve la tarea devuelta y las demás siguen donde estaban. La orden de trabajo del sector de origen no se cierra sola, aunque se quede sin tareas: el cierre lo hace siempre una persona. Los materiales ya pedidos quedan en la orden de origen.
+</Callout>
+
+## Permisos
+
+| Para… | Hace falta |
+| ----- | ---------- |
+| Ver **Autorizaciones**, **Reasignaciones** y **Para tu información** | **Ver** en **Mi bandeja: decisiones de mantenimiento** |
+| **Aprobar tarea**, **Rechazar tarea** y **Reasignar** | **Editar** en la misma pestaña. Sin ese permiso los botones no aparecen. |
+| Ver **Validar cierre** | **Ver** en **Mi bandeja: decisiones de mantenimiento** **o** **Ver** en **Órdenes de mantenimiento** |
+| **Revisar y validar** | **Editar** en **Órdenes de mantenimiento**. Sin ese permiso el botón queda deshabilitado, con el motivo escrito debajo, y **Ver orden** abre el detalle en solo lectura. |
+
+Si no tenés ninguno de esos permisos, no aparecen ni el ícono ni el enlace.
+
+## Problemas frecuentes
+
+<Callout type="warning" title="No se pudo cargar una categoría">
+Cada categoría carga por separado: si una falla, aparece su error con **Reintentar** y las demás siguen funcionando. Un error no significa que no haya nada pendiente.
+</Callout>
+
+<Callout type="info" title="Una orden terminada no aparece en Validar cierre">
+Aparece recién cuando **todas** sus OT están terminadas y no quedan tareas esperando autorización. Revisalo en el detalle de la orden.
+</Callout>

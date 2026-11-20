@@ -1,6 +1,7 @@
 export interface PipelineStep {
   id: string;
-  stepNumber: number;
+  /** Número de etapa del circuito. Sin valor = paso lateral que no es una etapa (ej. Gomería). */
+  stepNumber?: number;
   label: string;
   description: string;
   iconName: string;

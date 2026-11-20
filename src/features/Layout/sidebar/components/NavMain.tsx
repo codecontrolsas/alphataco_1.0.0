@@ -15,7 +15,7 @@ import {
 import { useUnreadSupportTicketsCount } from '@/features/Ayuda/hooks/useUnreadSupportTicketsCount';
 import { useActiveDashboardBoard } from '@/features/Dashboard/Boards/hooks/useActiveDashboardBoard';
 import { cn } from '@/lib/utils';
-import { ChevronRight, ExternalLink } from 'lucide-react';
+import { ChevronRight, ExternalLink, Inbox } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useMemo } from 'react';
@@ -76,6 +76,8 @@ interface NavMainProps {
   accessibleModuleSlugs: string[];
   /** Por modulo, las claves de sub-item visibles (`resolveVisibleTabs`). */
   visibleTabs: Record<string, string[]>;
+  /** Algún proveedor de Mi bandeja está habilitado para el usuario: se ofrece el enlace fijo. */
+  inboxEnabled?: boolean;
 }
 
 /**
@@ -85,7 +87,7 @@ interface NavMainProps {
  * Al colapsar el sidebar a iconos el desplegable no se abre: `SidebarMenuButton` muestra el
  * `tooltip` en su lugar, que es el comportamiento del bloque sidebar-07.
  */
-export function NavMain({ accessibleModuleSlugs, visibleTabs }: NavMainProps) {
+export function NavMain({ accessibleModuleSlugs, visibleTabs, inboxEnabled = false }: NavMainProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
@@ -112,7 +114,7 @@ export function NavMain({ accessibleModuleSlugs, visibleTabs }: NavMainProps) {
   // En el Dashboard el acceso activo sale del tablero que se está viendo (`?tablero=`), no de `?tab=`.
   const dashboardBoard = useActiveDashboardBoard(pathname === '/dashboard');
 
-  if (items.length === 0) {
+  if (items.length === 0 && !inboxEnabled) {
     return (
       <SidebarGroup>
         <div className="text-sidebar-foreground/70 px-2 py-6 text-center text-sm group-data-[collapsible=icon]:hidden">
@@ -124,6 +126,21 @@ export function NavMain({ accessibleModuleSlugs, visibleTabs }: NavMainProps) {
   }
 
   return (
+    <>
+      {inboxEnabled ? (
+        <SidebarGroup className="pb-0">
+          <SidebarMenu className="gap-0.5">
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Mi bandeja" isActive={pathname === '/dashboard/inbox'} className={ITEM_BUTTON}>
+                <Link href="/dashboard/inbox">
+                  <Inbox />
+                  <span>Mi bandeja</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroup>
+      ) : null}
     <SidebarGroup>
       <SidebarGroupLabel className="text-sidebar-foreground/60 text-xs font-semibold tracking-wider uppercase">
         Módulos
@@ -245,5 +262,6 @@ export function NavMain({ accessibleModuleSlugs, visibleTabs }: NavMainProps) {
         })}
       </SidebarMenu>
     </SidebarGroup>
+    </>
   );
 }

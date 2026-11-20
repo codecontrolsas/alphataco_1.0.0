@@ -2,6 +2,7 @@ import {
   getUserAccessibleModulesServer,
   getUserPermissionsMapServer,
 } from '@/features/Permissions/actions/permissions.server';
+import { isInboxEnabled } from '@/features/Inbox/lib/registry.server';
 import { resolveVisibleTabs } from '../../utils/tabs-visibility';
 import { NavMain } from '../NavMain';
 
@@ -22,6 +23,7 @@ export async function NavMainAsync() {
     <NavMain
       accessibleModuleSlugs={accessibleModules.map((module) => module.module_slug)}
       visibleTabs={resolveVisibleTabs(permissions)}
+      inboxEnabled={isInboxEnabled(permissions)}
     />
   );
 }

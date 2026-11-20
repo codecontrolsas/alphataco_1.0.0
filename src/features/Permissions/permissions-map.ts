@@ -1054,7 +1054,7 @@ export const PERMISSIONS = {
           },
           bandeja_aprobaciones: {
             slug: 'bandeja_aprobaciones',
-            name: 'Bandeja de aprobaciones',
+            name: 'Mi bandeja: decisiones de mantenimiento',
             tabId: '60000000-0000-0000-0000-000000000044',
             parent: 'maint_taller',
             allowedActions: ['view', 'update'],

@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import SectoresTab from '@/features/Empresa/General/components/mantenimiento/SectoresTab';
 import { EquiposConDesviosTabContent } from '@/features/Mantenimiento/EquiposConDesvios/EquiposConDesviosTabContent';
 import { EquipmentsWithDeviationsSkeleton } from '@/features/Mantenimiento/EquiposConDesvios/fallback/EquipmentsWithDeviationsSkeleton';
-import GomeriaTabContent from '@/features/Mantenimiento/Gomeria/GomeriaTabContent';
+import { GomeriaLegacyRedirect } from '@/features/Mantenimiento/Gomeria/components/GomeriaLegacyRedirect';
 import { NuevoPedidoTabContent } from '@/features/Mantenimiento/NuevoPedido/NuevoPedidoTabContent';
 import { NuevoPedidoSkeleton } from '@/features/Mantenimiento/NuevoPedido/fallback/NuevoPedidoSkeleton';
 import { WorkshopViewTabContent } from '@/features/Mantenimiento/WorkshopView/WorkshopViewTabContent';
@@ -12,7 +12,7 @@ import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
 import { CatalogTableSurface } from '@/shared/components/common/CatalogFormSheet';
 import { AlertTriangle, Building2, CircleDot, ClipboardList, Plus } from 'lucide-react';
 import { Suspense } from 'react';
-import { GomeriaSkeleton } from './Gomeria/fallback/GomeriaSkeleton';
+import { TALLER_VIEW_TABS } from './lib/taller-visibility';
 import { OperacionesPipelineContent } from './Pipeline/OperacionesPipeline/OperacionesPipelineContent';
 import { OperacionesPipelineSkeleton } from './Pipeline/OperacionesPipeline/fallback/OperacionesPipelineSkeleton';
 import { TallerPipelineContent } from './Pipeline/TallerPipeline/TallerPipelineContent';
@@ -58,7 +58,9 @@ export default async function MantenimientoComponent({ searchParams, permissions
           moduleSlug: 'mantenimiento',
           visibleWhenAny: [
             { moduleSlug: 'mantenimiento', tabSlug: 'maint_operaciones' },
-            { moduleSlug: 'mantenimiento', tabSlug: 'maint_taller' },
+            // Taller se habilita por sus pasos, no por el padre `maint_taller` (hereda `bandeja_aprobaciones`, que
+            // vive en Mi bandeja): quien solo tiene la bandeja no entra a una vista vacía.
+            ...TALLER_VIEW_TABS.map((tabSlug) => ({ moduleSlug: 'mantenimiento' as const, tabSlug })),
           ],
           content: (
             <ViewManagerServer
@@ -85,9 +87,8 @@ export default async function MantenimientoComponent({ searchParams, permissions
                 {
                   value: 'taller',
                   label: 'Taller',
-                  description: 'Programación, ingreso, mantenimiento y aprobaciones',
-                  moduleSlug: 'mantenimiento',
-                  tabSlug: 'maint_taller',
+                  description: 'Programación, ingreso, mantenimiento y gomería',
+                  visibleWhenAny: TALLER_VIEW_TABS.map((tabSlug) => ({ moduleSlug: 'mantenimiento' as const, tabSlug })),
                   content: (
                     <Suspense fallback={<TallerPipelineSkeleton />}>
                       <TallerPipelineContent searchParams={searchParams} permissions={permissions} />
@@ -194,10 +195,13 @@ export default async function MantenimientoComponent({ searchParams, permissions
           ),
         },
         // ============================================
-        // TAB: GOMERÍA
+        // TAB: GOMERÍA (sin menú: solo reenvía los enlaces viejos `?tab=gomeria&gomeria_tab=…` a la nueva ubicación
+        // de cada vista; ver `GomeriaLegacyRedirect`). Órdenes → Gestión > Taller, catálogo → Almacenes > Cubiertas,
+        // plantillas/marcas/tipos → Configuración > Taller > Cubiertas.
         // ============================================
         {
           value: 'gomeria',
+          hidden: true,
           label: (
             <span className="flex items-center gap-2">
               <CircleDot className="h-4 w-4" /> Gomería
@@ -205,11 +209,7 @@ export default async function MantenimientoComponent({ searchParams, permissions
           ),
           moduleSlug: 'mantenimiento',
           tabSlug: 'gomeria',
-          content: (
-            <Suspense fallback={<GomeriaSkeleton />}>
-              <GomeriaTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
-          ),
+          content: <GomeriaLegacyRedirect searchParams={searchParams} permissions={permissions} />,
         },
         // ============================================
         // TAB: CONFIGURACIÓN

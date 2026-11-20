@@ -27,6 +27,8 @@ export const ACTIVITY_LOG = {
    * los filtra por maintenance_order_id y por eso el evento no aparecia en la linea de tiempo.
    */
   WORK_ORDER_COMPLETED: 'work_order_completed',
+  /** La OT se quedó sin tareas al reasignarlas a otro sector (Mi bandeja). */
+  WORK_ORDER_CANCELLED: 'work_order_cancelled',
 
   // ── OrderManagement (nuevos) ────────────────────────────────────
   ORDER_ITEMS_UPDATED: 'order_items_updated',

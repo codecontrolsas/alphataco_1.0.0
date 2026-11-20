@@ -3,7 +3,9 @@ import { SectionManagerServer } from '@/features/TabsManager/SectionManagerServe
 import { sectionTab } from '@/features/TabsManager/section-tab';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { SectionTableSkeleton } from '@/shared/components/skeletons/SectionTableSkeleton';
-import { ArrowLeftRight, ClipboardList, HandHelping, Layers, Package, Settings, Warehouse } from 'lucide-react';
+import CatalogoTabContent from '@/features/Mantenimiento/Gomeria/Catalogo/CatalogoTabContent';
+import { CatalogoSkeleton } from '@/features/Mantenimiento/Gomeria/Catalogo/fallback/CatalogoSkeleton';
+import { ArrowLeftRight, CircleDot, ClipboardList, HandHelping, Layers, Package, Settings, Warehouse } from 'lucide-react';
 import DepotsTabContent from './Depots/DepotsTabContent';
 import LoansTabContent from './Loans/LoansTabContent';
 import MaterialsTabContent from './Materials/MaterialsTabContent';
@@ -12,6 +14,12 @@ import RequestsTabContent from './Requests/RequestsTabContent';
 import SettingsTabContent from './Settings/SettingsTabContent';
 import { SettingsSkeleton } from './Settings/fallback/SettingsSkeleton';
 import StockTabContent from './Stock/StockTabContent';
+
+/**
+ * `sectionTab` abierto a los dos módulos cuyos permisos gobiernan las secciones: Almacenes y, para Cubiertas,
+ * Mantenimiento (conserva el permiso `mantenimiento:catalogo_cubiertas`).
+ */
+const warehouseTab = sectionTab<'almacenes' | 'mantenimiento'>;
 
 /**
  * Modulo Almacenes (spec docs/superpowers/specs/2026-10-04-almacenes-etapa-1-design.md).
@@ -29,7 +37,7 @@ export default async function WarehousesComponent({ searchParams }: { searchPara
       defaultTab="stock"
       permissions={permissions}
       tabs={[
-        sectionTab({
+        warehouseTab({
           moduleSlug: 'almacenes',
           tabSlug: 'stock',
           icon: Layers,
@@ -37,7 +45,7 @@ export default async function WarehousesComponent({ searchParams }: { searchPara
           fallback: <SectionTableSkeleton />,
           children: <StockTabContent searchParams={searchParams} permissions={permissions} />,
         }),
-        sectionTab({
+        warehouseTab({
           moduleSlug: 'almacenes',
           tabSlug: 'movimientos',
           icon: ArrowLeftRight,
@@ -45,7 +53,7 @@ export default async function WarehousesComponent({ searchParams }: { searchPara
           fallback: <SectionTableSkeleton />,
           children: <MovementsTabContent searchParams={searchParams} permissions={permissions} />,
         }),
-        sectionTab({
+        warehouseTab({
           moduleSlug: 'almacenes',
           tabSlug: 'prestamos',
           icon: HandHelping,
@@ -53,7 +61,7 @@ export default async function WarehousesComponent({ searchParams }: { searchPara
           fallback: <SectionTableSkeleton />,
           children: <LoansTabContent searchParams={searchParams} permissions={permissions} />,
         }),
-        sectionTab({
+        warehouseTab({
           moduleSlug: 'almacenes',
           tabSlug: 'pedidos',
           icon: ClipboardList,
@@ -61,7 +69,7 @@ export default async function WarehousesComponent({ searchParams }: { searchPara
           fallback: <SectionTableSkeleton />,
           children: <RequestsTabContent searchParams={searchParams} permissions={permissions} />,
         }),
-        sectionTab({
+        warehouseTab({
           moduleSlug: 'almacenes',
           tabSlug: 'materiales',
           icon: Package,
@@ -69,7 +77,18 @@ export default async function WarehousesComponent({ searchParams }: { searchPara
           fallback: <SectionTableSkeleton />,
           children: <MaterialsTabContent searchParams={searchParams} permissions={permissions} />,
         }),
-        sectionTab({
+        // Catálogo de cubiertas (antes Mantenimiento > Gomería > Catálogo). La sección es de Almacenes pero el permiso
+        // sigue siendo el de siempre; si Gomería está apagada ese permiso no llega y la sección no se ofrece.
+        warehouseTab({
+          moduleSlug: 'mantenimiento',
+          tabSlug: 'catalogo_cubiertas',
+          value: 'cubiertas',
+          icon: CircleDot,
+          text: 'Cubiertas',
+          fallback: <CatalogoSkeleton />,
+          children: <CatalogoTabContent searchParams={searchParams} />,
+        }),
+        warehouseTab({
           moduleSlug: 'almacenes',
           tabSlug: 'depositos',
           icon: Warehouse,
@@ -77,7 +96,7 @@ export default async function WarehousesComponent({ searchParams }: { searchPara
           fallback: <SectionTableSkeleton />,
           children: <DepotsTabContent searchParams={searchParams} permissions={permissions} />,
         }),
-        sectionTab({
+        warehouseTab({
           moduleSlug: 'almacenes',
           tabSlug: 'config-almacen',
           icon: Settings,

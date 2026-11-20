@@ -36,8 +36,10 @@ export async function SectionManagerServer<M extends ModuleSlug = ModuleSlug>({
     );
   }
 
-  const navItems = visibleTabs.map((tab) => ({ value: tab.value, label: tab.label, href: tab.href }));
-  const hasMultiple = visibleTabs.length > 1;
+  const navItems = visibleTabs
+    .filter((tab) => !tab.hidden)
+    .map((tab) => ({ value: tab.value, label: tab.label, href: tab.href }));
+  const hasMultiple = navItems.length > 1;
 
   return (
     <div className="flex h-full flex-col gap-4">

@@ -4,14 +4,21 @@ import RepairTypeFormWrapper from '@/features/Mantenimiento/TiposReparaciones/Re
 import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
 import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
 import { CatalogTableSurface } from '@/shared/components/common/CatalogFormSheet';
+import MarcasTabContent from '@/features/Mantenimiento/Gomeria/Marcas/MarcasTabContent';
+import PlantillasTabContent from '@/features/Mantenimiento/Gomeria/Plantillas/PlantillasTabContent';
+import TiposTabContent from '@/features/Mantenimiento/Gomeria/Tipos/TiposTabContent';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import TalleresTab from '../General/components/mantenimiento/TalleresTab';
 import { buildSectorsAdminHref } from '../General/lib/sectors-admin-href';
 
+/** Pestañas de Mantenimiento (permiso heredado de Gomería) cuyas pantallas se configuran en la vista Cubiertas. */
+const TIRE_CATALOG_TABS = ['plantillas_cubiertas', 'marcas_cubiertas', 'tipos_cubiertas'] as const;
+
 /**
  * Sección Taller de Configuración: las pantallas que definen cómo trabaja el taller
- * (talleres, los tipos de reparación y los grupos de mantenimiento), reagrupadas en dos vistas.
+ * (talleres, los tipos de reparación y los grupos de mantenimiento), reagrupadas en tres vistas; la tercera,
+ * Cubiertas, reúne plantillas, marcas y tipos de cubierta (antes pestañas de Mantenimiento > Gomería, 778).
  * Los sectores de taller se administran desde Mantenimiento > Sectores: un enlace viejo
  * `?subtab=sectores_taller` redirige ahí; `?subtab=maintenance_groups` cae en la vista de su grupo.
  */
@@ -27,9 +34,11 @@ export default function TallerSectionContent({
 
   // Los sectores se mudaron a Mantenimiento > Sectores (778): el enlace viejo va ahí, y también quien solo
   // tenía permiso sobre los sectores (acá ya no vería nada).
+  // Las vistas de cubiertas (plantillas, marcas, tipos) cuentan: quien solo tiene esas y los sectores se queda acá.
   const onlySectors =
     isTabVisible('configuracion', 'sectores_taller') &&
-    !['talleres', 'type_of_repair', 'maintenance_groups'].some((tab) => isTabVisible('configuracion', tab));
+    !['talleres', 'type_of_repair', 'maintenance_groups'].some((tab) => isTabVisible('configuracion', tab)) &&
+    !TIRE_CATALOG_TABS.some((tab) => isTabVisible('mantenimiento', tab));
   if (searchParams.subtab === 'sectores_taller' || onlySectors) redirect(buildSectorsAdminHref());
 
   return (
@@ -83,6 +92,31 @@ export default function TallerSectionContent({
                   <Suspense fallback={<Skeleton className="h-[400px] w-full rounded-md" />}>
                     <MaintenanceGroupsWrapper />
                   </Suspense>
+                </CatalogTableSurface>
+              ) : null}
+            </div>
+          ),
+        },
+        {
+          value: 'cubiertas',
+          label: 'Cubiertas',
+          description: 'Plantillas de ejes por tipo de vehículo, marcas y tipos de cubierta',
+          visibleWhenAny: TIRE_CATALOG_TABS.map((tabSlug) => ({ moduleSlug: 'mantenimiento', tabSlug })),
+          content: (
+            <div className="flex min-w-0 flex-col gap-6">
+              {isTabVisible('mantenimiento', 'plantillas_cubiertas') ? (
+                <CatalogTableSurface id="plantillas-cubiertas" title="Plantillas de ejes">
+                  <PlantillasTabContent searchParams={searchParams} />
+                </CatalogTableSurface>
+              ) : null}
+              {isTabVisible('mantenimiento', 'marcas_cubiertas') ? (
+                <CatalogTableSurface id="marcas-cubiertas" title="Marcas de cubiertas">
+                  <MarcasTabContent searchParams={searchParams} />
+                </CatalogTableSurface>
+              ) : null}
+              {isTabVisible('mantenimiento', 'tipos_cubiertas') ? (
+                <CatalogTableSurface id="tipos-cubiertas" title="Tipos de cubierta">
+                  <TiposTabContent searchParams={searchParams} />
                 </CatalogTableSurface>
               ) : null}
             </div>

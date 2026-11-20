@@ -51,8 +51,10 @@ export function buildSidebarItems(
 ): NavigationLink[] {
   const accessible = new Set(accessibleModuleSlugs);
 
+  // Un módulo también se ofrece si alguno de sus sub-items es visible por un permiso de OTRO módulo
+  // (`visibleWhenAny` con `{ moduleSlug, tabSlug }`): quien solo tiene `mantenimiento:catalogo_cubiertas` ve Almacenes > Cubiertas.
   return links
-    .filter((link) => accessible.has(link.moduleSlug))
+    .filter((link) => accessible.has(link.moduleSlug) || (visibleTabs[link.moduleSlug]?.length ?? 0) > 0)
     .sort((a, b) => a.position - b.position)
     .map((link) => {
       if (!link.items) return link;

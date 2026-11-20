@@ -9,7 +9,7 @@
  */
 export const FIGURE_LABELS = {
   'taller-circuito':
-    'Línea de cuatro estaciones del taller: Por programar, Por ingresar, En taller y Aprobaciones. Un pedido avanza de una a otra y el equipo entra al taller en la tercera.',
+    'Línea de cuatro estaciones del taller: Por programar, Por ingresar, En taller y el cierre firmado en un escritorio (Validar cierre de Mi bandeja). Un pedido avanza de una a otra y el equipo entra al taller en la tercera.',
   'validacion-solicitud':
     'Una solicitud con varios ítems sobre una cinta. Cada ítem pasa por una compuerta: los aprobados siguen hacia el pedido del taller y los rechazados caen a una bandeja aparte.',
   'cubiertas-posiciones':
