@@ -1,0 +1,46 @@
+---
+title: Cumplimiento
+summary: La vista de quién aceptó, rechazó o tiene pendiente cada documento HSE vigente, con filtros por estado, documento y puesto, y su exportación a Excel.
+keywords: cumplimiento, aceptado, rechazado, pendiente, motivo del rechazo, documento hse, versión, legajo, exportar, excel, seguimiento
+updated: 2026-11-25
+---
+
+**Cumplimiento** muestra una fila por empleado y documento HSE vigente: si lo aceptó, lo rechazó o lo tiene pendiente. Las respuestas a versiones anteriores quedan en el detalle de cada documento (ver <GuideLink to="documentos-hse">Documentos HSE</GuideLink>).
+
+<OpenScreen />
+
+## La tabla
+
+| Columna | Qué muestra |
+|---|---|
+| **Legajo** y **Empleado** | Quién tiene que responder. |
+| **Puesto** | Su puesto actual. |
+| **Documento** y **Versión** | El documento y la versión que se le pide. |
+| **Estado** | **Pendiente**, **Aceptado** o **Rechazado**. |
+| **Asignado** | Desde cuándo lo tiene pendiente. |
+| **Respondió** | Cuándo aceptó o rechazó. |
+| **Motivo del rechazo** | Lo que escribió el empleado al rechazarlo. |
+
+Los filtros a la vista son **Estado**, **Documento** y **Puesto**. El buscador encuentra por legajo, nombre o documento, y la tabla se exporta a Excel como **Cumplimiento HSE**, con los filtros aplicados.
+
+Si todavía no hay documentos publicados con destinatarios, la tabla lo indica y queda vacía.
+
+## Cómo usarla
+
+- **Ver quién falta**: filtrá **Estado → Pendiente**, y si hace falta por **Documento** o **Puesto**.
+- **Atender los rechazos**: filtrá **Estado → Rechazado** y leé el **Motivo del rechazo**. Si el procedimiento tenía un error, la corrección va como versión nueva del documento, y todos vuelven a tenerlo pendiente.
+- **Presentar el estado a un cliente o auditor**: exportá a Excel con los filtros que correspondan.
+
+<Callout type="info" title="Una versión nueva vuelve todo a pendiente">
+Cuando se publica una versión nueva de un documento, sus filas pasan a la versión nueva y quedan **Pendiente**. Las aceptaciones de la versión anterior se conservan en el detalle del documento.
+</Callout>
+
+Los resultados de las capacitaciones no están en esta tabla: se ven en el detalle de cada capacitación (ver <GuideLink to="capacitaciones-hse">Capacitaciones</GuideLink>).
+
+## Permisos
+
+| Para… | Hace falta en **Cumplimiento** |
+|---|---|
+| Ver la tabla y exportarla | **Ver** |
+
+Con este permiso también se ven la barra de cumplimiento y las respuestas en el detalle de cada documento, y se recibe el **Resumen semanal de vencimientos HSE** si el rol tiene ese aviso activo.

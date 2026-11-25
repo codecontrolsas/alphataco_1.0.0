@@ -1,0 +1,99 @@
+---
+title: Documentos HSE
+summary: Cómo cargar una norma o procedimiento en PDF, elegir a quién aplica, publicarlo para que cada destinatario lo acepte desde el portal, sacar versiones nuevas y retirarlo.
+keywords: documento hse, norma, procedimiento, instructivo, pdf, publicar, borrador, versión, aceptar, rechazar, destinatarios, retirar, huella, vencimiento
+updated: 2026-11-25
+---
+
+Un **documento HSE** es una norma, un procedimiento o un instructivo en PDF que cada destinatario tiene que leer y **aceptar con su contraseña** desde el portal. El documento empieza como **borrador**, se **publica** cuando está listo y cada cambio posterior se publica como una **versión nueva**.
+
+<OpenScreen />
+
+<States>
+  <State name="Borrador" tone="default">Nadie lo ve. Se puede editar y reemplazar el PDF.</State>
+  <State name="Publicado" tone="success">Cada destinatario lo tiene pendiente en su portal. El PDF ya no se reemplaza: los cambios van en una versión nueva.</State>
+  <State name="Retirado" tone="warning">Ya no se pide y sale del portal. Las versiones y las respuestas quedan como constancia. No se puede volver a publicar.</State>
+</States>
+
+## La lista de documentos
+
+| Columna | Qué muestra |
+|---|---|
+| **Documento** | Título del documento. |
+| **Tipo** | El tipo HSE, si tiene uno. |
+| **Estado** | **Borrador**, **Publicado** o **Retirado**. |
+| **Versión** | La versión vigente: **v1**, **v2**… |
+| **Cumplimiento** | Por ejemplo **12/15 aceptaron, 3 pendientes**, o **Sin destinatarios**. |
+| **Vence** | Fecha en que hay que revisar o renovar el documento. |
+| **Destinatarios** y **Actualizado** | Ocultas por defecto; se muestran desde el selector de columnas. |
+
+Los filtros a la vista son **Estado**, **Tipo** y **Cumplimiento** (**Con pendientes**, **Todos respondieron**, **Sin destinatarios aún**). El buscador encuentra por título, descripción o tipo, y la lista se exporta a Excel.
+
+## Cargar un documento
+
+<Steps>
+  <Step title="Abrir el formulario">En **Documentos**, tocá **Nuevo documento**.</Step>
+  <Step title="Completar los datos">**Título** (por ejemplo "Procedimiento de trabajo en altura"), **Tipo** y **Vence** (opcionales), **Descripción** (opcional) y el **Archivo PDF**, de hasta 9 MB.</Step>
+  <Step title="Elegir a quién aplica">Agregá una o más reglas: **Todo el personal**, **Puesto**, **Sector** o **Empleado**. Ver <GuideLink to="hse#a-quién-aplica">A quién aplica</GuideLink>.</Step>
+  <Step title="Crear el borrador">Tocá **Crear borrador**. El sistema abre el detalle del documento para revisarlo.</Step>
+</Steps>
+
+<Callout type="info" title="El borrador no lo ve nadie">
+Se guarda como borrador. Hasta que se publique, ningún empleado lo ve, y el PDF se puede cambiar con **Reemplazar PDF**: el archivo anterior se descarta.
+</Callout>
+
+## El detalle del documento
+
+| Bloque | Qué muestra |
+|---|---|
+| **Versión vigente** | El archivo, el vencimiento y la fecha de publicación (**Todavía no (borrador)** si no se publicó). |
+| **A quién aplica** | Las reglas de destinatarios. |
+| **Cumplimiento** | Barra con aceptados, rechazados y pendientes. Sin el permiso de **Cumplimiento** se lee **No tenés permiso para ver el cumplimiento.** |
+| **Versiones** | Todas las versiones publicadas, con lo que cambió, su PDF y su huella SHA-256. Una versión publicada no se modifica. |
+| **Respuestas de la versión vigente** | Quién aceptó, quién rechazó (con el motivo) y quién sigue pendiente. Aparece cuando el documento está publicado. |
+
+La **huella** es un código calculado sobre el PDF: si alguien alterara el archivo, la huella dejaría de coincidir. Así queda probado qué texto exacto aceptó cada persona.
+
+## Publicar
+
+En el detalle del borrador, tocá **Publicar** y confirmá. El botón está deshabilitado mientras no haya destinatarios.
+
+Al publicar, cada destinatario lo ve pendiente en su portal y recibe un correo. Lo acepta con su contraseña o lo rechaza escribiendo el motivo. Un rechazo dispara el aviso **Un empleado rechazó un documento HSE** con ese motivo.
+
+## Versión nueva
+
+Cuando el procedimiento cambia, en el detalle tocá **Nueva versión**:
+
+| Campo | Para qué |
+|---|---|
+| **Archivo PDF** | El documento actualizado, hasta 9 MB. |
+| **Qué cambió** | Obligatorio. Por ejemplo "Se agregó el uso obligatorio de arnés en tareas sobre 1,8 m". |
+| **Vence** | Opcional; arranca con el vencimiento actual. |
+
+Al tocar **Publicar versión**, **todos los destinatarios vuelven a tenerlo pendiente** y tienen que aceptar la versión nueva. Las aceptaciones anteriores quedan como historia en **Versiones**.
+
+## Editar
+
+**Editar** cambia título, tipo, vencimiento, descripción y destinatarios; el PDF no se toca desde acá. En un documento publicado, si cambiás los destinatarios, los nuevos quedan pendientes y los que salen se archivan con lo que ya habían respondido.
+
+## Retirar
+
+**Retirar** saca el documento del portal y deja de pedirse. No se borra nada: las versiones y las aceptaciones quedan como constancia. Un documento retirado **no se puede volver a publicar** ni muestra acciones.
+
+## Permisos
+
+| Para… | Hace falta en **Documentos** |
+|---|---|
+| Ver la lista y el detalle | **Ver** |
+| **Nuevo documento** | **Crear** |
+| **Editar** y **Reemplazar PDF** | **Editar** |
+| **Publicar** y **Nueva versión** | **Publicar** |
+| **Retirar** | **Retirar** |
+
+La barra de cumplimiento y la tabla de respuestas piden además **Ver** en **Cumplimiento**.
+
+<Callout type="tip" title="Problemas frecuentes">
+**"Publicar" está gris**: el documento no tiene destinatarios. Agregalos con **Editar**.
+
+**Un empleado dice que no lo ve**: revisá que tenga habilitado el portal en su <GuideLink to="ficha-del-empleado">ficha</GuideLink> y que coincida con alguna regla de **A quién aplica**.
+</Callout>

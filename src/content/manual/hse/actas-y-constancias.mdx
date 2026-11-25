@@ -1,0 +1,82 @@
+---
+title: Actas y constancias
+summary: Cómo labrar el acta de un dictado de capacitación con capacitadores, asistentes y resultados, cerrarla con su huella y su PDF, anularla, y cómo se relaciona con las constancias que firman los empleados.
+keywords: acta, acta de capacitación, dictado, capacitador, asistentes, presentes, cerrar acta, anular, huella, pdf, constancia, modalidad, temario
+updated: 2026-11-25
+---
+
+El **acta de dictado** es el registro formal de una clase: quién la dio, quién asistió, qué se dictó y con qué resultado. Se arma como **borrador** y, al **cerrarla**, queda congelada con una huella y su PDF. Las **constancias** son otra cosa: las firma cada empleado en el portal cuando aprueba la capacitación.
+
+<OpenScreen />
+
+<States>
+  <State name="Borrador" tone="default">Se ajustan capacitadores y asistentes. Se puede editar o borrar.</State>
+  <State name="Cerrada" tone="success">Datos, capacitadores y asistentes congelados con su huella. Se descarga el PDF. Solo se puede anular.</State>
+  <State name="Anulada" tone="danger">Queda con el motivo y quién la anuló. No se borra.</State>
+</States>
+
+## La lista de actas
+
+| Columna | Qué muestra |
+|---|---|
+| **N° de acta** | Número correlativo. |
+| **Capacitación** | La capacitación dictada. |
+| **Fecha** | Fecha del dictado. |
+| **Modalidad** | **Presencial**, **Virtual (en vivo)**, **Mixta** o **En línea (portal)**. |
+| **Lugar** | Dónde se dictó. |
+| **Presentes** | Cantidad de asistentes marcados como presentes. |
+| **Estado** | **Borrador**, **Cerrada** o **Anulada**. |
+| **Cerrada** | Fecha de cierre. |
+
+Los filtros a la vista son **Estado**, **Capacitación** y **Fecha**. El buscador encuentra por capacitación, temario, lugar o número.
+
+## Labrar un acta
+
+<Steps>
+  <Step title="Abrir el formulario">En **Actas**, tocá **Nueva acta**. También se puede crear desde el detalle de la capacitación, en **Actas de dictado**.</Step>
+  <Step title="Completar el dictado">**Capacitación** (solo las publicadas), **Fecha del dictado**, **Modalidad**, **Duración en minutos** (opcional), **Lugar** (opcional, por ejemplo "Base Neuquén, sala 2"), **Temario** (un tema por línea) y **Observaciones** (opcional).</Step>
+  <Step title="Guardar el borrador">El acta arranca con los capacitadores habituales de la capacitación y con quienes la tienen asignada.</Step>
+  <Step title="Ajustar capacitadores y asistentes">Ver las secciones de abajo.</Step>
+  <Step title="Cerrar el acta">Con **Cerrar el acta** queda congelada y se puede descargar el PDF.</Step>
+</Steps>
+
+Si no hay ninguna capacitación publicada, el formulario lo indica: primero hay que publicar una (ver <GuideLink to="capacitaciones-hse">Capacitaciones</GuideLink>).
+
+### Capacitadores
+
+Cada capacitador es **Interno** (un empleado) o **Externo** (consultora, ART, bomberos…), con **Apellido y nombre**, **Cargo o título** y **Matrícula**. Hace falta al menos uno para cerrar el acta.
+
+### Asistentes
+
+La lista arranca con quienes tienen la capacitación asignada. En cada fila se marca **Asistió** y se ve el **Resultado** de la capacitación (o **Sin asignar** si la persona no la tiene asignada) y la **Constancia** (**Firmada…** o **Sin firmar**). Con **Sumar** se agrega a quien no estaba en la lista.
+
+## Cerrar el acta
+
+**Cerrar el acta** necesita al menos un capacitador y al menos un asistente presente.
+
+<Callout type="warning" title="Después del cierre no se edita">
+Se congelan los datos, los capacitadores y cada asistente con su resultado y su firma de ese momento, con una huella que permite detectar cualquier alteración. Después no se puede editar: solo anular.
+</Callout>
+
+Un acta cerrada o anulada se descarga con **Descargar PDF**.
+
+## Anular o borrar
+
+- **Anular** (acta cerrada): pide un **Motivo**. El acta no se borra: queda anulada, con el motivo y quién la anuló. Las constancias que firmaron los empleados no cambian.
+- **Borrar** (borrador): se borran el borrador y su lista de asistentes. No afecta los resultados ni las constancias.
+
+## Constancias
+
+La constancia la firma el empleado en el portal, con su contraseña, después de aprobar la capacitación. El PDF se guarda en su legajo, en la documentación del empleado (ver <GuideLink to="documentos-de-empleados">Documentos de empleados</GuideLink>). Si no hay acta del dictado, la constancia muestra los capacitadores habituales de la capacitación.
+
+Desde los resultados de la capacitación, quien tiene el permiso **Anular** de **Actas** puede anular una constancia firmada con un motivo. La constancia no se borra: queda anulada, su documento del legajo pasa a **Ya no aplica** y el empleado puede volver a firmar su aprobación vigente.
+
+## Permisos
+
+| Para… | Hace falta en **Actas** |
+|---|---|
+| Ver la lista y el detalle, descargar el PDF | **Ver** |
+| **Nueva acta** | **Crear** |
+| **Editar datos** de un borrador, capacitadores y asistentes | **Editar** |
+| **Cerrar el acta** | **Cerrar** |
+| **Anular** actas y constancias, **Borrar** borradores | **Anular** |
