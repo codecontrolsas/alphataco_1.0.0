@@ -1,0 +1,122 @@
+---
+title: Capacitaciones
+summary: Cómo armar una capacitación con material y examen, publicarla para que el personal la rinda desde el portal, seguir los resultados, los tiempos de estudio y las constancias firmadas.
+keywords: capacitación, curso, inducción, refuerzo, examen, preguntas, material, aprobación, intentos, vigencia, constancia, resultados, tiempos de estudio, publicar, retirar
+updated: 2026-11-25
+---
+
+Una **capacitación** reúne el **material** que el empleado estudia y un **examen** de opción única que rinde desde el portal. La corrección la hace el servidor: el portal nunca recibe las respuestas correctas. Quien aprueba firma su **constancia**, que queda en su legajo.
+
+<OpenScreen />
+
+<States>
+  <State name="Borrador" tone="default">Se cargan el material, las preguntas y los destinatarios. Nadie la ve.</State>
+  <State name="Publicada" tone="success">Cada destinatario la tiene pendiente. El examen y el material quedan congelados.</State>
+  <State name="Retirada" tone="warning">Sale del portal y deja de pedirse. Los intentos y los resultados quedan como constancia. No se puede volver a publicar.</State>
+</States>
+
+## La lista de capacitaciones
+
+La sección tiene dos vistas: **Capacitaciones** y **Tiempos de estudio y examen** (ver más abajo).
+
+| Columna | Qué muestra |
+|---|---|
+| **Capacitación** | Título. |
+| **Tipo** | **Inducción**, **Refuerzo periódico**, **Específica del puesto** u **Otra**. |
+| **Estado** | **Borrador**, **Publicada** o **Retirada**. |
+| **Avance** | Por ejemplo **8/10 aprobaron**, o **Sin asignar**. |
+| **Aprobación** | Porcentaje con el que se aprueba. |
+| **Publicada** y **Actualizada** | Fechas. |
+
+Los filtros son **Estado**, **Tipo** y **Avance** (**Con pendientes**, **Todos aprobaron**). El buscador encuentra por título o descripción.
+
+## Crear una capacitación
+
+<Steps>
+  <Step title="Abrir el formulario">En **Capacitaciones**, tocá **Nueva capacitación**.</Step>
+  <Step title="Completar las reglas del examen">Ver la tabla de campos de abajo.</Step>
+  <Step title="Elegir a quién aplica">Las mismas reglas que en los documentos: ver <GuideLink to="hse#a-quién-aplica">A quién aplica</GuideLink>.</Step>
+  <Step title="Guardar el borrador">El sistema abre el detalle para cargar el material y las preguntas.</Step>
+</Steps>
+
+| Campo | Qué define |
+|---|---|
+| **Título** | Por ejemplo "Uso de matafuegos". |
+| **Tipo** | Inducción, refuerzo periódico, específica del puesto u otra. |
+| **Descripción** | Opcional. |
+| **Aprueba con (%)** | Puntaje mínimo para aprobar. |
+| **Intentos** | Cuántas veces puede rendir, hasta 20, o **Sin límite**. |
+| **Tiempo (min, opcional)** | Tiempo máximo del examen, hasta 600 minutos. |
+| **Vigencia de la aprobación en meses (opcional)** | Hasta 120 meses. Vacío significa **No vence**. |
+| **Mezclar el orden de las preguntas** | Cada intento muestra las preguntas en otro orden. |
+
+El puntaje es el porcentaje de puntos obtenidos sobre el total: cada pregunta vale los puntos que se le asignen, y las preguntas sin responder cuentan como incorrectas.
+
+## Material
+
+En el detalle, el bloque **Material** guarda lo que el empleado estudia antes de rendir:
+
+- **Agregar PDF**: hasta 9 MB. Se guarda en el almacenamiento de la empresa y el empleado lo abre desde el portal.
+- **Agregar enlace**: un video o una página externa. Tiene que empezar con `https://`.
+
+Cada material es de **Lectura obligatoria** u **Opcional**. El obligatorio el empleado lo tiene que marcar como leído antes de rendir. Una capacitación se puede publicar solo con examen, sin material.
+
+## Preguntas
+
+**Agregar pregunta** abre el editor: el texto de la **Pregunta**, los **Puntos** (hasta 100), entre 2 y 6 opciones (**Agregar opción**) y la **Respuesta correcta**, que se marca con el círculo de la opción. Una capacitación admite hasta 100 preguntas.
+
+La respuesta correcta solo se ve en esta pantalla: el portal nunca la recibe.
+
+## Publicar
+
+**Publicar** necesita al menos una pregunta, destinatarios y que cada pregunta tenga respuesta correcta y al menos 2 opciones; si falta algo, el detalle lo indica.
+
+<Callout type="warning" title="Al publicar se congela">
+Desde ese momento el examen (preguntas, opciones, respuestas correctas, porcentaje de aprobación, intentos y tiempo) y el material quedan congelados. Para cambiarlos hay que retirarla y crear otra. Lo que sí se puede seguir editando son los destinatarios: los nuevos quedan pendientes y los que salen se archivan con su resultado.
+</Callout>
+
+## Resultados por empleado
+
+En una capacitación publicada, el bloque **Cumplimiento** lista a cada destinatario:
+
+| Columna | Qué muestra |
+|---|---|
+| **Legajo** y **Empleado** | Con la marca **De baja** si ya no está activo. |
+| **Puesto** | Puesto actual. |
+| **Estado** | **Pendiente**, **Rindiendo**, **Aprobada**, **Sin intentos** (usó todos sin aprobar) o **Vencida** (pasó la vigencia). |
+| **Intentos** y **Último puntaje** | Cuántas veces rindió y con qué resultado. |
+| **Aprobó el** y **Vigente hasta** | Fecha de aprobación y fin de la vigencia. |
+
+Desde cada fila se abren sus **intentos**: aprobado o desaprobado, y cada pregunta con su respuesta (**Correcta**, **Incorrecta** o **Sin responder**). La evaluación se baja en PDF con **Descargar PDF**.
+
+### Constancias
+
+Después de aprobar, el empleado firma su **constancia** en el portal con su contraseña, y el PDF se guarda en su legajo. En la fila figura **Firmada el…** con el botón **Descargar**.
+
+Una constancia firmada se puede **anular** con un motivo, que queda registrado. No se borra: queda anulada y su documento del legajo pasa a **Ya no aplica**. El empleado puede volver a firmar su aprobación vigente.
+
+## Capacitadores habituales y actas
+
+- **Capacitadores habituales**: quienes suelen dictarla. Se copian a cada acta nueva y aparecen en la constancia cuando no hay acta del dictado.
+- **Actas de dictado**: las actas de esta capacitación. **Nueva acta** aparece cuando está publicada. Ver <GuideLink to="actas-y-constancias">Actas y constancias</GuideLink>.
+
+## Tiempos de estudio y examen
+
+La vista **Tiempos de estudio y examen** muestra, por empleado y capacitación, cuánto estudió el material (de la primera apertura a **Ya lo leí**, hasta 4 horas por material) y cuánto tardó en el examen: el último intento y el total. **Sin medición** significa que no hay registro, no que fue cero.
+
+## Borrar o retirar
+
+- **Borrar borrador**: se borran el material, las preguntas y los destinatarios. Nadie la vio todavía.
+- **Retirar**: sale del portal y deja de pedirse. Los intentos y los resultados quedan como constancia. No se puede volver a publicar.
+
+## Permisos
+
+| Para… | Hace falta en **Capacitaciones** |
+|---|---|
+| Ver la lista, el detalle y los resultados | **Ver** |
+| **Nueva capacitación** | **Crear** |
+| **Editar**, material, preguntas y capacitadores habituales | **Editar** |
+| **Publicar** | **Publicar** |
+| **Retirar** y **Borrar borrador** | **Retirar** |
+
+Anular una constancia y crear actas de dictado se rigen por los permisos de **Actas**.
