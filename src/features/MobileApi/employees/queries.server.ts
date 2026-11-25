@@ -482,6 +482,8 @@ export async function getEmployeeDocuments(ctx: TenantContext, employeeId: strin
     expiringSoon: row.expiringSoon,
     notApplicable: row.notApplicable,
     denyReason: row.deny_reason,
+    // Un faltante (`missing:<empleado>:<tipo>…`) no tiene documento que abrir.
+    hasDetail: !row.id.startsWith('missing:'),
   });
 
   // Lo que pide acción primero: faltantes y rechazados, vencidos, por vencer; después por nombre.

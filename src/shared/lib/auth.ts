@@ -2,7 +2,7 @@ import 'server-only';
 
 import { isMobileApiEnabled } from '@/features/MobileApi/lib/config';
 import { Logger } from '@/lib/logger';
-import { appBaseUrl } from '@/shared/lib/app-url';
+import { appBaseUrl, requestOwnOrigins } from '@/shared/lib/app-url';
 import {
   LOGIN_BY_EMAIL,
   LOGIN_BY_IP,
@@ -90,6 +90,8 @@ const RATE_LIMITED_PATHS: Record<string, { byEmail: RateLimitRule; byIp: RateLim
 export const auth = betterAuth({
   appName: 'alphataco',
   baseURL: appBaseUrl(),
+  // Además de `baseURL`, el dominio por el que entró el request (ver `requestOwnOrigins`).
+  trustedOrigins: (request) => requestOwnOrigins(request),
   secret: process.env.BETTER_AUTH_SECRET,
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
 
