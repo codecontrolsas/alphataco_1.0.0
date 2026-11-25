@@ -62,7 +62,7 @@ function watchProblems(page: Page): BrowserProblems {
  * request y, bajo RLS, guarda cero filas ("No hay usuarios registrados" en Usuarios). La carga inicial (SSR) a veces sí
  * la ve, así que mirar solo la primera página no alcanza.
  */
-const SCREENS: { name: string; path: string; row: string; sortBy: string | null }[] = [
+const SCREENS: { name: string; path: string; row: string; sortBy: string | null; list?: true }[] = [
   {
     name: 'Configuración → Usuarios',
     path: '/dashboard/configuration?tab=general&subtab=users&usertab=usuarios-empleados',
@@ -82,10 +82,12 @@ const SCREENS: { name: string; path: string; row: string; sortBy: string | null 
     sortBy: 'Ingreso a Taller',
   },
   {
-    name: 'Mantenimiento → Taller (aprobaciones)',
-    path: '/dashboard/maintenance?vista=taller&taller_step=approvals',
+    // Desde el 778 el paso Aprobaciones del Taller redirige a Mi bandeja, que es una lista de tarjetas y no una tabla.
+    name: 'Mi bandeja → Mantenimiento (órdenes a validar)',
+    path: '/dashboard/inbox?type=mantenimiento',
     row: 'E2E-VALIDAR-1',
     sortBy: null,
+    list: true,
   },
   // HSE (ticket 804): las tablas leen con la RLS de lectura acotada (permiso del dashboard o compuerta del empleado).
   { name: 'HSE → Documentos', path: '/dashboard/hse?tab=documentos-hse', row: 'Documento HSE E2E', sortBy: null },
@@ -93,8 +95,12 @@ const SCREENS: { name: string; path: string; row: string; sortBy: string | null 
 ];
 
 /** La tabla visible que muestra la fila (no el resto de la página: el correo del admin también está en el menú). */
-function visibleTableWith(page: Page, row: string) {
-  return page.locator('table').filter({ visible: true }).filter({ hasText: row }).first();
+function visibleTableWith(page: Page, row: string, list = false) {
+  return page
+    .locator(list ? 'li' : 'table')
+    .filter({ visible: true })
+    .filter({ hasText: row })
+    .first();
 }
 
 test.describe('listados clave con datos', () => {
@@ -112,7 +118,7 @@ test.describe('listados clave con datos', () => {
     for (const screen of SCREENS) {
       await test.step(screen.name, async () => {
         await page.goto(screen.path);
-        const table = visibleTableWith(page, screen.row);
+        const table = visibleTableWith(page, screen.row, screen.list);
         await expect(table).toBeVisible({ timeout: 30_000 });
         if (screen.sortBy) {
           await table.locator('thead').getByRole('button', { name: screen.sortBy, exact: true }).click();

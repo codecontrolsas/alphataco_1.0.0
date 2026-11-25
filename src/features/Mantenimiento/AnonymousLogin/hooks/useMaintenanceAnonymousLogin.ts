@@ -77,7 +77,8 @@ export function useMaintenanceAnonymousLogin(equipmentId: string | null) {
         {
           loading: 'Iniciando sesión...',
           success: 'Sesión iniciada correctamente.',
-          error: (error) => error,
+          // Un Error devuelto tal cual, sonner lo toma como opciones del toast y pierde el texto.
+          error: (error) => (error instanceof Error ? error.message : String(error)),
         }
       )
       .unwrap()

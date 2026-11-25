@@ -34,3 +34,20 @@ export function resolveAppBaseUrl(env: Record<string, string | undefined> = proc
 export function appBaseUrl(env: Record<string, string | undefined> = process.env): string {
   return resolveAppBaseUrl(env) ?? DEFAULT_APP_BASE_URL;
 }
+
+const LOCAL_HOST_RE = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+const HOST_RE = /^[a-z0-9.-]+(:\d+)?$/i;
+
+/**
+ * Origen propio de un request, armado con su `Host` (Traefik lo deja tal cual). Better Auth lo suma a sus orígenes
+ * confiables para que la instancia acepte su propio dominio aunque `APP_BASE_URL` apunte a otro (pasó en demo: entraba
+ * por demo.alphataco.com.ar con la URL base en sslip, y todo POST de auth con cookie daba 403 INVALID_ORIGIN).
+ *
+ * No abre CSRF: un sitio ajeno manda su propio `Origin`, que nunca coincide con el `Host` de esta instancia.
+ * `http` solo para localhost (desarrollo); fuera de eso, siempre `https`.
+ */
+export function requestOwnOrigins(request: Request | undefined): string[] {
+  const host = request?.headers.get('host')?.trim();
+  if (!host || !HOST_RE.test(host)) return [];
+  return LOCAL_HOST_RE.test(host) ? [`http://${host}`, `https://${host}`] : [`https://${host}`];
+}

@@ -237,6 +237,8 @@ export const employeeDocumentSchema = z.object({
   expiringSoon: z.boolean(),
   notApplicable: z.boolean(),
   denyReason: nullableText,
+  /** Tiene ficha en `/documents/employee/:id` (un faltante no: su id es `missing:…`). Opcional para servidores viejos. */
+  hasDetail: z.boolean().optional(),
 });
 
 export const employeeDocumentsResponseSchema = z.object({

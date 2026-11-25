@@ -42,6 +42,9 @@ vi.mock('@/shared/lib/tenant', async (importOriginal) => ({
 vi.mock('@/features/Permissions/actions/permissions.server', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/Permissions/actions/permissions.server')>()),
   checkPermissionServer: async () => true,
+  // `requireMaintenancePermission` (Bandeja de Aprobaciones, ticket 778) pide varias tabs juntas.
+  checkMultiplePermissionsServer: async (checks: { moduleSlug: string; tabSlug: string; actionSlug: string }[]) =>
+    new Map(checks.map((c) => [`${c.moduleSlug}:${c.tabSlug}:${c.actionSlug}`, true])),
 }));
 vi.mock('@/features/Mantenimiento/utils/equipmentTypeVisibility', () => ({
   getHiddenEquipmentTypeIds: async () => [],
