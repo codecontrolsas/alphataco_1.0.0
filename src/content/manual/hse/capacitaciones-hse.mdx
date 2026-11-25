@@ -10,8 +10,8 @@ Una **capacitación** reúne el **material** que el empleado estudia y un **exam
 <OpenScreen />
 
 <States>
-  <State name="Borrador" tone="default">Se cargan el material, las preguntas y los destinatarios. Nadie la ve.</State>
-  <State name="Publicada" tone="success">Cada destinatario la tiene pendiente. El examen y el material quedan congelados.</State>
+  <State name="Borrador" tone="default" next="Publicada">Se cargan el material, las preguntas y los destinatarios. Nadie la ve.</State>
+  <State name="Publicada" tone="success" next="Retirada">Cada destinatario la tiene pendiente. El examen y el material quedan congelados.</State>
   <State name="Retirada" tone="warning">Sale del portal y deja de pedirse. Los intentos y los resultados quedan como constancia. No se puede volver a publicar.</State>
 </States>
 

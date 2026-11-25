@@ -10,8 +10,8 @@ Un **documento HSE** es una norma, un procedimiento o un instructivo en PDF que 
 <OpenScreen />
 
 <States>
-  <State name="Borrador" tone="default">Nadie lo ve. Se puede editar y reemplazar el PDF.</State>
-  <State name="Publicado" tone="success">Cada destinatario lo tiene pendiente en su portal. El PDF ya no se reemplaza: los cambios van en una versión nueva.</State>
+  <State name="Borrador" tone="default" next="Publicado, Retirado">Nadie lo ve. Se puede editar y reemplazar el PDF.</State>
+  <State name="Publicado" tone="success" next="Retirado">Cada destinatario lo tiene pendiente en su portal. El PDF ya no se reemplaza: los cambios van en una versión nueva.</State>
   <State name="Retirado" tone="warning">Ya no se pide y sale del portal. Las versiones y las respuestas quedan como constancia. No se puede volver a publicar.</State>
 </States>
 

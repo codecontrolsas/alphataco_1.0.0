@@ -10,8 +10,8 @@ El **acta de dictado** es el registro formal de una clase: quién la dio, quién
 <OpenScreen />
 
 <States>
-  <State name="Borrador" tone="default">Se ajustan capacitadores y asistentes. Se puede editar o borrar.</State>
-  <State name="Cerrada" tone="success">Datos, capacitadores y asistentes congelados con su huella. Se descarga el PDF. Solo se puede anular.</State>
+  <State name="Borrador" tone="default" next="Cerrada">Se ajustan capacitadores y asistentes. Se puede editar o borrar.</State>
+  <State name="Cerrada" tone="success" next="Anulada">Datos, capacitadores y asistentes congelados con su huella. Se descarga el PDF. Solo se puede anular.</State>
   <State name="Anulada" tone="danger">Queda con el motivo y quién la anuló. No se borra.</State>
 </States>
 
