@@ -10,6 +10,7 @@ import { empleadosSection } from './sections/empleados.ts';
 import { equiposSection } from './sections/equipos.ts';
 import { formulariosSection } from './sections/formularios.ts';
 import { generalSection } from './sections/general.ts';
+import { hseSection } from './sections/hse.ts';
 import { mantenimientoSection } from './sections/mantenimiento.ts';
 import { operacionesSection } from './sections/operaciones.ts';
 import { procesosSection } from './sections/procesos.ts';
@@ -31,6 +32,7 @@ export const MANUAL_SECTIONS: SectionDef[] = [
   almacenesSection,
   comprasSection,
   tesoreriaSection,
+  hseSection,
   comercialSection,
   formulariosSection,
   configuracionSection,

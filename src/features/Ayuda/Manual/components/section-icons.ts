@@ -1,5 +1,6 @@
 import {
   Boxes,
+  ShieldCheck,
   ShoppingCart,
   BriefcaseBusiness,
   ClipboardCheck,
@@ -35,6 +36,7 @@ export const SECTION_ICONS: Record<SectionIcon, LucideIcon> = {
   warehouse: Boxes,
   purchases: ShoppingCart,
   treasury: Landmark,
+  hse: ShieldCheck,
   forms: ClipboardCheck,
   help: LifeBuoy,
   settings: Settings,

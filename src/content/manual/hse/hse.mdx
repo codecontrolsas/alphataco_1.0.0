@@ -1,0 +1,71 @@
+---
+title: HSE
+summary: Qué resuelve el módulo HSE, cómo se conectan documentos, capacitaciones, cumplimiento y actas, y qué hace el empleado desde el portal.
+keywords: hse, seguridad, higiene, medio ambiente, normas, procedimientos, capacitación, examen, cumplimiento, acta, constancia, portal del empleado
+updated: 2026-11-25
+---
+
+El módulo **HSE** lleva la parte de seguridad, higiene y medio ambiente que pasa por cada persona: las normas y procedimientos que tiene que leer y aceptar, las capacitaciones que tiene que aprobar y la constancia formal de cada dictado. Todo lo que se le pide al empleado le llega a su **portal**, y lo que responde vuelve acá como cumplimiento.
+
+<OpenScreen />
+
+## Las secciones del módulo
+
+| Sección | Para qué sirve | Guía |
+|---|---|---|
+| **Documentos** | Normas, procedimientos e instructivos en PDF que cada destinatario lee y acepta con su contraseña. Cada cambio es una versión nueva. | <GuideLink to="documentos-hse">Documentos HSE</GuideLink> |
+| **Capacitaciones** | Material de estudio y un examen que el empleado rinde desde el portal. La corrección la hace el servidor. | <GuideLink to="capacitaciones-hse">Capacitaciones</GuideLink> |
+| **Cumplimiento** | Una fila por empleado y documento vigente: quién aceptó, quién rechazó y quién sigue pendiente. | <GuideLink to="cumplimiento-hse">Cumplimiento</GuideLink> |
+| **Actas** | El acta de cada dictado: capacitadores, asistentes y resultados, congelada al cerrarla. | <GuideLink to="actas-y-constancias">Actas y constancias</GuideLink> |
+
+Los **tipos de documento HSE** (norma, procedimiento, instructivo…) no están en este menú: se cargan en **Configuración → Tipos de documento → HSE**. Ver <GuideLink to="tipos-de-documento-hse">Tipos de documento HSE</GuideLink>.
+
+## Cómo ponerlo en marcha
+
+<Flow title="Orden recomendado para empezar">
+  <FlowStep title="Portal del empleado" module="Empleados" to="ficha-del-empleado">Cada destinatario necesita acceso al portal para leer, aceptar y rendir.</FlowStep>
+  <FlowStep title="Tipos de documento" module="Configuración" to="tipos-de-documento-hse">Opcionales: sirven para ordenar y filtrar los documentos.</FlowStep>
+  <FlowStep title="Documentos" module="HSE" to="documentos-hse">Cargá el PDF, elegí a quién aplica y publicalo.</FlowStep>
+  <FlowStep title="Capacitaciones" module="HSE" to="capacitaciones-hse">Material, preguntas y destinatarios; al publicarla queda congelada.</FlowStep>
+  <FlowStep title="Seguimiento" module="HSE" tone="success" to="cumplimiento-hse">Cumplimiento por empleado, actas de dictado y constancias.</FlowStep>
+</Flow>
+
+<Callout type="warning" title="Sin portal no hay respuesta">
+Un empleado sin acceso al portal figura como destinatario y queda **pendiente**, pero no tiene dónde leer ni aceptar. El acceso se habilita desde la sección **Portal** de la <GuideLink to="ficha-del-empleado">ficha del empleado</GuideLink>.
+</Callout>
+
+## A quién aplica
+
+Documentos y capacitaciones usan el mismo selector **A quién aplica**. Se pueden combinar varias reglas:
+
+| Agregar por | Qué incluye |
+|---|---|
+| **Todo el personal** | Todo el personal activo, también quien entre después. |
+| **Puesto** | Quienes tienen ese puesto. |
+| **Sector** | Quienes pertenecen a ese sector. |
+| **Empleado** | Una persona puntual, buscada por legajo o nombre. |
+
+Quienes coinciden con alguna regla tienen que cumplir. Si después alguien cambia de puesto o de sector, la lista se actualiza sola: quien entra queda pendiente y quien sale se archiva con lo que ya había respondido.
+
+## Qué hace el empleado desde el portal
+
+- **Documentos**: abre el PDF y lo **acepta con su contraseña** o lo **rechaza** escribiendo el motivo.
+- **Capacitaciones**: estudia el material (lo obligatorio lo marca como leído), rinde el examen y, si aprueba, **firma su constancia** con la contraseña. La constancia queda en su legajo.
+- **Vencimientos**: ve en el inicio del portal lo que vence en los próximos 30 días o ya venció.
+
+## Avisos automáticos
+
+| Cuándo | Qué se envía | A quién |
+|---|---|---|
+| Al publicar un documento o una versión nueva | Correo con el pendiente | Cada destinatario activo con portal habilitado y correo válido |
+| Todos los días, 7:20 | Aviso de documentos y capacitaciones que vencen en 30 días o ya vencieron | El empleado (inicio del portal y correo) |
+| Los lunes | **Resumen semanal de vencimientos HSE** | Los roles que tienen ese aviso activo y permiso en **Cumplimiento** |
+| Cuando un empleado rechaza un documento | **Un empleado rechazó un documento HSE**, con el motivo que escribió | Quienes tienen ese aviso activo |
+
+Los correos salen solo si la empresa tiene activos los módulos de portal y HSE.
+
+## Permisos
+
+Cada sección tiene su propio permiso: alguien puede ver el cumplimiento sin poder publicar documentos. El detalle está en la sección **Permisos** de cada guía.
+
+Los roles del sistema (**Admin**, **Administrador** y **Full Access Provisional**) tienen todo. A los roles de la empresa se les asigna a mano desde **Configuración → General → Usuarios**: ver <GuideLink to="empresa-usuarios-y-permisos">Usuarios y permisos</GuideLink>.
