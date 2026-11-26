@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.alphataco.app.preview",
+      "sha256_cert_fingerprints": [
+        "B6:EC:1E:1A:F7:4F:C6:54:90:D3:B9:F1:99:A7:13:91:6A:DF:2D:BB:55:82:9B:D2:D4:9D:74:3A:C5:D6:FF:87"
+      ]
+    }
+  }
+]
